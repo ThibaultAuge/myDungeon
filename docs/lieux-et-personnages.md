@@ -76,8 +76,8 @@ couloirs : les agents circulent par là pour aller d'une pièce à l'autre.
   exemplaire de chaque type.
 - **Les contrôles** forment une bande continue en bas à gauche : sécurité, revue et
   tests, puis accessibilité et SEO.
-- **Le Scriptorium** (rédaction de documentation) n'a pas de pièce dans le plan. Il est
-  placé provisoirement dans la Bibliothèque, comme un coin de pupitres de copistes.
+- **Le Scriptorium** (rédaction de documentation) est un coin de la Bibliothèque, avec
+  des pupitres de copistes.
 
 ### Liste des lieux
 
@@ -212,18 +212,24 @@ particulier.
 Le type inconnu est indispensable : chaque environnement peut avoir ses propres agents
 dans son `.claude/agents/`, et les plugins en ajoutent.
 
-## Points ouverts
+## Décisions
 
-- **Représenter l'humain ?** Il pourrait apparaître comme une statue ou une silhouette
-  derrière l'autel, ou rester hors scène.
-- **Sessions lancées par une autre session** (`spawnedFrom`). Chacune a son propre agent
-  principal et sa propre couleur ; le fil vers la session parente reste à dessiner.
-- **Skills** (`jira-comment`, `knowledge`…). Ils s'exécutent dans la session principale et
-  ne sont pas des personnages. On pourrait les montrer comme un parchemin que l'agent
-  principal tient en main.
-- **Place du Scriptorium.** Coin de la Bibliothèque pour l'instant, ou pièce à part si
-  Curator et Otis travaillent souvent en même temps qu'Explore.
-- **Nombre de pièces.** On passe de 4 à 14 lieux. Il faudra vérifier la lisibilité et
-  les 60 images/s.
-- **Code à adapter.** Le tableau outil → pièce de `packages/server/src/reducer.ts` et le
-  plan de `packages/web/src/scene/layout.ts` ne connaissent que les 4 pièces actuelles.
+- **L'humain n'est pas représenté.** La bulle et la file à l'autel suffisent.
+- **Sessions lancées par une autre session** (`spawnedFrom`). Chacune est un agent
+  principal à part entière, avec sa propre couleur. En général elle travaille dans son
+  propre worktree et ne dépend pas de la session qui l'a lancée. Le lien est donc
+  secondaire : une mention « lancée depuis… » dans le panneau de détail suffit, un repère
+  visuel dans la 3D est facultatif.
+- **Skills** (`jira-comment`, `knowledge`…). Ce ne sont pas des personnages. Quand un
+  agent utilise un skill, il porte un **badge** à son nom : un petit insigne en 3D sur le
+  personnage, ou au minimum un badge dans le panneau de détail HTML. Le hook
+  `PreToolUse` de l'outil `Skill` donne le nom du skill (à vérifier).
+- **Le Scriptorium** est un coin de la Bibliothèque.
+- **Nombre de pièces.** On part sur 14 lieux. La lisibilité et les 60 images/s seront
+  vérifiées à l'usage.
+
+## Prochaine étape
+
+On adaptera le code juste après : le tableau outil → pièce de
+`packages/server/src/reducer.ts` et le plan de `packages/web/src/scene/layout.ts` ne
+connaissent que les 4 pièces actuelles.
