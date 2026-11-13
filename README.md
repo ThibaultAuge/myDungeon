@@ -14,6 +14,8 @@ Un petit bureau en 3D où chaque agent Claude Code du poste local est un personn
   - **L'autel des requêtes**, au centre : tout agent qui t'attend (permission, question, prochain message) y fait la queue, le plus ancien en tête, à genoux. La file avance quand il repart, et contourne la nef par les couloirs si elle s'allonge.
   - **La taverne** : les nouveaux sous-agents sortent de ses casiers, et ceux qui ont fini y retournent avant de disparaître.
   - Chaque pièce a ses places. Un agent garde la sienne tant qu'il reste dans la pièce ; quand elle est pleine, les suivants se tiennent le long des murs.
+- **Une carte en vrais modèles 3D** : dalles de pierre, de bois ou de terre selon la pièce, murs avec fenêtres, arches, torches et bannières aux couleurs de la pièce, meubles et objets de décoration, ombres douces.
+  - **Déplace la souris pour découvrir les salles.** Les murs situés devant le curseur s'enfoncent dans le sol, et il ne reste qu'un muret qui marque le contour des pièces. Ceux situés derrière restent debout.
 - **Trois états.**
   - Vert : il travaille.
   - Ambre : il attend ton prochain message. La bulle devient rouge quand il attend ta permission ou ta réponse, ou qu'il est bloqué par une erreur.
@@ -50,7 +52,22 @@ Ouvre ensuite http://127.0.0.1:4777.
 
 Si le port 4777 est déjà pris (par exemple par une autre session), la configuration `agent-office-test` de `.claude/launch.json` lance un second serveur sur le port 4778. Elle ne contient pas de jeton : sans `AGENT_OFFICE_TOKEN` dans l'environnement, elle affiche l'inventaire mais refuse les hooks.
 
-Pour le développement, `npm run dev` lance le serveur et Vite (http://127.0.0.1:5173, qui relaie `/api` et `/ws` vers le port 4777).
+Pour le développement, `npm run dev` lance le serveur et Vite (http://127.0.0.1:5173, qui relaie `/api` et `/ws` vers le port 4777). La configuration `agent-office-web` de `.claude/launch.json` lance Vite seul, relayé vers le serveur de test du port 4778.
+
+### Modèles 3D
+
+La carte utilise les packs gratuits KayKit de Kay Lousberg (www.kaylousberg.com) : Dungeon Pack 1.1, RPG Tools Bits 1.0 et Fantasy Weapons Bits 1.0. Ils sont sous licence CC0 : le crédit n'est pas obligatoire, on le donne quand même (voir `packages/web/public/kaykit/LICENSE.txt`). Les modèles utilisés sont déjà dans le dépôt.
+
+Pour en ajouter un :
+
+1. Télécharge le pack sur https://kaylousberg.itch.io/ (prix libre, 0 € convient).
+2. Décompresse-le dans son propre dossier sous `assets-src/` (`dungeon/`, `rpg-tools/` ou `weapons/`). Ce dossier n'est pas versionné.
+3. Ajoute le nom du modèle dans `packages/web/src/scene/kit-manifest.json`.
+4. Lance la copie vers `packages/web/public/kaykit/` :
+
+```bash
+npm run kaykit:import
+```
 
 ## Comment ça marche
 
@@ -135,6 +152,7 @@ npm run typecheck
 
 ## Limites et suite
 
-- Les personnages sont des formes simples. Des modèles glTF animés viendront ensuite (packs CC0 comme Kenney ou Quaternius). Des assets Unreal ne seraient utilisables que si leur licence Fab autorise un usage hors Unreal Engine.
+- La carte utilise des modèles KayKit, mais les personnages sont encore des formes simples. Leur remplacement par des modèles glTF animés est la prochaine étape.
+- La scène fait environ 700 appels de dessin par image, ombres comprises : les meubles ne sont pas encore regroupés en instances. Des assets Unreal ne seraient utilisables que si leur licence Fab autorise un usage hors Unreal Engine.
 - Répondre aux agents depuis la 3D (permission, question) fera l'objet d'une phase distincte, qui demandera une authentification forte du serveur. Envoyer un prompt libre à une session déjà ouverte n'a pas encore de solution officielle.
 - Le plan complet se trouve dans [plans/plan-agent-office-2026-11-13.md](plans/plan-agent-office-2026-11-13.md).

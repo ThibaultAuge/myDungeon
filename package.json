@@ -12,7 +12,8 @@
     "test": "vitest run",
     "typecheck": "tsc -p packages/server --noEmit && tsc -p packages/web --noEmit",
     "hooks:install": "node scripts/install-hooks.mjs",
-    "hooks:uninstall": "node scripts/uninstall-hooks.mjs"
+    "hooks:uninstall": "node scripts/uninstall-hooks.mjs",
+    "kaykit:import": "node scripts/import-kaykit.mjs"
   },
   "devDependencies": {
     "concurrently": "^9.1.0",

@@ -34,6 +34,11 @@ export interface Spot extends Seat {
 
 export type Side = 'n' | 's' | 'e' | 'w';
 
+export type FloorKind = 'stone' | 'stoneFancy' | 'grate' | 'wood' | 'woodDark' | 'dirt';
+
+/** The six colours of the KayKit banners. */
+export type Accent = 'red' | 'blue' | 'green' | 'yellow' | 'white' | 'brown';
+
 export type PropKind =
   | 'altar'
   | 'pew'
@@ -69,7 +74,13 @@ export type PropKind =
   | 'fireplace'
   | 'barrel'
   | 'lockers'
-  | 'rug';
+  | 'rug'
+  // Decoration: no seat of its own, but agents walk around it.
+  | 'crates'
+  | 'barrels'
+  | 'chest'
+  | 'coins'
+  | 'candle';
 
 export interface Prop {
   kind: PropKind;
@@ -87,7 +98,10 @@ export interface RoomDef {
   cz: number;
   w: number;
   d: number;
-  floor: string;
+  /** Material of the floor tiles. */
+  floorKind: FloorKind;
+  /** Colour of the room banners and rug. */
+  accent: Accent;
   /** Wall holding the door, and the door's offset along that wall from its middle. */
   door: { side: Side; at: number };
   /** A zone inside another room (the Scriptorium): no walls, same door, same space. */
@@ -132,9 +146,11 @@ export const ROOMS: RoomDef[] = [
     cz: -11,
     w: 8,
     d: 4,
-    floor: '#C9D6F2',
+    floorKind: 'woodDark',
+    accent: 'blue',
     door: { side: 's', at: 0 },
     props: [
+      { kind: 'candle', x: 3.4, z: 1.4 },
       { kind: 'telescope', x: 2.4, z: -0.7 },
       { kind: 'starTable', x: -2, z: -0.9 },
     ],
@@ -147,9 +163,11 @@ export const ROOMS: RoomDef[] = [
     cz: -11,
     w: 8,
     d: 4,
-    floor: '#F2E3C4',
+    floorKind: 'dirt',
+    accent: 'white',
     door: { side: 's', at: 0 },
     props: [
+      { kind: 'barrels', x: -2.8, z: 1.3 },
       { kind: 'aviary', x: -2.4, z: -1.1 },
       { kind: 'lectern', x: 2.2, z: -0.7, rot: 0 },
     ],
@@ -161,9 +179,11 @@ export const ROOMS: RoomDef[] = [
     cz: -2.5,
     w: 8,
     d: 9,
-    floor: '#F3D9B1',
+    floorKind: 'wood',
+    accent: 'yellow',
     door: { side: 'e', at: 0 },
     props: [
+      { kind: 'chest', x: -3.1, z: -3.8 },
       { kind: 'mapTable', x: -0.6, z: -0.6 },
       { kind: 'globe', x: 2.6, z: -3.3 },
       { kind: 'rug', x: -0.6, z: -0.6 },
@@ -183,7 +203,8 @@ export const ROOMS: RoomDef[] = [
     cz: -2.5,
     w: 8,
     d: 9,
-    floor: '#E4D6F5',
+    floorKind: 'woodDark',
+    accent: 'green',
     door: { side: 'e', at: 0 },
     props: [
       { kind: 'bookcase', x: -2.6, z: -4.1 },
@@ -209,7 +230,8 @@ export const ROOMS: RoomDef[] = [
     cz: 0.25,
     w: 4,
     d: 3.5,
-    floor: '#D9C4EE',
+    floorKind: 'wood',
+    accent: 'red',
     door: { side: 'e', at: 0 },
     insideOf: 'biblio',
     props: [
@@ -229,9 +251,11 @@ export const ROOMS: RoomDef[] = [
     cz: -8.75,
     w: 8,
     d: 8.5,
-    floor: '#CFE8D5',
+    floorKind: 'stoneFancy',
+    accent: 'brown',
     door: { side: 's', at: 0 },
     props: [
+      { kind: 'crates', x: 3.2, z: 3.4 },
       { kind: 'bench', x: -2, z: -2.4 },
       { kind: 'bench', x: 2, z: -2.4 },
       { kind: 'bench', x: -2, z: 0.6 },
@@ -253,7 +277,8 @@ export const ROOMS: RoomDef[] = [
     cz: -0.25,
     w: 8,
     d: 4.5,
-    floor: '#F6E7A8',
+    floorKind: 'stone',
+    accent: 'red',
     door: { side: 's', at: 0 },
     props: [
       { kind: 'altar', x: 0, z: -1.65 },
@@ -277,9 +302,11 @@ export const ROOMS: RoomDef[] = [
     cz: -10.75,
     w: 8,
     d: 4.5,
-    floor: '#D7DDE3',
+    floorKind: 'grate',
+    accent: 'brown',
     door: { side: 's', at: 0 },
     props: [
+      { kind: 'crates', x: 3.2, z: 1.4 },
       { kind: 'boiler', x: -2.7, z: -1 },
       { kind: 'engine', x: 0.2, z: -1.3 },
       { kind: 'engine', x: 2.7, z: -1.3 },
@@ -292,9 +319,11 @@ export const ROOMS: RoomDef[] = [
     cz: -4.25,
     w: 8,
     d: 4.5,
-    floor: '#F5D0C5',
+    floorKind: 'stone',
+    accent: 'yellow',
     door: { side: 's', at: 0 },
     props: [
+      { kind: 'coins', x: 3.3, z: 1.6 },
       { kind: 'abacus', x: -1.8, z: -1.4 },
       { kind: 'slate', x: 1.9, z: -2 },
     ],
@@ -307,7 +336,8 @@ export const ROOMS: RoomDef[] = [
     cz: 2.25,
     w: 8,
     d: 4.5,
-    floor: '#F8C8DC',
+    floorKind: 'wood',
+    accent: 'red',
     door: { side: 's', at: 0 },
     props: [
       { kind: 'couch', x: -2.3, z: -1.5 },
@@ -322,7 +352,8 @@ export const ROOMS: RoomDef[] = [
     cz: 8.25,
     w: 8,
     d: 3.5,
-    floor: '#D9D2C3',
+    floorKind: 'dirt',
+    accent: 'brown',
     door: { side: 'w', at: 0 },
     props: [
       { kind: 'brooms', x: 2.8, z: -1.3 },
@@ -341,9 +372,11 @@ export const ROOMS: RoomDef[] = [
     cz: 7,
     w: 9,
     d: 6,
-    floor: '#C8D9C0',
+    floorKind: 'stone',
+    accent: 'blue',
     door: { side: 'n', at: 0 },
     props: [
+      { kind: 'crates', x: -3.5, z: 2.2 },
       { kind: 'portcullis', x: -4.4, z: 0.4, rot: E },
       { kind: 'weaponRack', x: 1.8, z: 2.7 },
       { kind: 'lantern', x: -3.4, z: -2.2 },
@@ -362,9 +395,11 @@ export const ROOMS: RoomDef[] = [
     cz: 7,
     w: 11,
     d: 6,
-    floor: '#BFE3E6',
+    floorKind: 'stone',
+    accent: 'green',
     door: { side: 'n', at: 0 },
     props: [
+      { kind: 'barrels', x: -4.6, z: -2.2 },
       { kind: 'readingTable', x: -2.6, z: 0.6 },
       { kind: 'alchemyBench', x: 2.8, z: 2.4 },
     ],
@@ -380,9 +415,11 @@ export const ROOMS: RoomDef[] = [
     cz: 7,
     w: 8,
     d: 6,
-    floor: '#FBE0B4',
+    floorKind: 'wood',
+    accent: 'yellow',
     door: { side: 'n', at: -2.4 },
     props: [
+      { kind: 'chest', x: 3.3, z: 2.35 },
       { kind: 'stage', x: -1.6, z: 1.6 },
       { kind: 'inspectionDesk', x: 2.2, z: 0.6 },
     ],
@@ -398,9 +435,11 @@ export const ROOMS: RoomDef[] = [
     cz: -1.5,
     w: 7,
     d: 23,
-    floor: '#EAC79A',
+    floorKind: 'wood',
+    accent: 'red',
     door: { side: 'w', at: 0 },
     props: [
+      { kind: 'crates', x: -2.7, z: -10.6 },
       { kind: 'fireplace', x: 0, z: -11 },
       { kind: 'longTable', x: 0.6, z: -6.5 },
       { kind: 'longTable', x: 0.6, z: -1 },
@@ -418,8 +457,6 @@ export const ROOMS: RoomDef[] = [
 ];
 
 export const ROOM_BY_ID = new Map(ROOMS.map((r) => [r.id, r]));
-
-/** Room names, for the HTML panels. */
 
 /** Outer bounds of the dungeon, corridors included. */
 export const BOUNDS = { x0: -24, x1: 23, z0: -13, z1: 10 };
@@ -550,6 +587,11 @@ const FOOTPRINTS: Record<PropKind, [number, number]> = {
   barrel: [0.4, 0.4],
   lockers: [0.25, 1.6],
   rug: [0, 0],
+  crates: [0.6, 0.6],
+  barrels: [0.8, 0.4],
+  chest: [0.5, 0.45],
+  coins: [0.3, 0.3],
+  candle: [0.12, 0.12],
 };
 
 /** True when (x, z), relative to the room centre, stands on the prop (plus a body's half width). */

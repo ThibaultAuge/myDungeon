@@ -1,6 +1,7 @@
 import { useMemo, useRef } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import { OrbitControls } from '@react-three/drei';
+import { OrbitControls, SoftShadows } from '@react-three/drei';
+import { NeutralToneMapping } from 'three';
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 import type { AgentView, SessionView } from '@agent-office/shared';
 import { agentName, sessionColor } from '../format.ts';
@@ -65,6 +66,31 @@ function CameraFollow({ selected }: { selected: string | null }) {
   return null;
 }
 
+/** Warm sun from the south-east, casting soft shadows over the whole dungeon. */
+function SunLight() {
+  const { x0, x1, z0, z1 } = BOUNDS;
+  const half = Math.max(x1 - x0, z1 - z0) / 2 + 6;
+  return (
+    <directionalLight
+      position={[CENTER[0] + 14, 32, CENTER[2] + 12]}
+      intensity={2.2}
+      color="#fff1dc"
+      castShadow
+      shadow-mapSize={[2048, 2048]}
+      shadow-bias={-0.0004}
+      shadow-normalBias={0.03}
+      shadow-camera-left={-half}
+      shadow-camera-right={half}
+      shadow-camera-top={half}
+      shadow-camera-bottom={-half}
+      shadow-camera-near={1}
+      shadow-camera-far={90}
+    >
+      <object3D attach="target" position={CENTER} />
+    </directionalLight>
+  );
+}
+
 export function OfficeScene() {
   const sessions = useOffice((s) => s.sessions);
   const selected = useOffice((s) => s.selectedAgentId);
@@ -75,9 +101,16 @@ export function OfficeScene() {
   const spots = useSpots(placed);
 
   return (
-    <Canvas camera={{ position: [CENTER[0], 40, CENTER[2] + 30], fov: 42 }} dpr={[1, 2]} onPointerMissed={() => select(null)}>
-      <hemisphereLight args={['#ffffff', '#9a9890', 1.1]} />
-      <directionalLight position={[8, 18, 6]} intensity={1.2} />
+    <Canvas
+      shadows
+      camera={{ position: [CENTER[0], 40, CENTER[2] + 30], fov: 42 }}
+      dpr={[1, 2]}
+      gl={{ toneMapping: NeutralToneMapping }}
+      onPointerMissed={() => select(null)}
+    >
+      <SoftShadows size={18} samples={10} focus={0.6} />
+      <hemisphereLight args={['#fff6e8', '#8a8478', 1.6]} />
+      <SunLight />
       <OfficeRooms />
       {placed.map(({ agent, session }) => (
         <AgentFigure

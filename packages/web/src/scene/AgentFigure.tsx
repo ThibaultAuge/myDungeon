@@ -103,11 +103,11 @@ export function AgentFigure({ agent, name, color, spot, selected, onSelect }: Pr
       onPointerOver={() => (document.body.style.cursor = 'pointer')}
       onPointerOut={() => (document.body.style.cursor = '')}
     >
-      <mesh ref={body} position={[0, 0.65, 0]}>
+      <mesh ref={body} position={[0, 0.65, 0]} castShadow>
         <capsuleGeometry args={[0.32, 0.6, 4, 12]} />
         <meshLambertMaterial color={color} transparent={agent.state === 'done'} opacity={agent.state === 'done' ? 0.55 : 1} />
       </mesh>
-      <mesh position={[0, 1.38, 0]}>
+      <mesh position={[0, 1.38, 0]} castShadow>
         <sphereGeometry args={[0.26, 16, 12]} />
         <meshLambertMaterial color="#F5C4B3" />
       </mesh>
@@ -115,7 +115,7 @@ export function AgentFigure({ agent, name, color, spot, selected, onSelect }: Pr
         <boxGeometry args={[0.28, 0.07, 0.08]} />
         <meshLambertMaterial color="#2C2C2A" />
       </mesh>
-      <mesh ref={ring} position={[0, 0.04, 0]} rotation={[Math.PI / 2, 0, 0]}>
+      <mesh ref={ring} position={[0, 0.06, 0]} rotation={[Math.PI / 2, 0, 0]}>
         <torusGeometry args={[0.5, 0.06, 8, 32]} />
         <meshBasicMaterial color={STATE_COLORS[agent.state]} />
       </mesh>

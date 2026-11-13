@@ -15,3 +15,21 @@ export const WEST = -Math.PI / 2;
 
 Reason: zero references in `packages/*/src` or `packages/*/test`; `@agent-office/web` is a
 private package, so no external consumers. `NORTH` was kept (used in layout.ts and its test).
+
+## 2026-11-14 — branch feat/carte-kaykit
+
+Code-only cleanup after the KayKit map rewrite. Assets (`kit-manifest.json`,
+`packages/web/public/kaykit/**`) left untouched on purpose: the 3D work is not finished.
+
+- `packages/web/src/scene/kit.ts`: removed the re-export `export { KIT_SCALE } from './dungeon.ts';`
+  (zero importers; everyone imports `KIT_SCALE` from `dungeon.ts`). Dropped `export` from
+  `kitUrl` and `allKitModels` (used only inside kit.ts) and changed the `allKitModels` comment
+  from "for preloading and for the manifest test" to "for preloading" (the test reads the JSON
+  directly).
+- `packages/web/src/scene/layout.ts`: removed the orphan comment
+  `/** Room names, for the HTML panels. */` and its blank line (left behind when `ROOM_NAMES`
+  was removed by the i18n commit ce4bff4).
+- `packages/web/src/scene/props.tsx`: dropped `export` from `PALETTE`, `ACCENT_HEX`, `Box`,
+  `Cyl`, `Ball` (used only inside props.tsx). Symbols unchanged.
+
+Rollback: re-add the `export` keywords / the re-export line; `tsc --noEmit` was clean after the change.

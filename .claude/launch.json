@@ -23,6 +23,21 @@
       "env": {
         "AGENT_OFFICE_PORT": "4778"
       }
+    },
+    {
+      "name": "agent-office-web",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "-w",
+        "@agent-office/web"
+      ],
+      "port": 5173,
+      "url": "http://127.0.0.1:5173",
+      "env": {
+        "AGENT_OFFICE_PORT": "4778"
+      }
     }
   ]
 }
