@@ -1,0 +1,22 @@
+{
+  "name": "agent-office",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "concurrently -n server,web -c cyan,magenta \"npm run dev -w @agent-office/server\" \"npm run dev -w @agent-office/web\"",
+    "build": "npm run build -w @agent-office/web",
+    "start": "npm run start -w @agent-office/server",
+    "test": "vitest run",
+    "typecheck": "tsc -p packages/server --noEmit && tsc -p packages/web --noEmit",
+    "hooks:install": "node scripts/install-hooks.mjs",
+    "hooks:uninstall": "node scripts/uninstall-hooks.mjs"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0",
+    "typescript": "^5.7.0",
+    "vitest": "^5.1.0"
+  }
+}

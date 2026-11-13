@@ -1,0 +1,1118 @@
+import { describe, expect, it } from 'vitest';
+import {
+  DONE_CLI_SESSION_TTL_MS,
+  DONE_SUBAGENT_TTL_MS,
+  HISTORY_LIMIT,
+  HOOK_AUTHORITY_MS,
+  SUBAGENT_SILENCE_MS,
+  applyHook,
+  applyInventory,
+  createState,
+  environmentsView,
+  hookEventSchema,
+  prune,
+  sessionsView,
+  summarize,
+  toolDetail,
+  toolRoom,
+  truncate,
+  type OfficeState,
+} from '../src/reducer.ts';
+import { CLI_A, CLI_B, ENVS, LOCAL_A, LOCAL_B, desk, hook, inventory, proc } from './fixtures/builders.ts';
+
+const NO_ENV = 'hors-environnement';
+const CLI_KEY = `cli:${CLI_A}`;
+
+/** A state that knows the environments but holds no session yet. */
+function stateWithEnvs(): OfficeState {
+  const state = createState();
+  applyInventory(state, inventory(), 0);
+  return state;
+}
+
+/** Applies hooks in order, each at its own timestamp, and returns the resulting cli session. */
+function run(state: OfficeState, steps: [number, ReturnType<typeof hook>][]) {
+  for (const [at, ev] of steps) applyHook(state, ev, at);
+  return state.sessions.get(CLI_KEY)!;
+}
+
+/** Spawns subagent `ag-1` of type Explore described as 'Scan repo' in the cli session. */
+function withSubagent(state: OfficeState, at = 1000) {
+  return run(state, [
+    [at, hook('UserPromptSubmit', { prompt: 'Fix the bug' })],
+    [at + 10, hook('PreToolUse', { tool_name: 'Agent', tool_input: { subagent_type: 'Explore', description: 'Scan repo' } })],
+    [at + 20, hook('SubagentStart', { agent_id: 'ag-1', agent_type: 'Explore' })],
+  ]);
+}
+
+describe('helpers', () => {
+  /**
+   * Verifies that read, edit and shell tools map to their rooms and others to none
+   */
+  it('toolRoom maps tools to rooms', () => {
+    expect(toolRoom('Read')).toBe('biblio');
+    expect(toolRoom('Grep')).toBe('biblio');
+    expect(toolRoom('Edit')).toBe('atelier');
+    expect(toolRoom('Write')).toBe('atelier');
+    expect(toolRoom('Bash')).toBe('serveur');
+    expect(toolRoom('PowerShell')).toBe('serveur');
+    expect(toolRoom('Frobnicate')).toBeUndefined();
+    expect(toolRoom(undefined)).toBeUndefined();
+  });
+
+  /**
+   * Verifies that truncate collapses whitespace and cuts at max with an ellipsis
+   */
+  it('truncate collapses whitespace and respects the max length', () => {
+    expect(truncate(undefined)).toBeUndefined();
+    expect(truncate('  a \n\t b  ')).toBe('a b');
+    expect(truncate('x'.repeat(200))).toBe('x'.repeat(200));
+    const cut = truncate('x'.repeat(201))!;
+    expect(cut).toHaveLength(200);
+    expect(cut.endsWith('…')).toBe(true);
+    expect(truncate('abcdef', 4)).toBe('abc…');
+  });
+
+  /**
+   * Verifies that toolDetail picks the first meaningful key in priority order
+   */
+  it('toolDetail picks file_path before command and skips empty values', () => {
+    expect(toolDetail({ file_path: 'C:/work/alpha/a.ts', command: 'ls' })).toBe('C:/work/alpha/a.ts');
+    expect(toolDetail({ command: 'npm test' })).toBe('npm test');
+    expect(toolDetail({ file_path: '', pattern: 'TODO' })).toBe('TODO');
+    expect(toolDetail({ file_path: 42, other: 'x' })).toBeUndefined();
+  });
+
+  /**
+   * Verifies that toolDetail returns undefined for non-object input
+   */
+  it.each([[undefined], [null], ['text'], [7]])('toolDetail(%j) is undefined', (input) => {
+    expect(toolDetail(input)).toBeUndefined();
+  });
+
+  /**
+   * Verifies that a long tool argument is truncated to 200 characters
+   */
+  it('toolDetail truncates to 200 characters', () => {
+    const d = toolDetail({ file_path: 'C:/' + 'a'.repeat(500) })!;
+    expect(d).toHaveLength(200);
+    expect(d.endsWith('…')).toBe(true);
+  });
+});
+
+describe('hookEventSchema', () => {
+  /**
+   * Verifies that a minimal hook payload is accepted and unknown fields are kept
+   */
+  it('accepts a minimal event and passes unknown fields through', () => {
+    const r = hookEventSchema.safeParse({ hook_event_name: 'Stop', session_id: 's1', permission_mode: 'default' });
+    expect(r.success).toBe(true);
+    expect((r.data as Record<string, unknown>).permission_mode).toBe('default');
+  });
+
+  /**
+   * Verifies that payloads missing or with invalid required fields are rejected
+   */
+  it.each([
+    [{ hook_event_name: 'Stop' }],
+    [{ hook_event_name: 'Stop', session_id: '' }],
+    [{ session_id: 's1' }],
+    [{ hook_event_name: 3, session_id: 's1' }],
+    [{ hook_event_name: 'Stop', session_id: 's1', prompt: 5 }],
+    [[]],
+    [null],
+  ])('rejects %j', (raw) => {
+    expect(hookEventSchema.safeParse(raw).success).toBe(false);
+  });
+});
+
+describe('applyInventory', () => {
+  /**
+   * Verifies that startedFromEnvironmentId wins over a folder match
+   */
+  it('attaches a desktop session to its declared environment', () => {
+    const state = createState();
+    applyInventory(state, inventory({ desktopSessions: [desk({ envId: 'env-beta' })] }), 1);
+    expect(state.sessions.get(LOCAL_A)?.envId).toBe('env-beta');
+  });
+
+  /**
+   * Verifies that a declared but unknown environment falls back to folder matching
+   */
+  it('falls back to folder match when the declared env is unknown', () => {
+    const state = createState();
+    applyInventory(state, inventory({ desktopSessions: [desk({ envId: 'env-deleted' })] }), 1);
+    expect(state.sessions.get(LOCAL_A)?.envId).toBe('env-alpha');
+  });
+
+  /**
+   * Verifies that the longest matching folder wins, case-insensitively on Windows paths
+   */
+  it('matches the most specific environment by folder', () => {
+    const state = createState();
+    applyInventory(state, inventory({ desktopSessions: [desk({ matchFolders: ['c:/WORK/alpha/API/src'] })] }), 1);
+    expect(state.sessions.get(LOCAL_A)?.envId).toBe('env-alpha-api');
+  });
+
+  /**
+   * Verifies that a session outside every environment has no env
+   */
+  it('leaves envId null without match', () => {
+    const state = createState();
+    applyInventory(state, inventory({ desktopSessions: [desk({ matchFolders: ['D:\\elsewhere'] })] }), 1);
+    expect(state.sessions.get(LOCAL_A)?.envId).toBeNull();
+  });
+
+  /**
+   * Verifies that desktop fields (title, archived, parent, dates) are copied to the session
+   */
+  it('copies desktop metadata', () => {
+    const state = createState();
+    const parent = { sessionId: 'local_parent', title: 'Parent' };
+    applyInventory(
+      state,
+      inventory({ desktopSessions: [desk({ title: 'T', archived: true, parent, createdAt: 50, lastActivityAt: 5000 })] }),
+      1,
+    );
+    expect(state.sessions.get(LOCAL_A)).toMatchObject({
+      origin: 'desktop',
+      title: 'T',
+      archived: true,
+      parent,
+      createdAt: 50,
+      lastActivityAt: 5000,
+      live: false,
+      cliSessionIds: [CLI_A],
+    });
+    expect(state.sessions.get(LOCAL_A)?.main.state).toBe('done');
+  });
+
+  /**
+   * Verifies that a busy live process makes the main agent working
+   */
+  it('marks main working for a busy process', () => {
+    const state = createState();
+    applyInventory(state, inventory({ desktopSessions: [desk()], live: [proc({ status: 'busy' })] }), 1000);
+    const s = state.sessions.get(LOCAL_A)!;
+    expect(s.live).toBe(true);
+    expect(s.main).toMatchObject({ state: 'working', since: 1000 });
+    expect(s.main.waitReason).toBeUndefined();
+  });
+
+  /**
+   * Verifies that an idle live process makes the main agent wait for a prompt
+   */
+  it('marks main waiting for a prompt for an idle process', () => {
+    const state = createState();
+    applyInventory(state, inventory({ desktopSessions: [desk()], live: [proc({ status: 'idle' })] }), 1000);
+    expect(state.sessions.get(LOCAL_A)?.main).toMatchObject({ state: 'waiting', waitReason: 'prompt', room: 'accueil' });
+  });
+
+  /**
+   * Verifies that a process without hostSessionId links to the desktop session by cli id
+   */
+  it('links a live process by cli session id', () => {
+    const state = createState();
+    applyInventory(state, inventory({ desktopSessions: [desk()], live: [proc({ hostSessionId: undefined })] }), 1);
+    expect(state.sessions.get(LOCAL_A)?.live).toBe(true);
+    expect([...state.sessions.keys()]).toEqual([LOCAL_A]);
+  });
+
+  /**
+   * Verifies that a new cli id reported by the host process routes later hooks to the session
+   */
+  it('learns the cli id of a host process', () => {
+    const state = createState();
+    applyInventory(state, inventory({ desktopSessions: [desk({ cliSessionIds: [] })], live: [proc({ cliSessionId: CLI_B })] }), 1);
+    expect(state.sessions.get(LOCAL_A)?.cliSessionIds).toEqual([CLI_B]);
+    const s = applyHook(state, hook('Stop', { session_id: CLI_B }), 2);
+    expect(s.id).toBe(LOCAL_A);
+    expect(state.sessions.size).toBe(1);
+  });
+
+  /**
+   * Verifies that a vanished process ends the session when no hook is recent
+   */
+  it('marks the session done when its process disappears', () => {
+    const state = createState();
+    applyInventory(state, inventory({ desktopSessions: [desk()], live: [proc()] }), 1000);
+    applyInventory(state, inventory({ desktopSessions: [desk()] }), 100_000);
+    const s = state.sessions.get(LOCAL_A)!;
+    expect(s.live).toBe(false);
+    expect(s.main).toMatchObject({ state: 'done', since: 100_000 });
+  });
+
+  /**
+   * Verifies that a recent hook keeps the session live until HOOK_AUTHORITY_MS has passed
+   */
+  it('keeps the session live while a hook is fresh', () => {
+    const state = createState();
+    applyInventory(state, inventory({ desktopSessions: [desk()], live: [proc()] }), 1000);
+    applyHook(state, hook('PreToolUse', { tool_name: 'Read' }), 50_000);
+    applyInventory(state, inventory({ desktopSessions: [desk()] }), 50_000 + HOOK_AUTHORITY_MS);
+    expect(state.sessions.get(LOCAL_A)).toMatchObject({ live: true, main: { state: 'working', tool: 'Read' } });
+    applyInventory(state, inventory({ desktopSessions: [desk()] }), 50_000 + HOOK_AUTHORITY_MS + 1);
+    expect(state.sessions.get(LOCAL_A)).toMatchObject({ live: false, main: { state: 'done' } });
+  });
+
+  /**
+   * Verifies that the busy/idle status is ignored while a hook is fresh, then applied
+   */
+  it('lets hooks override the live status during HOOK_AUTHORITY_MS', () => {
+    const state = createState();
+    applyInventory(state, inventory({ desktopSessions: [desk()], live: [proc({ status: 'busy' })] }), 0);
+    applyHook(state, hook('PreToolUse', { tool_name: 'Edit' }), 10_000);
+    applyInventory(state, inventory({ desktopSessions: [desk()], live: [proc({ status: 'idle' })] }), 20_000);
+    expect(state.sessions.get(LOCAL_A)?.main.state).toBe('working');
+    applyInventory(state, inventory({ desktopSessions: [desk()], live: [proc({ status: 'idle' })] }), 10_000 + HOOK_AUTHORITY_MS + 1);
+    expect(state.sessions.get(LOCAL_A)?.main).toMatchObject({ state: 'waiting', waitReason: 'prompt', room: 'accueil' });
+  });
+
+  /**
+   * Verifies that an idle status does not erase a pending permission request
+   */
+  it('keeps a permission wait when the process reports idle', () => {
+    const state = createState();
+    applyInventory(state, inventory({ desktopSessions: [desk()], live: [proc()] }), 0);
+    applyHook(state, hook('PermissionRequest', { tool_name: 'Bash' }), 10_000);
+    applyInventory(state, inventory({ desktopSessions: [desk()], live: [proc({ status: 'idle' })] }), 100_000);
+    expect(state.sessions.get(LOCAL_A)?.main).toMatchObject({ state: 'waiting', waitReason: 'permission' });
+  });
+
+  /**
+   * Verifies that a terminal process without desktop record becomes a cli: session
+   */
+  it('creates a cli session for a process without desktop record', () => {
+    const state = createState();
+    applyInventory(
+      state,
+      inventory({ live: [proc({ cliSessionId: CLI_B, hostSessionId: undefined, cwd: 'C:/work/beta/src', status: 'idle' })] }),
+      1000,
+    );
+    const s = state.sessions.get(`cli:${CLI_B}`)!;
+    expect(s).toMatchObject({ origin: 'cli', title: 'src', envId: 'env-beta', live: true, cliSessionIds: [CLI_B] });
+    expect(s.main).toMatchObject({ state: 'waiting', waitReason: 'prompt' });
+    expect(applyHook(state, hook('Stop', { session_id: CLI_B }), 1001).id).toBe(`cli:${CLI_B}`);
+    expect(state.sessions.size).toBe(1);
+  });
+
+  /**
+   * Verifies that a named terminal process uses its name as title
+   */
+  it('uses the process name as cli session title', () => {
+    const state = createState();
+    applyInventory(state, inventory({ live: [proc({ hostSessionId: undefined, name: 'nightly-job' })] }), 1);
+    expect(state.sessions.get(CLI_KEY)?.title).toBe('nightly-job');
+  });
+
+  /**
+   * Verifies that a cli session whose process vanished is kept but marked done
+   */
+  it('marks a cli session done when its process disappears', () => {
+    const state = createState();
+    applyInventory(state, inventory({ live: [proc({ hostSessionId: undefined })] }), 1000);
+    applyInventory(state, inventory(), 1000 + HOOK_AUTHORITY_MS + 1);
+    expect(state.sessions.get(CLI_KEY)).toMatchObject({ live: false, main: { state: 'done' } });
+  });
+
+  /**
+   * Verifies that a cli session with a fresh hook survives a missing process
+   */
+  it('keeps a cli session live when a hook is fresh', () => {
+    const state = createState();
+    applyInventory(state, inventory({ live: [proc({ hostSessionId: undefined })] }), 1000);
+    applyHook(state, hook('PreToolUse', { tool_name: 'Bash' }), 5000);
+    applyInventory(state, inventory(), 6000);
+    expect(state.sessions.get(CLI_KEY)?.live).toBe(true);
+  });
+
+  /**
+   * Verifies that a desktop session whose record vanished is removed
+   */
+  it('removes a deleted desktop session', () => {
+    const state = createState();
+    applyInventory(state, inventory({ desktopSessions: [desk(), desk({ localId: LOCAL_B, cliSessionIds: [] })] }), 1);
+    applyInventory(state, inventory({ desktopSessions: [desk({ localId: LOCAL_B, cliSessionIds: [] })] }), 2);
+    expect([...state.sessions.keys()]).toEqual([LOCAL_B]);
+  });
+
+  /**
+   * Verifies that environments are replaced by each inventory read
+   */
+  it('replaces the environment list', () => {
+    const state = stateWithEnvs();
+    applyInventory(state, inventory({ environments: [ENVS[2]] }), 1);
+    expect(state.environments.map((e) => e.id)).toEqual(['env-beta']);
+  });
+
+  /**
+   * Verifies that a cli session created by early hooks merges into the desktop session
+   */
+  it('absorbs an early cli session into the desktop session', () => {
+    const state = stateWithEnvs();
+    withSubagent(state, 1000);
+    applyHook(state, hook('PreToolUse', { tool_name: 'Agent', tool_input: { subagent_type: 'Plan', description: 'Draft plan' } }), 1300);
+    expect(state.sessions.has(CLI_KEY)).toBe(true);
+
+    applyInventory(state, inventory({ desktopSessions: [desk()], live: [proc({ status: 'idle' })] }), 2000);
+
+    expect(state.sessions.has(CLI_KEY)).toBe(false);
+    expect([...state.sessions.keys()]).toEqual([LOCAL_A]);
+    const s = state.sessions.get(LOCAL_A)!;
+    expect(s.live).toBe(true);
+    // The hook is fresh: the idle status must not override the working agent.
+    // The main agent keeps its id through the merge, so its figure, colour and selection survive.
+    expect(s.main).toMatchObject({ id: `${CLI_KEY}#main`, sessionId: LOCAL_A, state: 'working', description: 'Fix the bug' });
+    expect(s.subagents).toHaveLength(1);
+    expect(s.subagents[0]).toMatchObject({ id: 'ag-1', sessionId: LOCAL_A, agentType: 'Explore', description: 'Scan repo' });
+
+    // Pending spawns follow the session, and later hooks land on the desktop session.
+    const after = applyHook(state, hook('SubagentStart', { agent_id: 'ag-2', agent_type: 'Plan' }), 2100);
+    expect(after.id).toBe(LOCAL_A);
+    expect(after.subagents[1]).toMatchObject({ id: 'ag-2', description: 'Draft plan' });
+    expect(state.sessions.size).toBe(1);
+  });
+
+  /**
+   * Verifies that the absorbed session inherits hook freshness and stays live
+   */
+  it('keeps hook authority after absorbing', () => {
+    const state = stateWithEnvs();
+    applyHook(state, hook('UserPromptSubmit', { prompt: 'go' }), 1000);
+    applyInventory(state, inventory({ desktopSessions: [desk()] }), 2000);
+    expect(state.sessions.get(LOCAL_A)?.live).toBe(true);
+    applyInventory(state, inventory({ desktopSessions: [desk()] }), 1000 + HOOK_AUTHORITY_MS + 1);
+    expect(state.sessions.get(LOCAL_A)?.live).toBe(false);
+  });
+});
+
+describe('applyHook: main agent', () => {
+  /**
+   * Verifies that a hook from an unknown session creates a live cli session in its env
+   */
+  it('creates a cli session from the first hook', () => {
+    const state = stateWithEnvs();
+    const s = applyHook(state, hook('SessionStart', { cwd: 'C:/work/alpha/src' }), 500);
+    expect(s).toMatchObject({
+      id: CLI_KEY,
+      origin: 'cli',
+      title: 'src',
+      envId: 'env-alpha',
+      live: true,
+      createdAt: 500,
+      lastActivityAt: 500,
+      cliSessionIds: [CLI_A],
+    });
+    expect(s.main).toMatchObject({ state: 'waiting', waitReason: 'prompt' });
+  });
+
+  /**
+   * Verifies that a hook without cwd creates an env-less terminal session
+   */
+  it('creates an env-less session without cwd', () => {
+    const state = stateWithEnvs();
+    const s = applyHook(state, { hook_event_name: 'Stop', session_id: CLI_A }, 1);
+    expect(s).toMatchObject({ envId: null, title: 'Session terminal', cwd: '' });
+  });
+
+  /**
+   * Verifies that a user prompt sets the main agent working with the prompt as detail
+   */
+  it('UserPromptSubmit sets main working', () => {
+    const s = run(stateWithEnvs(), [[1000, hook('UserPromptSubmit', { prompt: 'Fix\n the  bug' })]]);
+    expect(s.main).toMatchObject({ state: 'working', toolDetail: 'Fix the bug', description: 'Fix the bug', since: 1000 });
+    expect(s.main.tool).toBeUndefined();
+    expect(s.lastActivityAt).toBe(1000);
+  });
+
+  /**
+   * Verifies that each tool family moves the main agent to its room with its detail
+   */
+  it.each([
+    ['Read', { file_path: 'C:/work/alpha/a.ts' }, 'biblio', 'C:/work/alpha/a.ts'],
+    ['Edit', { file_path: 'C:/work/alpha/b.ts' }, 'atelier', 'C:/work/alpha/b.ts'],
+    ['Bash', { command: 'npm test' }, 'serveur', 'npm test'],
+  ])('PreToolUse %s moves main to its room', (tool, input, room, detail) => {
+    const s = run(stateWithEnvs(), [[1, hook('PreToolUse', { tool_name: tool, tool_input: input })]]);
+    expect(s.main).toMatchObject({ state: 'working', tool, room, toolDetail: detail });
+  });
+
+  /**
+   * Verifies that an unknown tool keeps the agent in its current room
+   */
+  it('unknown tool keeps the current room', () => {
+    const s = run(stateWithEnvs(), [
+      [1, hook('PreToolUse', { tool_name: 'Edit', tool_input: { file_path: 'a' } })],
+      [2, hook('PreToolUse', { tool_name: 'Frobnicate' })],
+    ]);
+    expect(s.main).toMatchObject({ tool: 'Frobnicate', room: 'atelier' });
+  });
+
+  /**
+   * Verifies that PostToolUse keeps the agent working on its tool
+   */
+  it('PostToolUse keeps main working', () => {
+    const s = run(stateWithEnvs(), [
+      [1, hook('PreToolUse', { tool_name: 'Read', tool_input: { file_path: 'a' } })],
+      [2, hook('PostToolUseFailure', { tool_name: 'Read' })],
+    ]);
+    expect(s.main).toMatchObject({ state: 'working', tool: 'Read', room: 'biblio' });
+  });
+
+  /**
+   * Verifies that a permission request makes main wait in the lobby with the tool
+   */
+  it('PermissionRequest sets waiting permission in accueil', () => {
+    const s = run(stateWithEnvs(), [
+      [1, hook('PreToolUse', { tool_name: 'Bash', tool_input: { command: 'rm -rf build' } })],
+      [2, hook('PermissionRequest', { tool_name: 'Bash', tool_input: { command: 'rm -rf build' } })],
+    ]);
+    expect(s.main).toMatchObject({ state: 'waiting', waitReason: 'permission', room: 'accueil', tool: 'Bash', toolDetail: 'rm -rf build' });
+  });
+
+  /**
+   * Verifies that AskUserQuestion makes main wait on a question showing its text
+   */
+  it('AskUserQuestion sets waiting question with the question text', () => {
+    const s = run(stateWithEnvs(), [
+      [1, hook('PreToolUse', { tool_name: 'AskUserQuestion', tool_input: { questions: [{ question: 'Which DB?' }, { question: 'Other' }] } })],
+    ]);
+    expect(s.main).toMatchObject({ state: 'waiting', waitReason: 'question', room: 'accueil', tool: 'AskUserQuestion', toolDetail: 'Which DB?' });
+  });
+
+  /**
+   * Verifies that AskUserQuestion without questions leaves no detail
+   */
+  it('AskUserQuestion without questions has no detail', () => {
+    const s = run(stateWithEnvs(), [[1, hook('PreToolUse', { tool_name: 'AskUserQuestion', tool_input: {} })]]);
+    expect(s.main.waitReason).toBe('question');
+    expect(s.main.toolDetail).toBeUndefined();
+  });
+
+  /**
+   * Verifies that Stop makes main wait for a prompt and records the last message
+   */
+  it('Stop sets waiting prompt with lastMessage and clears the tool', () => {
+    const s = run(stateWithEnvs(), [
+      [1, hook('PreToolUse', { tool_name: 'Edit', tool_input: { file_path: 'a' } })],
+      [2, hook('Stop', { last_assistant_message: 'All  done.' })],
+    ]);
+    expect(s.main).toMatchObject({ state: 'waiting', waitReason: 'prompt', room: 'accueil', lastMessage: 'All done.' });
+    expect(s.main.tool).toBeUndefined();
+    expect(s.main.toolDetail).toBeUndefined();
+  });
+
+  /**
+   * Verifies that the last message is truncated to 400 characters
+   */
+  it('Stop truncates lastMessage to 400 characters', () => {
+    const s = run(stateWithEnvs(), [[1, hook('Stop', { last_assistant_message: 'm'.repeat(1000) })]]);
+    expect(s.main.lastMessage).toHaveLength(400);
+  });
+
+  /**
+   * Verifies that a new prompt after Stop clears the wait reason
+   */
+  it('UserPromptSubmit after Stop clears waitReason', () => {
+    const s = run(stateWithEnvs(), [
+      [1, hook('Stop')],
+      [2, hook('UserPromptSubmit', { prompt: 'next' })],
+    ]);
+    expect(s.main.state).toBe('working');
+    expect(s.main.waitReason).toBeUndefined();
+  });
+
+  /**
+   * Verifies that StopFailure makes main wait on an error with its message
+   */
+  it('StopFailure sets waiting error', () => {
+    const s = run(stateWithEnvs(), [[1, hook('StopFailure', { error: 'rate_limit' })]]);
+    expect(s.main).toMatchObject({ state: 'waiting', waitReason: 'error', toolDetail: 'rate_limit' });
+  });
+
+  /**
+   * Verifies that a non-string error falls back to a generic message
+   */
+  it('StopFailure with structured error uses a generic detail', () => {
+    const s = run(stateWithEnvs(), [[1, hook('StopFailure', { error: { code: 500 } })]]);
+    expect(s.main.toolDetail).toBe('Erreur API');
+  });
+
+  /**
+   * Verifies that a permission notification sets a permission wait with its message
+   */
+  it('Notification permission_prompt sets waiting permission', () => {
+    const s = run(stateWithEnvs(), [[1, hook('Notification', { notification_type: 'permission_prompt', message: 'Allow Bash?' })]]);
+    expect(s.main).toMatchObject({ state: 'waiting', waitReason: 'permission', toolDetail: 'Allow Bash?' });
+  });
+
+  /**
+   * Verifies that an idle notification does not interrupt a working agent
+   */
+  it('Notification idle_prompt is ignored while working', () => {
+    const s = run(stateWithEnvs(), [
+      [1, hook('UserPromptSubmit', { prompt: 'go' })],
+      [2, hook('Notification', { notification_type: 'idle_prompt' })],
+    ]);
+    expect(s.main.state).toBe('working');
+  });
+
+  /**
+   * Verifies that SessionStart does not interrupt a working agent
+   */
+  it('SessionStart keeps a working main agent', () => {
+    const s = run(stateWithEnvs(), [
+      [1, hook('UserPromptSubmit', { prompt: 'go' })],
+      [2, hook('SessionStart')],
+    ]);
+    expect(s.main.state).toBe('working');
+  });
+
+  /**
+   * Verifies that SessionEnd ends the session and every agent in it
+   */
+  it('SessionEnd marks the session not live and all agents done', () => {
+    const state = stateWithEnvs();
+    withSubagent(state, 1000);
+    const s = run(state, [
+      [1100, hook('PreToolUse', { tool_name: 'Edit', tool_input: { file_path: 'a' } })],
+      [1200, hook('SessionEnd')],
+    ]);
+    expect(s.live).toBe(false);
+    expect(s.main).toMatchObject({ state: 'done', room: 'accueil', since: 1200 });
+    expect(s.main.tool).toBeUndefined();
+    expect(s.subagents.map((a) => a.state)).toEqual(['done']);
+  });
+
+  /**
+   * Verifies that a SessionEnd for a never-seen session does not mark it live
+   */
+  it('SessionEnd on a new session leaves it not live', () => {
+    const s = run(stateWithEnvs(), [[1, hook('SessionEnd')]]);
+    expect(s.live).toBe(false);
+  });
+
+  /**
+   * Verifies that an unknown event only refreshes activity and liveness
+   */
+  it('unknown events change no agent state', () => {
+    const s = run(stateWithEnvs(), [
+      [1, hook('Stop')],
+      [5, hook('SomethingNew')],
+    ]);
+    expect(s.main).toMatchObject({ state: 'waiting', waitReason: 'prompt', since: 1 });
+    expect(s.lastActivityAt).toBe(5);
+  });
+});
+
+describe('applyHook: since', () => {
+  /**
+   * Verifies that since is kept when state, tool and wait reason are unchanged
+   */
+  it('does not reset on an identical activity', () => {
+    const s = run(stateWithEnvs(), [
+      [100, hook('PreToolUse', { tool_name: 'Read', tool_input: { file_path: 'a' } })],
+      [200, hook('PostToolUse', { tool_name: 'Read' })],
+      [300, hook('PreToolUse', { tool_name: 'Read', tool_input: { file_path: 'b' } })],
+    ]);
+    expect(s.main).toMatchObject({ since: 100, toolDetail: 'b' });
+  });
+
+  /**
+   * Verifies that since resets when the tool changes
+   */
+  it('resets when the tool changes', () => {
+    const s = run(stateWithEnvs(), [
+      [100, hook('PreToolUse', { tool_name: 'Read' })],
+      [300, hook('PreToolUse', { tool_name: 'Grep' })],
+    ]);
+    expect(s.main.since).toBe(300);
+  });
+
+  /**
+   * Verifies that since resets when the state or the wait reason changes
+   */
+  it('resets on state and wait reason changes', () => {
+    const state = stateWithEnvs();
+    let s = run(state, [
+      [100, hook('PreToolUse', { tool_name: 'Bash' })],
+      [200, hook('PermissionRequest', { tool_name: 'Bash' })],
+    ]);
+    expect(s.main.since).toBe(200);
+    s = run(state, [[300, hook('Stop')]]);
+    expect(s.main.since).toBe(300);
+    s = run(state, [[400, hook('Notification', { notification_type: 'idle_prompt' })]]);
+    expect(s.main.since).toBe(300);
+  });
+});
+
+describe('applyHook: subagents', () => {
+  /**
+   * Verifies that an Agent call then SubagentStart creates a described subagent
+   */
+  it('creates a subagent with the description of the matching Agent call', () => {
+    const s = withSubagent(stateWithEnvs(), 1000);
+    expect(s.subagents).toHaveLength(1);
+    expect(s.subagents[0]).toMatchObject({
+      id: 'ag-1',
+      sessionId: CLI_KEY,
+      kind: 'sub',
+      agentType: 'Explore',
+      description: 'Scan repo',
+      state: 'working',
+      room: 'accueil',
+      since: 1020,
+    });
+  });
+
+  /**
+   * Verifies that SubagentStart picks the pending spawn of the same agent type
+   */
+  it('matches pending spawns by agent type', () => {
+    const s = run(stateWithEnvs(), [
+      [1, hook('PreToolUse', { tool_name: 'Agent', tool_input: { subagent_type: 'Plan', description: 'P' } })],
+      [2, hook('PreToolUse', { tool_name: 'Task', tool_input: { subagent_type: 'Explore', description: 'E' } })],
+      [3, hook('SubagentStart', { agent_id: 'ag-e', agent_type: 'Explore' })],
+      [4, hook('SubagentStart', { agent_id: 'ag-p', agent_type: 'Plan' })],
+    ]);
+    expect(s.subagents.map((a) => [a.id, a.description])).toEqual([
+      ['ag-e', 'E'],
+      ['ag-p', 'P'],
+    ]);
+  });
+
+  /**
+   * Verifies that an Agent call without subagent_type is matched as general-purpose
+   */
+  it('defaults the pending spawn type to general-purpose', () => {
+    const s = run(stateWithEnvs(), [
+      [1, hook('PreToolUse', { tool_name: 'Agent', tool_input: { description: 'G' } })],
+      [2, hook('SubagentStart', { agent_id: 'ag-g', agent_type: 'general-purpose' })],
+    ]);
+    expect(s.subagents[0]?.description).toBe('G');
+  });
+
+  /**
+   * Verifies that a SubagentStart without a pending spawn has no description
+   */
+  it('creates a subagent without description when no spawn matches', () => {
+    const s = run(stateWithEnvs(), [[1, hook('SubagentStart', { agent_id: 'ag-1', agent_type: 'Explore' })]]);
+    expect(s.subagents[0]?.agentType).toBe('Explore');
+    expect(s.subagents[0]?.description).toBeUndefined();
+  });
+
+  /**
+   * Verifies that a spawn is consumed once and a repeated SubagentStart adds nothing
+   */
+  it('ignores a duplicate SubagentStart', () => {
+    const state = stateWithEnvs();
+    withSubagent(state, 1000);
+    const s = run(state, [[2000, hook('SubagentStart', { agent_id: 'ag-1', agent_type: 'Explore' })]]);
+    expect(s.subagents).toHaveLength(1);
+  });
+
+  /**
+   * Verifies that internal agents with an empty or missing type are not shown
+   */
+  it.each([[{ agent_id: 'ag-int', agent_type: '' }], [{ agent_id: 'ag-int' }], [{ agent_type: 'Explore' }]])(
+    'ignores SubagentStart %j',
+    (extra) => {
+      const s = run(stateWithEnvs(), [[1, hook('SubagentStart', extra)]]);
+      expect(s.subagents).toEqual([]);
+    },
+  );
+
+  /**
+   * Verifies that tool events carrying agent_id update the subagent, not main
+   */
+  it('routes tool events with agent_id to the subagent', () => {
+    const state = stateWithEnvs();
+    withSubagent(state, 1000);
+    const s = run(state, [[1100, hook('PreToolUse', { agent_id: 'ag-1', tool_name: 'Grep', tool_input: { pattern: 'TODO' } })]]);
+    expect(s.subagents[0]).toMatchObject({ tool: 'Grep', room: 'biblio', toolDetail: 'TODO', since: 1100 });
+    expect(s.main).toMatchObject({ tool: 'Agent', since: 1010 });
+
+    run(state, [[1200, hook('PermissionRequest', { agent_id: 'ag-1', tool_name: 'Bash' })]]);
+    expect(s.subagents[0]).toMatchObject({ state: 'waiting', waitReason: 'permission' });
+    expect(s.main.state).toBe('working');
+  });
+
+  /**
+   * Verifies that a subagent's question makes only that subagent wait
+   */
+  it('AskUserQuestion from a subagent only affects the subagent', () => {
+    const state = stateWithEnvs();
+    withSubagent(state, 1000);
+    const s = run(state, [
+      [1100, hook('PreToolUse', { agent_id: 'ag-1', tool_name: 'AskUserQuestion', tool_input: { questions: [{ question: 'Q?' }] } })],
+    ]);
+    expect(s.subagents[0]).toMatchObject({ state: 'waiting', waitReason: 'question', toolDetail: 'Q?' });
+    expect(s.main.state).toBe('working');
+  });
+
+  /**
+   * Verifies that an Agent call made by a subagent is not queued as a main spawn
+   */
+  it('does not queue spawns from a subagent Agent call', () => {
+    const state = stateWithEnvs();
+    withSubagent(state, 1000);
+    const s = run(state, [
+      [1100, hook('PreToolUse', { agent_id: 'ag-1', tool_name: 'Agent', tool_input: { subagent_type: 'Plan', description: 'nested' } })],
+      [1200, hook('SubagentStart', { agent_id: 'ag-2', agent_type: 'Plan' })],
+    ]);
+    expect(s.subagents[1]?.description).toBeUndefined();
+  });
+
+  /**
+   * Verifies that SubagentStop finishes the subagent with its last message
+   */
+  it('SubagentStop marks the subagent done with lastMessage', () => {
+    const state = stateWithEnvs();
+    withSubagent(state, 1000);
+    run(state, [[1100, hook('PreToolUse', { agent_id: 'ag-1', tool_name: 'Read' })]]);
+    const s = run(state, [[1200, hook('SubagentStop', { agent_id: 'ag-1', last_assistant_message: 'Found 3 files' })]]);
+    expect(s.subagents[0]).toMatchObject({ state: 'done', room: 'accueil', lastMessage: 'Found 3 files', since: 1200 });
+    expect(s.subagents[0]?.tool).toBeUndefined();
+    expect(s.main.state).toBe('working');
+  });
+
+  /**
+   * Verifies that a late PostToolUse does not revive a finished subagent
+   */
+  it('PostToolUse does not revive a done subagent', () => {
+    const state = stateWithEnvs();
+    withSubagent(state, 1000);
+    const s = run(state, [
+      [1100, hook('SubagentStop', { agent_id: 'ag-1' })],
+      [1200, hook('PostToolUse', { agent_id: 'ag-1', tool_name: 'Read' })],
+    ]);
+    expect(s.subagents[0]?.state).toBe('done');
+  });
+
+  /**
+   * Verifies that a tool event from an unseen agent_id creates that subagent
+   */
+  // An agent_id without agent_type is an internal agent (prompt suggestions…): it gets no figure.
+  it('creates the subagent from a tool event when SubagentStart was missed', () => {
+    const s = run(stateWithEnvs(), [
+      [1, hook('PreToolUse', { agent_id: 'ag-x', agent_type: 'dexter', tool_name: 'Write', tool_input: { file_path: 'C:/work/alpha/t.ts' } })],
+      [2, hook('PostToolUse', { agent_id: 'ag-y', tool_name: 'Read' })],
+    ]);
+    expect(s.subagents.map((a) => [a.id, a.agentType, a.room])).toEqual([
+      ['ag-x', 'dexter', 'atelier'],
+    ]);
+    expect(s.subagents[0]).toMatchObject({ kind: 'sub', state: 'working', toolDetail: 'C:/work/alpha/t.ts' });
+  });
+
+  /**
+   * Verifies that non-tool events from an unknown agent_id create no subagent
+   */
+  it('does not create a subagent from SubagentStop of an unknown agent', () => {
+    const s = run(stateWithEnvs(), [
+      [1, hook('UserPromptSubmit', { prompt: 'go' })],
+      [2, hook('SubagentStop', { agent_id: 'ghost' })],
+    ]);
+    expect(s.subagents).toEqual([]);
+    expect(s.main.state).toBe('working');
+  });
+});
+
+describe('prune', () => {
+  /**
+   * Verifies that done subagents disappear exactly after DONE_SUBAGENT_TTL_MS
+   */
+  it('removes done subagents after their TTL', () => {
+    const state = stateWithEnvs();
+    withSubagent(state, 1000);
+    run(state, [[5000, hook('SubagentStop', { agent_id: 'ag-1' })]]);
+    prune(state, 5000 + DONE_SUBAGENT_TTL_MS - 1);
+    expect(state.sessions.get(CLI_KEY)?.subagents).toHaveLength(1);
+    prune(state, 5000 + DONE_SUBAGENT_TTL_MS);
+    expect(state.sessions.get(CLI_KEY)?.subagents).toEqual([]);
+  });
+
+  /**
+   * Verifies that working subagents are never pruned
+   */
+  it('keeps working subagents', () => {
+    const state = stateWithEnvs();
+    withSubagent(state, 1000);
+    prune(state, 1000 + DONE_SUBAGENT_TTL_MS * 10);
+    expect(state.sessions.get(CLI_KEY)?.subagents).toHaveLength(1);
+  });
+
+  /**
+   * Verifies that finished cli sessions are forgotten after DONE_CLI_SESSION_TTL_MS
+   */
+  it('removes old finished cli sessions', () => {
+    const state = stateWithEnvs();
+    run(state, [
+      [1000, hook('UserPromptSubmit', { prompt: 'go' })],
+      [2000, hook('SessionEnd')],
+    ]);
+    prune(state, 2000 + DONE_CLI_SESSION_TTL_MS);
+    expect(state.sessions.has(CLI_KEY)).toBe(true);
+    prune(state, 2000 + DONE_CLI_SESSION_TTL_MS + 1);
+    expect(state.sessions.has(CLI_KEY)).toBe(false);
+
+    // A later hook with the same id starts a fresh session.
+    const later = 2000 + DONE_CLI_SESSION_TTL_MS + 10;
+    const s = applyHook(state, hook('Stop'), later);
+    expect(s).toMatchObject({ id: CLI_KEY, createdAt: later, subagents: [] });
+  });
+
+  /**
+   * Verifies that live cli sessions and finished desktop sessions are kept
+   */
+  it('keeps live cli sessions and desktop sessions', () => {
+    const state = stateWithEnvs();
+    applyInventory(state, inventory({ desktopSessions: [desk({ localId: LOCAL_B, cliSessionIds: [] })] }), 1);
+    run(state, [[1000, hook('UserPromptSubmit', { prompt: 'go' })]]);
+    prune(state, 1000 + DONE_CLI_SESSION_TTL_MS * 2);
+    expect([...state.sessions.keys()].sort()).toEqual([CLI_KEY, LOCAL_B].sort());
+  });
+});
+
+describe('environmentsView', () => {
+  /**
+   * Verifies that each environment counts its live sessions and no virtual env appears
+   */
+  it('counts active sessions per environment without orphans', () => {
+    const state = createState();
+    applyInventory(
+      state,
+      inventory({
+        desktopSessions: [desk(), desk({ localId: LOCAL_B, cliSessionIds: [] })],
+        live: [proc()],
+      }),
+      1,
+    );
+    expect(environmentsView(state)).toEqual([
+      { id: 'env-alpha', name: 'Alpha', folders: ['C:\\work\\alpha'], activeSessions: 1 },
+      { id: 'env-alpha-api', name: 'Alpha API', folders: ['C:\\Work\\Alpha\\api'], activeSessions: 0 },
+      { id: 'env-beta', name: 'Beta', folders: ['C:\\work\\beta'], activeSessions: 0 },
+    ]);
+  });
+
+  /**
+   * Verifies that a session outside every env adds the virtual environment last
+   */
+  it('adds the virtual environment when a session has no env', () => {
+    const state = stateWithEnvs();
+    applyHook(state, hook('UserPromptSubmit', { cwd: 'D:/elsewhere', prompt: 'go' }), 1);
+    const list = environmentsView(state);
+    expect(list).toHaveLength(ENVS.length + 1);
+    expect(list.at(-1)).toEqual({ id: NO_ENV, name: 'Hors environnement', folders: [], virtual: true, activeSessions: 1 });
+  });
+
+  /**
+   * Verifies that a finished orphan session still shows the virtual env with 0 active
+   */
+  it('shows the virtual environment for finished orphans', () => {
+    const state = stateWithEnvs();
+    run(state, [
+      [1, hook('Stop', { cwd: 'D:/elsewhere' })],
+      [2, hook('SessionEnd')],
+    ]);
+    expect(environmentsView(state).at(-1)).toMatchObject({ id: NO_ENV, activeSessions: 0 });
+  });
+
+  /**
+   * Verifies that an empty state lists only the known environments
+   */
+  it('returns [] for an empty state', () => {
+    expect(environmentsView(createState())).toEqual([]);
+  });
+});
+
+describe('sessionsView', () => {
+  /**
+   * Verifies ordering and filtering: live by creation, then recent non-archived history
+   */
+  it('returns live sessions first, then at most HISTORY_LIMIT newest finished ones', () => {
+    const state = createState();
+    const finished = Array.from({ length: HISTORY_LIMIT + 5 }, (_, i) =>
+      desk({ localId: `local_hist_${i}`, cliSessionIds: [], envId: 'env-alpha', lastActivityAt: 1000 + i }),
+    );
+    applyInventory(
+      state,
+      inventory({
+        desktopSessions: [
+          desk({ localId: 'local_live_late', cliSessionIds: [], envId: 'env-alpha', createdAt: 500 }),
+          desk({ localId: 'local_live_early', cliSessionIds: [], envId: 'env-alpha', createdAt: 300 }),
+          desk({ localId: 'local_archived', cliSessionIds: [], envId: 'env-alpha', archived: true, lastActivityAt: 999_999 }),
+          desk({ localId: 'local_beta', cliSessionIds: [], envId: 'env-beta', lastActivityAt: 999_999 }),
+          ...finished,
+        ],
+        live: [
+          proc({ pid: 1, cliSessionId: 'c-late', hostSessionId: 'local_live_late' }),
+          proc({ pid: 2, cliSessionId: 'c-early', hostSessionId: 'local_live_early' }),
+        ],
+      }),
+      1,
+    );
+
+    const ids = sessionsView(state, 'env-alpha').map((s) => s.id);
+    const expectedHistory = Array.from({ length: HISTORY_LIMIT }, (_, k) => `local_hist_${HISTORY_LIMIT + 4 - k}`);
+    expect(ids).toEqual(['local_live_early', 'local_live_late', ...expectedHistory]);
+    expect(ids).not.toContain('local_archived');
+    expect(ids).not.toContain('local_beta');
+  });
+
+  /**
+   * Verifies that the virtual env id returns sessions without environment
+   */
+  it('returns orphan sessions for the virtual environment', () => {
+    const state = stateWithEnvs();
+    applyHook(state, hook('Stop', { cwd: 'D:/elsewhere' }), 1);
+    expect(sessionsView(state, NO_ENV).map((s) => s.id)).toEqual([CLI_KEY]);
+    expect(sessionsView(state, 'env-alpha')).toEqual([]);
+  });
+
+  /**
+   * Verifies that an unknown env id yields an empty list
+   */
+  it('returns [] for an unknown environment', () => {
+    const state = stateWithEnvs();
+    applyHook(state, hook('Stop'), 1);
+    expect(sessionsView(state, 'env-unknown')).toEqual([]);
+  });
+});
+
+describe('summarize', () => {
+  /**
+   * Verifies that a tool event summary carries ids, env and the tool detail
+   */
+  it('summarises a tool event', () => {
+    const state = stateWithEnvs();
+    const ev = hook('PreToolUse', { agent_id: 'ag-1', agent_type: 'Explore', tool_name: 'Bash', tool_input: { command: 'npm test' } });
+    const s = applyHook(state, ev, 42);
+    expect(summarize(ev, s, 42)).toEqual({
+      seq: 0,
+      at: 42,
+      event: 'PreToolUse',
+      sessionId: CLI_KEY,
+      envId: 'env-alpha',
+      agentId: 'ag-1',
+      agentType: 'Explore',
+      tool: 'Bash',
+      detail: 'npm test',
+    });
+  });
+
+  /**
+   * Verifies that without tool input the prompt, then the message, is the detail (120 max)
+   */
+  it('falls back to prompt then message, truncated to 120', () => {
+    const state = stateWithEnvs();
+    const p = hook('UserPromptSubmit', { prompt: 'p'.repeat(300) });
+    const detail = summarize(p, applyHook(state, p, 1), 1).detail!;
+    expect(detail).toHaveLength(120);
+    const n = hook('Notification', { message: 'Need input' });
+    expect(summarize(n, applyHook(state, n, 2), 2).detail).toBe('Need input');
+    const e = hook('Stop');
+    expect(summarize(e, applyHook(state, e, 3), 3).detail).toBeUndefined();
+  });
+});
+
+describe('review regressions', () => {
+  /** A desktop session whose file is listed but unreadable (mid-write) keeps its live state. */
+  it('keeps a desktop session whose file is present but did not parse', () => {
+    const state = stateWithEnvs();
+    applyInventory(state, inventory({ desktopSessions: [desk()], live: [proc({ status: 'busy' })] }), 1000);
+    applyHook(state, hook('PreToolUse', { tool_name: 'Edit', tool_input: { file_path: 'a.ts' } }), 1100);
+    applyInventory(state, inventory({ desktopSessions: [], live: [proc({ status: 'busy' })], presentIds: new Set([LOCAL_A]), complete: true }), 1200);
+    const s = state.sessions.get(LOCAL_A)!;
+    expect(s).toBeDefined();
+    expect(s.main).toMatchObject({ state: 'working', tool: 'Edit', room: 'atelier' });
+  });
+
+  /** An incomplete listing (folder unreadable, desktop data not found) proves no deletion. */
+  it('keeps desktop sessions when the listing is incomplete', () => {
+    const state = stateWithEnvs();
+    applyInventory(state, inventory({ desktopSessions: [desk()] }), 1000);
+    applyInventory(state, inventory({ desktopSessions: [], presentIds: new Set(), complete: false }), 1100);
+    expect(state.sessions.has(LOCAL_A)).toBe(true);
+    applyInventory(state, inventory({ desktopSessions: [], presentIds: new Set(), complete: true }), 1200);
+    expect(state.sessions.has(LOCAL_A)).toBe(false);
+  });
+
+  /** An unreadable presets file keeps the environments already known. */
+  it('keeps environments when the presets file could not be read', () => {
+    const state = stateWithEnvs();
+    applyInventory(state, inventory({ environments: [], presetsOk: false }), 1000);
+    expect(state.environments).toEqual(ENVS);
+  });
+
+  /** The process status never overrides a question or error wait, and an unknown status is ignored. */
+  it('protects hook-reported waits from the inventory status', () => {
+    const state = stateWithEnvs();
+    applyInventory(state, inventory({ desktopSessions: [desk()], live: [proc({ status: 'busy' })] }), 1000);
+    applyHook(state, hook('PreToolUse', { tool_name: 'AskUserQuestion', tool_input: { questions: [{ question: 'Which?' }] } }), 1100);
+    const later = 1100 + HOOK_AUTHORITY_MS + 1;
+    applyInventory(state, inventory({ desktopSessions: [desk()], live: [proc({ status: 'busy' })] }), later);
+    expect(state.sessions.get(LOCAL_A)!.main).toMatchObject({ state: 'waiting', waitReason: 'question' });
+
+    applyHook(state, hook('PreToolUse', { tool_name: 'Bash', tool_input: { command: 'npm test' } }), later + 1);
+    const silent = later + 1 + HOOK_AUTHORITY_MS + 1;
+    applyInventory(state, inventory({ desktopSessions: [desk()], live: [proc({ status: 'unknown' as 'busy' })] }), silent);
+    expect(state.sessions.get(LOCAL_A)!.main).toMatchObject({ state: 'working', room: 'serveur' });
+  });
+
+  /** A permission notification does not paint the main agent when a subagent is the one waiting. */
+  it('keeps the main agent working when a subagent asked for permission', () => {
+    const state = stateWithEnvs();
+    withSubagent(state, 1000);
+    applyHook(state, hook('PermissionRequest', { agent_id: 'ag-1', agent_type: 'Explore', tool_name: 'Bash', tool_input: { command: 'rm x' } }), 1200);
+    const s = applyHook(state, hook('Notification', { notification_type: 'permission_prompt', message: 'Claude needs your permission' }), 1300);
+    expect(s.subagents[0]).toMatchObject({ state: 'waiting', waitReason: 'permission' });
+    expect(s.main.state).not.toBe('waiting');
+  });
+
+  /** A subagent whose SubagentStop was missed retires after SUBAGENT_SILENCE_MS. */
+  it('retires silent subagents', () => {
+    const state = stateWithEnvs();
+    const s = withSubagent(state, 1000);
+    prune(state, 1000 + SUBAGENT_SILENCE_MS + 1000);
+    expect(s.subagents[0]?.state ?? 'done').toBe('done');
+  });
+
+  /** Pending spawns are cleared at the end of a turn, so a later subagent never inherits an old description. */
+  it('clears pending spawns on Stop', () => {
+    const state = stateWithEnvs();
+    run(state, [
+      [1, hook('PreToolUse', { tool_name: 'Agent', tool_input: { subagent_type: 'Explore', description: 'Old task' } })],
+      [2, hook('Stop')],
+    ]);
+    const s = applyHook(state, hook('SubagentStart', { agent_id: 'ag-new', agent_type: 'Explore' }), 3);
+    expect(s.subagents.find((a) => a.id === 'ag-new')!.description).toBeUndefined();
+  });
+
+  /** Merging keeps a live session live even when a stale temporary copy was finished. */
+  it('never downgrades live when absorbing a stale temporary session', () => {
+    const state = stateWithEnvs();
+    applyHook(state, hook('UserPromptSubmit', { prompt: 'old', session_id: CLI_B }), 100);
+    applyHook(state, hook('SessionEnd', { session_id: CLI_B }), 200);
+    applyHook(state, hook('UserPromptSubmit', { prompt: 'current' }), 300);
+    applyInventory(
+      state,
+      inventory({ desktopSessions: [desk({ cliSessionIds: [CLI_A, CLI_B] })], live: [proc({ status: 'busy' })] }),
+      400,
+    );
+    const s = state.sessions.get(LOCAL_A)!;
+    expect(s.live).toBe(true);
+    expect(s.main).toMatchObject({ state: 'working', description: 'current' });
+    expect(state.sessions.size).toBe(1);
+  });
+});
+
+describe('re-review regressions', () => {
+  /** A subagent waiting on the user is never retired for silence. */
+  it('keeps a silent subagent that waits for permission', () => {
+    const state = stateWithEnvs();
+    const s = withSubagent(state, 1000);
+    applyHook(state, hook('PermissionRequest', { agent_id: 'ag-1', agent_type: 'Explore', tool_name: 'Bash' }), 1100);
+    prune(state, 1100 + SUBAGENT_SILENCE_MS + 1000);
+    expect(s.subagents[0]).toMatchObject({ state: 'waiting', waitReason: 'permission' });
+  });
+});

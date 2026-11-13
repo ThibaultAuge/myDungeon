@@ -1,0 +1,22 @@
+{
+  "byAccount": {
+    "acct-00000000-0000-4000-8000-000000000001": {
+      "presets": [
+        {
+          "id": "env-alpha",
+          "name": "Alpha",
+          "target": { "kind": "local", "cwd": "C:\\work\\alpha", "additionalFolders": ["C:\\work\\shared"] }
+        },
+        { "id": "env-no-name", "target": { "kind": "local", "cwd": "C:\\work\\nameless" } }
+      ]
+    },
+    "acct-00000000-0000-4000-8000-000000000002": {
+      "presets": [
+        { "id": "env-beta", "name": "Beta", "target": { "kind": "local", "cwd": "C:\\work\\beta" } },
+        { "id": "env-remote", "name": "Remote", "target": { "kind": "remote" } }
+      ]
+    },
+    "acct-00000000-0000-4000-8000-000000000003": {}
+  },
+  "unrelatedKey": 1
+}

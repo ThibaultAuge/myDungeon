@@ -1,0 +1,75 @@
+import fs from 'node:fs';
+import chokidar from 'chokidar';
+import { buildApp } from './app.ts';
+import { loadConfig, WEB_DIST } from './config.ts';
+import { readInventory } from './inventory.ts';
+import { resolvePaths, type ClaudePaths } from './paths.ts';
+import { OfficeStore } from './store.ts';
+
+const RESCAN_MS = 10_000;
+const REDISCOVER_MS = 60_000;
+const DEBOUNCE_MS = 300;
+
+const config = loadConfig();
+const store = new OfficeStore();
+let paths: ClaudePaths = resolvePaths();
+
+function rescan(): void {
+  try {
+    store.ingestInventory(readInventory(paths));
+  } catch (err) {
+    console.error('[inventaire] lecture impossible :', (err as Error).message);
+  }
+}
+
+let debounce: NodeJS.Timeout | null = null;
+function scheduleRescan(): void {
+  if (debounce) clearTimeout(debounce);
+  debounce = setTimeout(rescan, DEBOUNCE_MS);
+}
+
+function watchTargets(p: ClaudePaths): string[] {
+  return [p.liveDir, ...p.sessionDirs, ...(p.presetsFile ? [p.presetsFile] : [])];
+}
+
+function startWatcher(p: ClaudePaths) {
+  const w = chokidar.watch(watchTargets(p), { depth: 0, ignoreInitial: true });
+  w.on('all', scheduleRescan);
+  // Without a listener an EPERM on a vanished folder would crash the server, and every hook with it.
+  w.on('error', (err) => console.error('[surveillance]', (err as Error).message));
+  return w;
+}
+
+let watcher = startWatcher(paths);
+
+rescan();
+setInterval(() => {
+  rescan();
+  store.tick();
+}, RESCAN_MS);
+setInterval(() => {
+  try {
+    const next = resolvePaths();
+    // A folder that still exists but failed to list during discovery stays watched: its
+    // sessions are then reported as an incomplete scan instead of being deleted.
+    const kept = paths.sessionDirs.filter((d) => !next.sessionDirs.includes(d) && fs.existsSync(d));
+    next.sessionDirs = [...next.sessionDirs, ...kept];
+    if (JSON.stringify(watchTargets(next)) !== JSON.stringify(watchTargets(paths))) {
+      paths = next;
+      void watcher.close();
+      watcher = startWatcher(paths);
+      rescan();
+    }
+  } catch (err) {
+    console.error('[découverte] échec :', (err as Error).message);
+  }
+}, REDISCOVER_MS);
+
+const app = await buildApp({ store, port: config.port, token: config.token, webDist: WEB_DIST });
+await app.listen({ host: '127.0.0.1', port: config.port });
+
+console.log(`Agent Office : http://127.0.0.1:${config.port}`);
+console.log(`  données desktop : ${paths.desktopData ?? 'introuvables'} (${paths.sessionDirs.length} dossier(s) de sessions)`);
+if (!config.token) {
+  console.warn('  aucun jeton : les hooks sont refusés. Lance `npm run hooks:install`.');
+}
