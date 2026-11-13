@@ -110,7 +110,8 @@ function EnvPage({ envId }: { envId: string }) {
           </div>
           <Legend />
         </div>
-        <aside className="office__side" aria-label="Détail des agents">
+        {/* Focusable: the panel scrolls, and keyboard users must be able to scroll it. */}
+        <aside className="office__side" aria-label="Détail des agents" tabIndex={0}>
           <StatusAnnouncer sessions={sessions} />
           <AgentPanel sessions={sessions} />
           <SessionList sessions={sessions} />

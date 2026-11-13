@@ -228,8 +228,25 @@ dans son `.claude/agents/`, et les plugins en ajoutent.
 - **Nombre de pièces.** On part sur 14 lieux. La lisibilité et les 60 images/s seront
   vérifiées à l'usage.
 
-## Prochaine étape
+## État de l'implémentation
 
-On adaptera le code juste après : le tableau outil → pièce de
-`packages/server/src/reducer.ts` et le plan de `packages/web/src/scene/layout.ts` ne
-connaissent que les 4 pièces actuelles.
+*Mis à jour le 2026-11-13.*
+
+Fait :
+
+- le plan du donjon, ses 14 lieux et ses couloirs (`packages/web/src/scene/layout.ts`, rendu dans
+  `Room.tsx`) ;
+- les déplacements par les portes et les couloirs, y compris quand un agent change de destination en
+  chemin ;
+- le tableau outil → pièce et les postes attitrés des agents spécialisés
+  (`packages/server/src/reducer.ts`) ;
+- les places par pièce, les postes attitrés, le débordement le long des murs ;
+- la file d'attente à l'autel ;
+- la taverne comme point d'apparition et de retour des sous-agents.
+
+Reste à faire :
+
+- le cycle de vie complet de la taverne (un exemplaire neutre de chaque type au repos) ;
+- les silhouettes par type d'agent ;
+- la tenue de l'agent principal selon le mode plan (`permission_mode`, toujours à vérifier) ;
+- les badges de skills.

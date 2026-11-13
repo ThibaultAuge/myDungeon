@@ -1,13 +1,6 @@
-import type { AgentView, RoomId, SessionView } from '@agent-office/shared';
+import type { AgentView, SessionView } from '@agent-office/shared';
 
 export const STATE_COLORS = { working: '#1D9E75', waiting: '#EF9F27', done: '#888780' } as const;
-
-export const ROOM_NAMES: Record<RoomId, string> = {
-  accueil: 'Accueil',
-  atelier: 'Atelier code',
-  biblio: 'Bibliothèque',
-  serveur: 'Salle serveur',
-};
 
 export function stateLabel(a: AgentView): string {
   if (a.state === 'working') return 'Travaille';

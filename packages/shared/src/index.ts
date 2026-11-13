@@ -1,6 +1,22 @@
 // Types shared by the server and the web client. Type-only module: import it with `import type`.
 
-export type RoomId = 'accueil' | 'atelier' | 'biblio' | 'serveur';
+/** The places of the dungeon. See docs/lieux-et-personnages.md. */
+export type RoomId =
+  | 'autel'
+  | 'cartes'
+  | 'atelier'
+  | 'biblio'
+  | 'scriptorium'
+  | 'observatoire'
+  | 'pigeonnier'
+  | 'machines'
+  | 'arithmetique'
+  | 'garde'
+  | 'epreuves'
+  | 'heraut'
+  | 'detente'
+  | 'concierge'
+  | 'taverne';
 
 export type AgentState = 'working' | 'waiting' | 'done';
 

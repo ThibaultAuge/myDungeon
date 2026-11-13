@@ -1,5 +1,6 @@
 import type { AgentView, SessionView } from '@agent-office/shared';
 import { agentName, elapsed, sessionColor, stateLabel, STATE_COLORS } from '../format.ts';
+import { ROOM_NAMES } from '../scene/layout.ts';
 import { useOffice } from '../store.ts';
 import { useNow } from '../useNow.ts';
 
@@ -26,6 +27,7 @@ function AgentButton({ agent, session, now }: { agent: AgentView; session: Sessi
         <span className="muted">
           {stateLabel(agent)}
           {agent.tool ? ` · ${agent.tool}` : ''}
+          {` · ${ROOM_NAMES[agent.room] ?? agent.room}`}
           {/* The ticking timer stays out of the accessible name, which must not change every second. */}
           <span aria-hidden="true"> · {elapsed(agent.since, now)}</span>
         </span>

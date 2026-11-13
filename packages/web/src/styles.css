@@ -45,6 +45,11 @@ body {
   color: var(--text);
 }
 
+/* The office fills the window exactly: the scene keeps its size and the side panel scrolls. */
+#root:has(.office) {
+  height: 100vh;
+}
+
 h1 {
   font-size: 22px;
   font-weight: 500;
@@ -193,6 +198,8 @@ select,
 .office {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 340px;
+  /* A long session list scrolls in the side panel instead of stretching the scene. */
+  grid-template-rows: minmax(0, 1fr);
   flex: 1;
   min-height: 0;
   height: 0;
@@ -219,8 +226,12 @@ select,
 }
 
 @media (max-width: 800px) {
+  #root:has(.office) {
+    height: auto;
+  }
   .office {
     grid-template-columns: 1fr;
+    grid-template-rows: auto;
     height: auto;
     flex: none;
   }
