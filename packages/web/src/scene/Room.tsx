@@ -2,7 +2,7 @@ import { useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { Html } from '@react-three/drei';
 import type { Mesh, MeshLambertMaterial } from 'three';
-import { ROOM_NAMES } from '../format.ts';
+import { useT } from '../i18n/useT.ts';
 import { reducedMotion } from '../motion.ts';
 import { ROOMS } from './layout.ts';
 
@@ -48,13 +48,14 @@ const BOOK_COLORS = ['#534AB7', '#1D9E75', '#D85A30', '#378ADD'];
 
 /** Static office: floors, walls, furniture and room signs. */
 export function OfficeRooms() {
+  const { t } = useT();
   return (
     <group>
       {ROOMS.map((r) => (
         <group key={r.id}>
           <Box size={[8.6, 0.2, 8.6]} pos={[r.center[0], -0.1, r.center[1]]} color={r.floor} />
           <Html position={[r.center[0], 2.2, r.center[1] + (r.center[1] < 0 ? -3.6 : 3.6)]} center className="room-sign" zIndexRange={[5, 0]}>
-            {ROOM_NAMES[r.id]}
+            {t.rooms[r.id]}
           </Html>
         </group>
       ))}

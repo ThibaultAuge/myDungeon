@@ -7,11 +7,14 @@ import { History } from './ui/History.tsx';
 import { SessionList } from './ui/SessionList.tsx';
 import { Debug } from './ui/Debug.tsx';
 import { StatusAnnouncer } from './ui/StatusAnnouncer.tsx';
-import { STATE_COLORS } from './format.ts';
+import { LangSwitcher } from './ui/LangSwitcher.tsx';
+import { envName, STATE_COLORS } from './format.ts';
+import { useT } from './i18n/useT.ts';
 
 function Header({ children }: { children?: ReactNode }) {
   const connected = useOffice((s) => s.connected);
   const navigate = useOffice((s) => s.navigate);
+  const { t } = useT();
   return (
     <header className="topbar">
       <a
@@ -26,8 +29,9 @@ function Header({ children }: { children?: ReactNode }) {
       </a>
       {children}
       <span className={`conn ${connected ? 'conn--ok' : 'conn--ko'}`} role="status">
-        {connected ? 'Connecté' : 'Serveur injoignable, nouvelle tentative…'}
+        {connected ? t.conn.ok : t.conn.ko}
       </span>
+      <LangSwitcher />
     </header>
   );
 }
@@ -35,6 +39,7 @@ function Header({ children }: { children?: ReactNode }) {
 function Home() {
   const environments = useOffice((s) => s.environments);
   const navigate = useOffice((s) => s.navigate);
+  const { t } = useT();
   useEffect(() => {
     void loadEnvironments();
   }, []);
@@ -42,8 +47,8 @@ function Home() {
     <>
       <Header />
       <main className="home">
-        <h1>Choisis une entreprise</h1>
-        <p className="muted">Chaque environnement de l’app Claude est un bureau, avec ses sessions et ses agents.</p>
+        <h1>{t.home.title}</h1>
+        <p className="muted">{t.home.intro}</p>
         <ul className="env-grid">
           {environments.map((e) => (
             <li key={e.id}>
@@ -55,33 +60,34 @@ function Home() {
                   navigate({ page: 'env', envId: e.id });
                 }}
               >
-                <span className="env-card__name">{e.name}</span>
-                <span className="muted">{e.activeSessions > 0 ? `${e.activeSessions} session(s) en cours` : 'Au calme'}</span>
+                <span className="env-card__name">{envName(e, t)}</span>
+                <span className="muted">{e.activeSessions > 0 ? t.home.activeSessions(e.activeSessions) : t.home.quiet}</span>
                 {e.folders[0] && <span className="path">{e.folders[0]}</span>}
               </a>
             </li>
           ))}
         </ul>
-        {environments.length === 0 && <p className="muted">Aucun environnement trouvé. Le serveur tourne-t-il ?</p>}
+        {environments.length === 0 && <p className="muted">{t.home.empty}</p>}
       </main>
     </>
   );
 }
 
 function Legend() {
+  const { t } = useT();
   return (
-    <ul className="legend" aria-label="Légende">
+    <ul className="legend" aria-label={t.legend.label}>
       <li>
-        <span className="dot" style={{ background: STATE_COLORS.working }} aria-hidden="true" /> Travaille
+        <span className="dot" style={{ background: STATE_COLORS.working }} aria-hidden="true" /> {t.legend.working}
       </li>
       <li>
-        <span className="dot" style={{ background: STATE_COLORS.waiting }} aria-hidden="true" /> Attend ton message
+        <span className="dot" style={{ background: STATE_COLORS.waiting }} aria-hidden="true" /> {t.legend.waitingPrompt}
       </li>
       <li>
-        <span className="dot" style={{ background: '#E24B4A' }} aria-hidden="true" /> Attend ta permission ou ta réponse
+        <span className="dot" style={{ background: '#E24B4A' }} aria-hidden="true" /> {t.legend.urgent}
       </li>
       <li>
-        <span className="dot" style={{ background: STATE_COLORS.done }} aria-hidden="true" /> Terminé
+        <span className="dot" style={{ background: STATE_COLORS.done }} aria-hidden="true" /> {t.legend.done}
       </li>
     </ul>
   );
@@ -91,26 +97,28 @@ function EnvPage({ envId }: { envId: string }) {
   const sessions = useOffice((s) => s.sessions);
   const environments = useOffice((s) => s.environments);
   const env = environments.find((e) => e.id === envId);
+  const { t } = useT();
+  const name = env ? envName(env, t) : '';
   useEffect(() => {
-    document.title = env ? `${env.name} · Agent Office` : 'Agent Office';
+    document.title = name ? `${name} · Agent Office` : 'Agent Office';
     return () => {
       document.title = 'Agent Office';
     };
-  }, [env]);
+  }, [name]);
   return (
     <>
       <Header>
         <EnvSwitcher envId={envId} />
       </Header>
       <main className="office">
-        <h1 className="sr-only">Bureau {env?.name ?? ''}</h1>
+        <h1 className="sr-only">{t.office.heading(name || t.env.unknown)}</h1>
         <div className="office__scene">
-          <div className="office__canvas" role="img" aria-label="Vue 3D du bureau. La même information est disponible dans la liste des sessions.">
+          <div className="office__canvas" role="img" aria-label={t.office.canvas}>
             <OfficeScene />
           </div>
           <Legend />
         </div>
-        <aside className="office__side" aria-label="Détail des agents">
+        <aside className="office__side" aria-label={t.office.side}>
           <StatusAnnouncer sessions={sessions} />
           <AgentPanel sessions={sessions} />
           <SessionList sessions={sessions} />

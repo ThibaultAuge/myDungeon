@@ -92,7 +92,14 @@ describe('parseDesktopSession', () => {
    */
   it('defaults title, cwd and dates when absent', () => {
     const s = parseDesktopSession({ sessionId: 'local_x' });
-    expect(s).toMatchObject({ title: 'Session sans titre', cwd: '', createdAt: 0, lastActivityAt: 0, archived: false });
+    expect(s).toMatchObject({ title: null, cwd: '', createdAt: 0, lastActivityAt: 0, archived: false });
+  });
+
+  /**
+   * Verifies that an empty-string title is reported as null, never as French text
+   */
+  it('maps an empty title to null', () => {
+    expect(parseDesktopSession({ sessionId: 'local_x', title: '' })?.title).toBeNull();
   });
 
   /**

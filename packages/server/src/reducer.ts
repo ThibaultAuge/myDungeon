@@ -145,7 +145,7 @@ function markSessionDone(s: SessionView, now: number): void {
 function createSession(
   id: string,
   origin: 'desktop' | 'cli',
-  fields: { title: string; cwd: string; envId: string | null; now: number },
+  fields: { title: string | null; cwd: string; envId: string | null; now: number },
 ): SessionView {
   return {
     id,
@@ -258,7 +258,7 @@ export function applyInventory(state: OfficeState, inv: Inventory, now: number):
     let s = state.sessions.get(id);
     if (!s) {
       s = createSession(id, 'cli', {
-        title: p.name || path.basename(p.cwd) || 'Session terminal',
+        title: p.name || path.basename(p.cwd) || null,
         cwd: p.cwd,
         envId: matchEnvironment([p.cwd], environments),
         now,
@@ -308,7 +308,7 @@ function resolveSession(state: OfficeState, ev: HookEvent, now: number): Session
   const id = `cli:${ev.session_id}`;
   const cwd = ev.cwd ?? '';
   const created = createSession(id, 'cli', {
-    title: path.basename(cwd) || 'Session terminal',
+    title: path.basename(cwd) || null,
     cwd,
     envId: cwd ? matchEnvironment([cwd], state.environments) : null,
     now,
@@ -425,7 +425,7 @@ export function applyHook(state: OfficeState, ev: HookEvent, now: number): Sessi
       state.pendingSpawns.delete(s.id);
       break;
     case 'StopFailure':
-      setWaiting(s.main, 'error', now, { toolDetail: truncate(typeof ev.error === 'string' ? ev.error : 'Erreur API') });
+      setWaiting(s.main, 'error', now, { tool: undefined, toolDetail: typeof ev.error === 'string' ? truncate(ev.error) : undefined });
       state.pendingSpawns.delete(s.id);
       break;
     case 'SessionEnd':

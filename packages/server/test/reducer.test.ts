@@ -306,6 +306,35 @@ describe('applyInventory', () => {
   });
 
   /**
+   * Verifies that an unnamed terminal process with empty cwd gets a null title
+   */
+  it('gives a null title to an unnamed cli process without cwd', () => {
+    const state = createState();
+    applyInventory(state, inventory({ live: [proc({ hostSessionId: undefined, cwd: '', name: undefined })] }), 1);
+    const s = state.sessions.get(CLI_KEY);
+    expect(s).toBeDefined();
+    expect(s?.title).toBeNull();
+  });
+
+  /**
+   * Verifies that an empty process name falls back to the cwd folder name
+   */
+  it('falls back to the folder name when the process name is empty', () => {
+    const state = createState();
+    applyInventory(state, inventory({ live: [proc({ hostSessionId: undefined, cwd: 'C:/work/beta', name: '' })] }), 1);
+    expect(state.sessions.get(CLI_KEY)?.title).toBe('beta');
+  });
+
+  /**
+   * Verifies that an untitled desktop record yields a session with a null title
+   */
+  it('keeps a null desktop title as null', () => {
+    const state = createState();
+    applyInventory(state, inventory({ desktopSessions: [desk({ title: null })] }), 1);
+    expect(state.sessions.get(LOCAL_A)?.title).toBeNull();
+  });
+
+  /**
    * Verifies that a cli session whose process vanished is kept but marked done
    */
   it('marks a cli session done when its process disappears', () => {
@@ -412,7 +441,7 @@ describe('applyHook: main agent', () => {
   it('creates an env-less session without cwd', () => {
     const state = stateWithEnvs();
     const s = applyHook(state, { hook_event_name: 'Stop', session_id: CLI_A }, 1);
-    expect(s).toMatchObject({ envId: null, title: 'Session terminal', cwd: '' });
+    expect(s).toMatchObject({ envId: null, title: null, cwd: '' });
   });
 
   /**
@@ -531,11 +560,25 @@ describe('applyHook: main agent', () => {
   });
 
   /**
-   * Verifies that a non-string error falls back to a generic message
+   * Verifies that a non-string error leaves no detail, so the client shows a translated message
    */
-  it('StopFailure with structured error uses a generic detail', () => {
+  it('StopFailure with structured error leaves the detail to the client', () => {
     const s = run(stateWithEnvs(), [[1, hook('StopFailure', { error: { code: 500 } })]]);
-    expect(s.main.toolDetail).toBe('Erreur API');
+    expect(s.main).toMatchObject({ state: 'waiting', waitReason: 'error' });
+    expect(s.main.toolDetail).toBeUndefined();
+  });
+
+  /**
+   * Verifies that StopFailure clears the last tool, so the panel shows the error and not that tool
+   */
+  it('StopFailure after a tool call clears the tool', () => {
+    const s = run(stateWithEnvs(), [
+      [1, hook('PreToolUse', { tool_name: 'Bash', tool_input: { command: 'ls' } })],
+      [2, hook('StopFailure', { error: { code: 500 } })],
+    ]);
+    expect(s.main).toMatchObject({ state: 'waiting', waitReason: 'error' });
+    expect(s.main.tool).toBeUndefined();
+    expect(s.main.toolDetail).toBeUndefined();
   });
 
   /**

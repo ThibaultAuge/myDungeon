@@ -1,0 +1,107 @@
+import type { Messages } from './fr.ts';
+import { plural } from './plural.ts';
+
+export const de: Messages = {
+  conn: {
+    ok: 'Verbunden',
+    ko: 'Server nicht erreichbar, neuer Versuch…',
+  },
+  langSwitcher: {
+    label: 'Sprache der Oberfläche',
+  },
+  home: {
+    title: 'Wähle ein Unternehmen',
+    intro: 'Jede Umgebung der Claude-App ist ein Büro, mit seinen Sitzungen und Agenten.',
+    activeSessions: (n: number) => plural('de', n, `${n} laufende Sitzung`, `${n} laufende Sitzungen`),
+    quiet: 'Alles ruhig',
+    empty: 'Keine Umgebung gefunden. Läuft der Server?',
+  },
+  env: {
+    none: 'Ohne Umgebung',
+    unknown: 'Unbekannte Umgebung',
+  },
+  envSwitcher: {
+    label: 'Unternehmen',
+    active: (n: number) => ` (${n} aktiv)`,
+    open: 'Öffnen',
+  },
+  legend: {
+    label: 'Legende',
+    working: 'Arbeitet',
+    waitingPrompt: 'Wartet auf deine Nachricht',
+    urgent: 'Wartet auf deine Erlaubnis oder Antwort',
+    done: 'Fertig',
+  },
+  office: {
+    heading: (name: string) => `Büro ${name}`,
+    canvas: '3D-Ansicht des Büros. Dieselben Informationen stehen in der Liste der Sitzungen.',
+    side: 'Details der Agenten',
+  },
+  state: {
+    working: 'Arbeitet',
+    done: 'Fertig',
+    permission: 'Wartet auf deine Erlaubnis',
+    question: 'Stellt dir eine Frage',
+    error: 'Durch einen Fehler blockiert',
+    prompt: 'Wartet auf deine nächste Nachricht',
+  },
+  session: {
+    untitled: 'Sitzung ohne Titel',
+  },
+  panel: {
+    close: 'Details schließen',
+    stateSince: (state: string, duration: string) => `${state} seit ${duration}`,
+    session: 'Sitzung',
+    agent: 'Agent',
+    mainAgent: 'Hauptagent',
+    subagent: (type: string) => `Subagent ${type}`,
+    lastRequest: 'Letzte Anfrage',
+    task: 'Aufgabe',
+    tool: 'Werkzeug',
+    detail: 'Detail',
+    apiError: 'API-Fehler',
+    launchedFrom: 'Gestartet von',
+    otherSession: 'einer anderen Sitzung',
+    folder: 'Ordner',
+    lastMessage: 'Letzte Nachricht',
+  },
+  sessionList: {
+    title: 'Laufende Sitzungen',
+    empty: 'Keine offene Sitzung in dieser Umgebung.',
+    subagentsOf: (title: string) => `Subagenten von ${title}`,
+  },
+  history: {
+    title: 'Verlauf',
+    empty: 'Keine beendete Sitzung.',
+  },
+  debug: {
+    environments: 'Umgebungen',
+    name: 'Name',
+    activeSessions: 'Laufende Sitzungen',
+    folders: 'Ordner',
+    events: (n: number) => `Hook-Stream (${n})`,
+    time: 'Uhrzeit',
+    event: 'Ereignis',
+    environment: 'Umgebung',
+    session: 'Sitzung',
+    agent: 'Agent',
+    tool: 'Werkzeug',
+    detail: 'Detail',
+    mainAgent: 'Hauptagent',
+  },
+  rooms: {
+    accueil: 'Empfang',
+    atelier: 'Code-Werkstatt',
+    biblio: 'Bibliothek',
+    serveur: 'Serverraum',
+  },
+  time: {
+    seconds: (n: number) => `${n} s`,
+    minutes: (n: number) => `${n} Min.`,
+    hours: (h: number, min: string) => `${h} Std. ${min} Min.`,
+    days: (n: number) => plural('de', n, `${n} Tag`, `${n} Tage`),
+    ago: (duration: string) => `vor ${duration}`,
+    daysAgo: (n: number) => plural('de', n, `vor ${n} Tag`, `vor ${n} Tagen`),
+  },
+  labelled: (label: string, detail: string) => `${label}: ${detail}`,
+};

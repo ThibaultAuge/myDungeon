@@ -1,0 +1,107 @@
+import type { Messages } from './fr.ts';
+import { plural } from './plural.ts';
+
+export const en: Messages = {
+  conn: {
+    ok: 'Connected',
+    ko: 'Server unreachable, retrying…',
+  },
+  langSwitcher: {
+    label: 'Interface language',
+  },
+  home: {
+    title: 'Choose a company',
+    intro: 'Each environment of the Claude app is an office, with its sessions and agents.',
+    activeSessions: (n: number) => plural('en', n, `${n} active session`, `${n} active sessions`),
+    quiet: 'All quiet',
+    empty: 'No environment found. Is the server running?',
+  },
+  env: {
+    none: 'No environment',
+    unknown: 'Unknown environment',
+  },
+  envSwitcher: {
+    label: 'Company',
+    active: (n: number) => ` (${n} active)`,
+    open: 'Open',
+  },
+  legend: {
+    label: 'Legend',
+    working: 'Working',
+    waitingPrompt: 'Waiting for your message',
+    urgent: 'Waiting for your permission or answer',
+    done: 'Done',
+  },
+  office: {
+    heading: (name: string) => `${name} office`,
+    canvas: '3D view of the office. The same information is available in the session list.',
+    side: 'Agent details',
+  },
+  state: {
+    working: 'Working',
+    done: 'Done',
+    permission: 'Waiting for your permission',
+    question: 'Asking you a question',
+    error: 'Blocked by an error',
+    prompt: 'Waiting for your next message',
+  },
+  session: {
+    untitled: 'Untitled session',
+  },
+  panel: {
+    close: 'Close details',
+    stateSince: (state: string, duration: string) => `${state} (${duration})`,
+    session: 'Session',
+    agent: 'Agent',
+    mainAgent: 'Main agent',
+    subagent: (type: string) => `Subagent ${type}`,
+    lastRequest: 'Last request',
+    task: 'Task',
+    tool: 'Tool',
+    detail: 'Detail',
+    apiError: 'API error',
+    launchedFrom: 'Launched from',
+    otherSession: 'another session',
+    folder: 'Folder',
+    lastMessage: 'Last message',
+  },
+  sessionList: {
+    title: 'Active sessions',
+    empty: 'No open session in this environment.',
+    subagentsOf: (title: string) => `Subagents of ${title}`,
+  },
+  history: {
+    title: 'History',
+    empty: 'No finished session.',
+  },
+  debug: {
+    environments: 'Environments',
+    name: 'Name',
+    activeSessions: 'Active sessions',
+    folders: 'Folders',
+    events: (n: number) => `Hook stream (${n})`,
+    time: 'Time',
+    event: 'Event',
+    environment: 'Environment',
+    session: 'Session',
+    agent: 'Agent',
+    tool: 'Tool',
+    detail: 'Detail',
+    mainAgent: 'main',
+  },
+  rooms: {
+    accueil: 'Reception',
+    atelier: 'Code workshop',
+    biblio: 'Library',
+    serveur: 'Server room',
+  },
+  time: {
+    seconds: (n: number) => `${n} s`,
+    minutes: (n: number) => `${n} min`,
+    hours: (h: number, min: string) => `${h} h ${min} min`,
+    days: (n: number) => `${n} d`,
+    ago: (duration: string) => `${duration} ago`,
+    daysAgo: (n: number) => `${n} d ago`,
+  },
+  labelled: (label: string, detail: string) => `${label}: ${detail}`,
+};

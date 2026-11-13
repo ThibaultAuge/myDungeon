@@ -32,7 +32,8 @@ export interface SessionView {
   origin: SessionOrigin;
   cliSessionIds: string[];
   envId: string | null;
-  title: string;
+  /** Null when the app has not titled a desktop session, or a terminal session has no name nor folder: the client shows a translated placeholder. */
+  title: string | null;
   cwd: string;
   /** True while a Claude Code process runs it. */
   live: boolean;
@@ -48,7 +49,7 @@ export interface EnvironmentView {
   id: string;
   name: string;
   folders: string[];
-  /** Virtual environment holding sessions that match no preset. */
+  /** Virtual environment holding sessions that match no preset. Its `name` is a French placeholder: the client translates it. */
   virtual?: boolean;
   activeSessions: number;
 }

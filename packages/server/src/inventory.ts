@@ -17,7 +17,8 @@ export interface DesktopSession {
   localId: string;
   cliSessionIds: string[];
   envId: string | null;
-  title: string;
+  /** Null when the app has not titled the session yet: the client shows a translated placeholder. */
+  title: string | null;
   /** Folders used to match an environment when `envId` is missing (worktree-aware). */
   matchFolders: string[];
   cwd: string;
@@ -120,7 +121,7 @@ export function parseDesktopSession(raw: unknown): DesktopSession | null {
     localId: s.sessionId,
     cliSessionIds,
     envId: s.startedFromEnvironmentId ?? s.envScopeId ?? null,
-    title: s.title ?? 'Session sans titre',
+    title: s.title || null,
     matchFolders,
     cwd: s.cwd ?? s.originCwd ?? '',
     archived: s.isArchived ?? false,

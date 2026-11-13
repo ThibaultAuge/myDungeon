@@ -125,6 +125,55 @@ h3 {
   color: var(--ko);
 }
 
+/* Segmented FR | DE | EN control, last item of the top bar (top right corner). */
+.lang-switcher {
+  display: inline-flex;
+  border: 1px solid var(--control-border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  font-size: 13px;
+}
+
+.lang-switcher__button {
+  min-width: 36px;
+  min-height: 28px;
+  padding: 2px 8px;
+  border: 0;
+  background: var(--surface);
+  cursor: pointer;
+}
+
+.lang-switcher__button + .lang-switcher__button {
+  border-left: 1px solid var(--control-border);
+}
+
+.lang-switcher__button:hover {
+  background: rgba(127, 127, 127, 0.12);
+}
+
+.lang-switcher__button[aria-pressed='true'] {
+  background: var(--accent);
+  color: var(--surface);
+  font-weight: 600;
+}
+
+/* Forced colours drop the fill: underline the active language so it stays visible. */
+@media (forced-colors: active) {
+  .lang-switcher__button[aria-pressed='true'] {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+}
+
+/* Drawn inside the button, so the group's rounded overflow does not clip it. */
+.lang-switcher__button:focus-visible {
+  outline-offset: -4px;
+}
+
+.lang-switcher__button[aria-pressed='true']:focus-visible {
+  outline-color: var(--surface);
+}
+
 .env-switcher {
   display: flex;
   align-items: center;

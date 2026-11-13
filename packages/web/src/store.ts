@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type { EnvironmentView, HookEventSummary, ServerMessage, SessionView } from '@agent-office/shared';
+import { initialLang, saveLang, type Lang } from './i18n/index.ts';
 
 export type Route = { page: 'home' } | { page: 'env'; envId: string } | { page: 'debug' };
 
@@ -18,6 +19,18 @@ export function routePath(r: Route): string {
 
 const MAX_EVENTS = 150;
 
+/** `localStorage` itself throws when site data is blocked. */
+function browserStorage(): Storage | undefined {
+  try {
+    return window.localStorage;
+  } catch {
+    return undefined;
+  }
+}
+
+const startLang = initialLang(browserStorage(), navigator);
+document.documentElement.lang = startLang;
+
 interface OfficeStore {
   route: Route;
   connected: boolean;
@@ -27,8 +40,10 @@ interface OfficeStore {
   serverOffset: number;
   events: HookEventSummary[];
   selectedAgentId: string | null;
+  lang: Lang;
   navigate(r: Route): void;
   select(agentId: string | null): void;
+  setLang(lang: Lang): void;
 }
 
 export const useOffice = create<OfficeStore>((set) => ({
@@ -39,6 +54,7 @@ export const useOffice = create<OfficeStore>((set) => ({
   serverOffset: 0,
   events: [],
   selectedAgentId: null,
+  lang: startLang,
   navigate(r) {
     history.pushState(null, '', routePath(r));
     set({ route: r, sessions: [], selectedAgentId: null });
@@ -46,6 +62,11 @@ export const useOffice = create<OfficeStore>((set) => ({
   },
   select(agentId) {
     set({ selectedAgentId: agentId });
+  },
+  setLang(lang) {
+    document.documentElement.lang = lang;
+    saveLang(browserStorage(), lang);
+    set({ lang });
   },
 }));
 

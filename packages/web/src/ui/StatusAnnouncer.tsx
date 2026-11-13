@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import type { SessionView } from '@agent-office/shared';
 import { agentName, stateLabel } from '../format.ts';
+import { MESSAGES } from '../i18n/index.ts';
+import { useOffice } from '../store.ts';
 
 /**
  * Announces to screen readers only the transitions that call for the user
@@ -31,7 +33,11 @@ export function StatusAnnouncer({ sessions }: { sessions: SessionView[] }) {
         const before = previous.current?.get(a.id);
         if (previous.current === null || before === key) continue;
         const urgent = a.state === 'waiting' && a.waitReason !== 'prompt';
-        if (urgent || a.state === 'done') pending.current.push(`${agentName(a, s)} : ${stateLabel(a)}`);
+        if (urgent || a.state === 'done') {
+          // Read when the change is detected, not subscribed: a language change alone must not re-run this diff.
+          const t = MESSAGES[useOffice.getState().lang];
+          pending.current.push(t.labelled(agentName(a, s, t), stateLabel(a, t)));
+        }
       }
     }
     previous.current = next;

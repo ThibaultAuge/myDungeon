@@ -1,45 +1,51 @@
-import type { AgentView, RoomId, SessionView } from '@agent-office/shared';
+import type { AgentView, EnvironmentView, SessionView } from '@agent-office/shared';
+import type { Messages } from './i18n/index.ts';
 
 export const STATE_COLORS = { working: '#1D9E75', waiting: '#EF9F27', done: '#888780' } as const;
 
-export const ROOM_NAMES: Record<RoomId, string> = {
-  accueil: 'Accueil',
-  atelier: 'Atelier code',
-  biblio: 'Bibliothèque',
-  serveur: 'Salle serveur',
-};
-
-export function stateLabel(a: AgentView): string {
-  if (a.state === 'working') return 'Travaille';
-  if (a.state === 'done') return 'Terminé';
+export function stateLabel(a: AgentView, t: Messages): string {
+  if (a.state === 'working') return t.state.working;
+  if (a.state === 'done') return t.state.done;
   switch (a.waitReason) {
     case 'permission':
-      return 'Attend ta permission';
+      return t.state.permission;
     case 'question':
-      return 'Te pose une question';
+      return t.state.question;
     case 'error':
-      return 'Bloqué par une erreur';
+      return t.state.error;
     default:
-      return 'Attend ton prochain message';
+      return t.state.prompt;
   }
 }
 
-export function agentName(a: AgentView, s: SessionView): string {
-  return a.kind === 'main' ? s.title : a.agentType;
+/** The server sends no title when the session has neither a title nor a folder name. */
+export function sessionTitle(s: Pick<SessionView, 'title'>, t: Messages): string {
+  return s.title ?? t.session.untitled;
 }
 
-export function elapsed(since: number, now: number): string {
+/** The virtual environment's name comes from the server in French: it is translated here. */
+export function envName(e: EnvironmentView, t: Messages): string {
+  return e.virtual ? t.env.none : e.name;
+}
+
+export function agentName(a: AgentView, s: SessionView, t: Messages): string {
+  return a.kind === 'main' ? sessionTitle(s, t) : a.agentType;
+}
+
+export function elapsed(since: number, now: number, t: Messages): string {
   const sec = Math.max(0, Math.round((now - since) / 1000));
-  if (sec < 60) return `${sec} s`;
+  if (sec < 60) return t.time.seconds(sec);
   const min = Math.floor(sec / 60);
-  if (min < 60) return `${min} min`;
+  if (min < 60) return t.time.minutes(min);
   const h = Math.floor(min / 60);
-  if (h < 48) return `${h} h ${String(min % 60).padStart(2, '0')}`;
-  return `${Math.floor(h / 24)} j`;
+  if (h < 48) return t.time.hours(h, String(min % 60).padStart(2, '0'));
+  return t.time.days(Math.floor(h / 24));
 }
 
-export function ago(at: number, now: number): string {
-  return `il y a ${elapsed(at, now)}`;
+export function ago(at: number, now: number, t: Messages): string {
+  const h = Math.floor(Math.max(0, Math.round((now - at) / 1000)) / 3600);
+  if (h >= 48) return t.time.daysAgo(Math.floor(h / 24));
+  return t.time.ago(elapsed(at, now, t));
 }
 
 const PALETTE = ['#534AB7', '#378ADD', '#D4537E', '#BA7517', '#0F6E56', '#993C1D', '#7F77DD', '#185FA5'];

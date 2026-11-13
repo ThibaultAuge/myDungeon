@@ -4,6 +4,7 @@ import { OrbitControls } from '@react-three/drei';
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 import type { AgentView, RoomId, SessionView } from '@agent-office/shared';
 import { agentName, sessionColor } from '../format.ts';
+import { useT } from '../i18n/useT.ts';
 import { useOffice } from '../store.ts';
 import { useNow } from '../useNow.ts';
 import { AgentFigure, agentPositions } from './AgentFigure.tsx';
@@ -80,6 +81,7 @@ export function OfficeScene() {
   const selected = useOffice((s) => s.selectedAgentId);
   const select = useOffice((s) => s.select);
   const now = useNow();
+  const { t } = useT();
   const placed = visibleAgents(sessions, now);
   const seats = useSeats(placed);
 
@@ -92,7 +94,7 @@ export function OfficeScene() {
         <AgentFigure
           key={agent.id}
           agent={agent}
-          name={agentName(agent, session)}
+          name={agentName(agent, session, t)}
           color={sessionColor(session.main.id)}
           seat={seats.get(agent.id)!}
           selected={selected === agent.id}
