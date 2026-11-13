@@ -29,6 +29,7 @@ function AgentButton({ agent, session, now }: { agent: AgentView; session: Sessi
         <span className="muted">
           {stateLabel(agent, t)}
           {agent.tool ? ` · ${agent.tool}` : ''}
+          {` · ${t.rooms[agent.room] ?? agent.room}`}
           {/* The ticking timer stays out of the accessible name, which must not change every second. */}
           <span aria-hidden="true"> · {elapsed(agent.since, now, t)}</span>
         </span>

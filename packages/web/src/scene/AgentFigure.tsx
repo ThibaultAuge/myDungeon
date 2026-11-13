@@ -5,7 +5,7 @@ import { Vector3, type Group, type Mesh } from 'three';
 import type { AgentView } from '@agent-office/shared';
 import { STATE_COLORS } from '../format.ts';
 import { reducedMotion } from '../motion.ts';
-import { routeBetween, type Seat } from './layout.ts';
+import { reroute, routeBetween, SPAWN, type Point, type Spot } from './layout.ts';
 
 /** Live positions of the figures, read by the camera to follow the selected agent. */
 export const agentPositions = new Map<string, Vector3>();
@@ -16,25 +16,28 @@ interface Props {
   agent: AgentView;
   name: string;
   color: string;
-  seat: Seat;
+  spot: Spot;
   selected: boolean;
   onSelect(id: string): void;
 }
 
-export function AgentFigure({ agent, name, color, seat, selected, onSelect }: Props) {
+export function AgentFigure({ agent, name, color, spot, selected, onSelect }: Props) {
   const group = useRef<Group>(null);
   const body = useRef<Mesh>(null);
   const ring = useRef<Mesh>(null);
   const bubble = useRef<Mesh>(null);
-  // Subagents appear at the hub and walk to their first seat; main agents start seated.
-  const pos = useMemo(() => (agent.kind === 'sub' ? new Vector3(0, 0, 0) : new Vector3(seat.x, 0, seat.z)), []); // eslint-disable-line react-hooks/exhaustive-deps
-  const path = useRef<{ x: number; z: number }[]>(agent.kind === 'sub' ? [{ x: seat.x, z: seat.z }] : []);
-  const room = useRef(agent.room);
+  // Subagents come out of the tavern lockers and walk to their post; main agents start in place.
+  const start = agent.kind === 'sub' ? SPAWN : spot;
+  const pos = useMemo(() => new Vector3(start.x, 0, start.z), []); // eslint-disable-line react-hooks/exhaustive-deps
+  const path = useRef<Point[]>(agent.kind === 'sub' ? routeBetween(SPAWN, spot) : []);
+  const last = useRef<Spot>(spot);
 
   useEffect(() => {
-    path.current = routeBetween(pos, seat, room.current === agent.room);
-    room.current = agent.room;
-  }, [seat.x, seat.z, agent.room]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (last.current.id === spot.id) return;
+    // From where the agent is, not from where it was going: never through a wall.
+    path.current = reroute(path.current, last.current, spot);
+    last.current = spot;
+  }, [spot]);
 
   useEffect(() => {
     agentPositions.set(agent.id, pos);
@@ -66,13 +69,17 @@ export function AgentFigure({ agent, name, color, seat, selected, onSelect }: Pr
       }
     } else {
       // Shortest arc, so an agent never spins a full turn to face its desk.
-      const diff = Math.atan2(Math.sin(seat.facing - g.rotation.y), Math.cos(seat.facing - g.rotation.y));
+      const diff = Math.atan2(Math.sin(spot.facing - g.rotation.y), Math.cos(spot.facing - g.rotation.y));
       g.rotation.y += diff * 0.1;
     }
     g.position.copy(pos);
     if (body.current) {
       const bob = walking ? Math.abs(Math.sin(t * 12)) * 0.08 : agent.state === 'working' ? Math.sin(t * 8) * 0.03 : 0;
+      // The first of the altar queue kneels: the whole figure sinks a little.
       body.current.position.y = 0.65 + bob;
+      g.position.y = path.current.length === 0 && spot.kneel ? -0.3 : 0;
+      // The state ring stays on the floor.
+      if (ring.current) ring.current.position.y = 0.04 - g.position.y / g.scale.y;
     }
     if (bubble.current) {
       bubble.current.rotation.y = t * 2;

@@ -71,25 +71,78 @@ export const hookEventSchema = z
 
 export type HookEvent = z.infer<typeof hookEventSchema>;
 
+// Rooms of the main agent and of generic subagents (Explore, general-purpose…), by tool.
 const TOOL_ROOMS: Record<string, RoomId> = {
   Read: 'biblio',
   Grep: 'biblio',
   Glob: 'biblio',
   LS: 'biblio',
-  WebFetch: 'biblio',
-  WebSearch: 'biblio',
+  WebFetch: 'observatoire',
+  WebSearch: 'observatoire',
   Edit: 'atelier',
   MultiEdit: 'atelier',
   Write: 'atelier',
   NotebookEdit: 'atelier',
-  Bash: 'serveur',
-  PowerShell: 'serveur',
-  BashOutput: 'serveur',
-  Monitor: 'serveur',
+  Bash: 'machines',
+  PowerShell: 'machines',
+  BashOutput: 'machines',
+  KillShell: 'machines',
+  Monitor: 'machines',
+  EnterPlanMode: 'cartes',
+  ExitPlanMode: 'cartes',
+  TodoWrite: 'cartes',
 };
 
 export function toolRoom(tool: string | undefined): RoomId | undefined {
-  return tool ? TOOL_ROOMS[tool] : undefined;
+  // Own keys only: `tool_name` comes from the hook payload and may be 'constructor'…
+  return tool && Object.hasOwn(TOOL_ROOMS, tool) ? TOOL_ROOMS[tool] : undefined;
+}
+
+// Specialised subagents keep their own post whatever the tool: the tool only changes
+// what they do there. Keys are lower case; agent types are matched case-insensitively.
+const AGENT_POSTS: Record<string, RoomId> = {
+  barbapapa: 'atelier',
+  'butt-stallion': 'detente',
+  'samuel-morse': 'pigeonnier',
+  neo: 'garde',
+  oracle: 'observatoire',
+  dexter: 'epreuves',
+  hermione: 'epreuves',
+  gatsby: 'heraut',
+  timmy: 'heraut',
+  hancock: 'concierge',
+  curator: 'scriptorium',
+  otis: 'scriptorium',
+  turing: 'arithmetique',
+  plan: 'cartes',
+  'claude-code-guide': 'autel',
+};
+
+/** The post of a specialised agent type, or undefined for the main agent and generic types. */
+export function agentPost(agentType: string): RoomId | undefined {
+  return Object.hasOwn(AGENT_POSTS, agentType.toLowerCase()) ? AGENT_POSTS[agentType.toLowerCase()] : undefined;
+}
+
+/** Where an agent goes when it has no tool room yet: the planning table, the shelves or the workbenches. */
+function homeRoom(a: AgentView): RoomId {
+  if (a.kind === 'main') return 'cartes';
+  return a.agentType.toLowerCase() === 'explore' ? 'biblio' : 'atelier';
+}
+
+/** Rooms a generic agent leaves when it resumes work (the altar queue, the tavern). Posts are checked first. */
+const IDLE_ROOMS = new Set<RoomId>(['autel', 'taverne']);
+
+/** The room an agent works in while it uses `tool`. */
+export function workRoom(a: AgentView, tool: string | undefined): RoomId {
+  const post = a.kind === 'sub' ? agentPost(a.agentType) : undefined;
+  if (post) {
+    // The janitor does his rounds in the workshop while he edits code.
+    if (post === 'concierge' && toolRoom(tool) === 'atelier') return 'atelier';
+    return post;
+  }
+  const room = toolRoom(tool);
+  if (room) return room;
+  return IDLE_ROOMS.has(a.room) ? homeRoom(a) : a.room;
 }
 
 export function truncate(s: string | undefined, max = DETAIL_MAX): string | undefined {
@@ -111,7 +164,10 @@ export function toolDetail(input: unknown): string | undefined {
 }
 
 function newAgent(id: string, sessionId: string, kind: 'main' | 'sub', agentType: string, now: number): AgentView {
-  return { id, sessionId, kind, agentType, state: 'working', room: 'accueil', since: now };
+  const a: AgentView = { id, sessionId, kind, agentType, state: 'working', room: 'autel', since: now };
+  // A new subagent heads straight for its post, or its usual room for a generic type.
+  if (kind === 'sub') a.room = workRoom(a, undefined);
+  return a;
 }
 
 /** Applies a patch and restarts the elapsed-time clock when the activity changed. */
@@ -126,12 +182,12 @@ function patchAgent(a: AgentView, patch: Partial<AgentView>, now: number): void 
 }
 
 function setWaiting(a: AgentView, reason: WaitReason, now: number, extra: Partial<AgentView> = {}): void {
-  patchAgent(a, { state: 'waiting', waitReason: reason, room: 'accueil', ...extra }, now);
+  patchAgent(a, { state: 'waiting', waitReason: reason, room: 'autel', ...extra }, now);
 }
 
 function setDone(a: AgentView, now: number): void {
   if (a.state === 'done') return;
-  patchAgent(a, { state: 'done', room: 'accueil', tool: undefined, toolDetail: undefined }, now);
+  patchAgent(a, { state: 'done', room: 'taverne', tool: undefined, toolDetail: undefined }, now);
   a.tool = undefined;
   a.toolDetail = undefined;
 }
@@ -171,7 +227,7 @@ function createSession(
 function mainFromLiveStatus(s: SessionView, p: LiveProcess, now: number): void {
   if (p.status === 'unknown') return;
   if (s.main.state === 'waiting' && s.main.waitReason !== 'prompt') return;
-  if (p.status === 'busy') patchAgent(s.main, { state: 'working' }, now);
+  if (p.status === 'busy') patchAgent(s.main, { state: 'working', room: workRoom(s.main, s.main.tool) }, now);
   else setWaiting(s.main, 'prompt', now);
 }
 
@@ -363,7 +419,12 @@ export function applyHook(state: OfficeState, ev: HookEvent, now: number): Sessi
       if (s.main.state !== 'working') setWaiting(s.main, 'prompt', now);
       break;
     case 'UserPromptSubmit':
-      patchAgent(s.main, { state: 'working', tool: undefined, toolDetail: truncate(ev.prompt), description: truncate(ev.prompt) }, now);
+      // A new prompt: the main agent leaves the altar for the map room to study the request.
+      patchAgent(
+        s.main,
+        { state: 'working', room: 'cartes', tool: undefined, toolDetail: truncate(ev.prompt), description: truncate(ev.prompt) },
+        now,
+      );
       s.main.tool = undefined;
       break;
     case 'PreToolUse': {
@@ -382,14 +443,15 @@ export function applyHook(state: OfficeState, ev: HookEvent, now: number): Sessi
       }
       patchAgent(
         target,
-        { state: 'working', tool, toolDetail: toolDetail(ev.tool_input), room: toolRoom(tool) ?? target.room },
+        { state: 'working', tool, toolDetail: toolDetail(ev.tool_input), room: workRoom(target, tool) },
         now,
       );
       break;
     }
     case 'PostToolUse':
     case 'PostToolUseFailure':
-      if (target.state !== 'done') patchAgent(target, { state: 'working' }, now);
+      // After a permission or a question, the agent leaves the altar queue for its work room.
+      if (target.state !== 'done') patchAgent(target, { state: 'working', room: workRoom(target, target.tool) }, now);
       break;
     case 'PermissionRequest':
       setWaiting(target, 'permission', now, { tool, toolDetail: toolDetail(ev.tool_input) });

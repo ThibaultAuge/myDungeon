@@ -3,11 +3,17 @@
 Un petit bureau en 3D où chaque agent Claude Code du poste local est un personnage. On voit qui travaille, sur quoi, qui attend une réponse et qui a fini.
 
 - **Une entreprise par environnement** de l'app desktop Claude (un nom et ses dossiers). On passe de l'une à l'autre.
-- **Quatre pièces.** Le personnage va dans la pièce qui correspond à l'outil qu'il utilise :
-  - **Bibliothèque** : lecture et recherche (`Read`, `Grep`, `Glob`, `WebFetch`, `WebSearch`) ;
-  - **Atelier code** : écriture (`Edit`, `Write`, `NotebookEdit`) ;
-  - **Salle serveur** : commandes (`Bash`, `PowerShell`) ;
-  - **Accueil** : attente ou fin.
+- **Un donjon de 14 lieux**, reliés par des couloirs (le plan est dans [docs/lieux-et-personnages.md](docs/lieux-et-personnages.md)). Les agents passent par les portes et les couloirs, jamais à travers un mur.
+  - **L'agent principal et les sous-agents génériques** (Explore, general-purpose…) vont dans la pièce de l'outil qu'ils utilisent :
+    - **Bibliothèque** : lecture et recherche (`Read`, `Grep`, `Glob`) ;
+    - **Observatoire** : web (`WebFetch`, `WebSearch`) ;
+    - **Atelier** : écriture (`Edit`, `Write`, `NotebookEdit`) ;
+    - **Salle des machines** : commandes (`Bash`, `PowerShell`) ;
+    - **Salle des cartes** : planification (`EnterPlanMode`, `ExitPlanMode`, `TodoWrite`), et à chaque nouveau prompt.
+  - **Les sous-agents spécialisés** restent à leur poste quel que soit l'outil : Hermione et Dexter en salle des épreuves, Oracle à l'observatoire, Turing au cabinet de l'arithméticien, Curator et Otis au Scriptorium, etc. Hancock quitte son réduit pour l'atelier quand il modifie du code.
+  - **L'autel des requêtes**, au centre : tout agent qui t'attend (permission, question, prochain message) y fait la queue, le plus ancien en tête, à genoux. La file avance quand il repart, et contourne la nef par les couloirs si elle s'allonge.
+  - **La taverne** : les nouveaux sous-agents sortent de ses casiers, et ceux qui ont fini y retournent avant de disparaître.
+  - Chaque pièce a ses places. Un agent garde la sienne tant qu'il reste dans la pièce ; quand elle est pleine, les suivants se tiennent le long des murs.
 - **Trois états.**
   - Vert : il travaille.
   - Ambre : il attend ton prochain message. La bulle devient rouge quand il attend ta permission ou ta réponse, ou qu'il est bloqué par une erreur.
@@ -41,6 +47,8 @@ npm start
 ```
 
 Ouvre ensuite http://127.0.0.1:4777.
+
+Si le port 4777 est déjà pris (par exemple par une autre session), la configuration `agent-office-test` de `.claude/launch.json` lance un second serveur sur le port 4778. Elle ne contient pas de jeton : sans `AGENT_OFFICE_TOKEN` dans l'environnement, elle affiche l'inventaire mais refuse les hooks.
 
 Pour le développement, `npm run dev` lance le serveur et Vite (http://127.0.0.1:5173, qui relaie `/api` et `/ws` vers le port 4777).
 

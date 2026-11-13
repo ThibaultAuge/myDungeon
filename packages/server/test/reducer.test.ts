@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
+import type { AgentView, RoomId } from '@agent-office/shared';
 import {
   DONE_CLI_SESSION_TTL_MS,
   DONE_SUBAGENT_TTL_MS,
   HISTORY_LIMIT,
   HOOK_AUTHORITY_MS,
   SUBAGENT_SILENCE_MS,
+  agentPost,
   applyHook,
   applyInventory,
   createState,
@@ -16,6 +18,7 @@ import {
   toolDetail,
   toolRoom,
   truncate,
+  workRoom,
   type OfficeState,
 } from '../src/reducer.ts';
 import { CLI_A, CLI_B, ENVS, LOCAL_A, LOCAL_B, desk, hook, inventory, proc } from './fixtures/builders.ts';
@@ -54,8 +57,8 @@ describe('helpers', () => {
     expect(toolRoom('Grep')).toBe('biblio');
     expect(toolRoom('Edit')).toBe('atelier');
     expect(toolRoom('Write')).toBe('atelier');
-    expect(toolRoom('Bash')).toBe('serveur');
-    expect(toolRoom('PowerShell')).toBe('serveur');
+    expect(toolRoom('Bash')).toBe('machines');
+    expect(toolRoom('PowerShell')).toBe('machines');
     expect(toolRoom('Frobnicate')).toBeUndefined();
     expect(toolRoom(undefined)).toBeUndefined();
   });
@@ -205,7 +208,7 @@ describe('applyInventory', () => {
   it('marks main waiting for a prompt for an idle process', () => {
     const state = createState();
     applyInventory(state, inventory({ desktopSessions: [desk()], live: [proc({ status: 'idle' })] }), 1000);
-    expect(state.sessions.get(LOCAL_A)?.main).toMatchObject({ state: 'waiting', waitReason: 'prompt', room: 'accueil' });
+    expect(state.sessions.get(LOCAL_A)?.main).toMatchObject({ state: 'waiting', waitReason: 'prompt', room: 'autel' });
   });
 
   /**
@@ -265,7 +268,7 @@ describe('applyInventory', () => {
     applyInventory(state, inventory({ desktopSessions: [desk()], live: [proc({ status: 'idle' })] }), 20_000);
     expect(state.sessions.get(LOCAL_A)?.main.state).toBe('working');
     applyInventory(state, inventory({ desktopSessions: [desk()], live: [proc({ status: 'idle' })] }), 10_000 + HOOK_AUTHORITY_MS + 1);
-    expect(state.sessions.get(LOCAL_A)?.main).toMatchObject({ state: 'waiting', waitReason: 'prompt', room: 'accueil' });
+    expect(state.sessions.get(LOCAL_A)?.main).toMatchObject({ state: 'waiting', waitReason: 'prompt', room: 'autel' });
   });
 
   /**
@@ -460,7 +463,7 @@ describe('applyHook: main agent', () => {
   it.each([
     ['Read', { file_path: 'C:/work/alpha/a.ts' }, 'biblio', 'C:/work/alpha/a.ts'],
     ['Edit', { file_path: 'C:/work/alpha/b.ts' }, 'atelier', 'C:/work/alpha/b.ts'],
-    ['Bash', { command: 'npm test' }, 'serveur', 'npm test'],
+    ['Bash', { command: 'npm test' }, 'machines', 'npm test'],
   ])('PreToolUse %s moves main to its room', (tool, input, room, detail) => {
     const s = run(stateWithEnvs(), [[1, hook('PreToolUse', { tool_name: tool, tool_input: input })]]);
     expect(s.main).toMatchObject({ state: 'working', tool, room, toolDetail: detail });
@@ -491,12 +494,12 @@ describe('applyHook: main agent', () => {
   /**
    * Verifies that a permission request makes main wait in the lobby with the tool
    */
-  it('PermissionRequest sets waiting permission in accueil', () => {
+  it('PermissionRequest sets waiting permission at the altar', () => {
     const s = run(stateWithEnvs(), [
       [1, hook('PreToolUse', { tool_name: 'Bash', tool_input: { command: 'rm -rf build' } })],
       [2, hook('PermissionRequest', { tool_name: 'Bash', tool_input: { command: 'rm -rf build' } })],
     ]);
-    expect(s.main).toMatchObject({ state: 'waiting', waitReason: 'permission', room: 'accueil', tool: 'Bash', toolDetail: 'rm -rf build' });
+    expect(s.main).toMatchObject({ state: 'waiting', waitReason: 'permission', room: 'autel', tool: 'Bash', toolDetail: 'rm -rf build' });
   });
 
   /**
@@ -506,7 +509,7 @@ describe('applyHook: main agent', () => {
     const s = run(stateWithEnvs(), [
       [1, hook('PreToolUse', { tool_name: 'AskUserQuestion', tool_input: { questions: [{ question: 'Which DB?' }, { question: 'Other' }] } })],
     ]);
-    expect(s.main).toMatchObject({ state: 'waiting', waitReason: 'question', room: 'accueil', tool: 'AskUserQuestion', toolDetail: 'Which DB?' });
+    expect(s.main).toMatchObject({ state: 'waiting', waitReason: 'question', room: 'autel', tool: 'AskUserQuestion', toolDetail: 'Which DB?' });
   });
 
   /**
@@ -526,7 +529,7 @@ describe('applyHook: main agent', () => {
       [1, hook('PreToolUse', { tool_name: 'Edit', tool_input: { file_path: 'a' } })],
       [2, hook('Stop', { last_assistant_message: 'All  done.' })],
     ]);
-    expect(s.main).toMatchObject({ state: 'waiting', waitReason: 'prompt', room: 'accueil', lastMessage: 'All done.' });
+    expect(s.main).toMatchObject({ state: 'waiting', waitReason: 'prompt', room: 'autel', lastMessage: 'All done.' });
     expect(s.main.tool).toBeUndefined();
     expect(s.main.toolDetail).toBeUndefined();
   });
@@ -622,7 +625,7 @@ describe('applyHook: main agent', () => {
       [1200, hook('SessionEnd')],
     ]);
     expect(s.live).toBe(false);
-    expect(s.main).toMatchObject({ state: 'done', room: 'accueil', since: 1200 });
+    expect(s.main).toMatchObject({ state: 'done', room: 'taverne', since: 1200 });
     expect(s.main.tool).toBeUndefined();
     expect(s.subagents.map((a) => a.state)).toEqual(['done']);
   });
@@ -703,7 +706,7 @@ describe('applyHook: subagents', () => {
       agentType: 'Explore',
       description: 'Scan repo',
       state: 'working',
-      room: 'accueil',
+      room: 'biblio',
       since: 1020,
     });
   });
@@ -814,7 +817,7 @@ describe('applyHook: subagents', () => {
     withSubagent(state, 1000);
     run(state, [[1100, hook('PreToolUse', { agent_id: 'ag-1', tool_name: 'Read' })]]);
     const s = run(state, [[1200, hook('SubagentStop', { agent_id: 'ag-1', last_assistant_message: 'Found 3 files' })]]);
-    expect(s.subagents[0]).toMatchObject({ state: 'done', room: 'accueil', lastMessage: 'Found 3 files', since: 1200 });
+    expect(s.subagents[0]).toMatchObject({ state: 'done', room: 'taverne', lastMessage: 'Found 3 files', since: 1200 });
     expect(s.subagents[0]?.tool).toBeUndefined();
     expect(s.main.state).toBe('working');
   });
@@ -842,7 +845,7 @@ describe('applyHook: subagents', () => {
       [2, hook('PostToolUse', { agent_id: 'ag-y', tool_name: 'Read' })],
     ]);
     expect(s.subagents.map((a) => [a.id, a.agentType, a.room])).toEqual([
-      ['ag-x', 'dexter', 'atelier'],
+      ['ag-x', 'dexter', 'epreuves'],
     ]);
     expect(s.subagents[0]).toMatchObject({ kind: 'sub', state: 'working', toolDetail: 'C:/work/alpha/t.ts' });
   });
@@ -1099,7 +1102,7 @@ describe('review regressions', () => {
     applyHook(state, hook('PreToolUse', { tool_name: 'Bash', tool_input: { command: 'npm test' } }), later + 1);
     const silent = later + 1 + HOOK_AUTHORITY_MS + 1;
     applyInventory(state, inventory({ desktopSessions: [desk()], live: [proc({ status: 'unknown' as 'busy' })] }), silent);
-    expect(state.sessions.get(LOCAL_A)!.main).toMatchObject({ state: 'working', room: 'serveur' });
+    expect(state.sessions.get(LOCAL_A)!.main).toMatchObject({ state: 'working', room: 'machines' });
   });
 
   /** A permission notification does not paint the main agent when a subagent is the one waiting. */
@@ -1157,5 +1160,364 @@ describe('re-review regressions', () => {
     applyHook(state, hook('PermissionRequest', { agent_id: 'ag-1', agent_type: 'Explore', tool_name: 'Bash' }), 1100);
     prune(state, 1100 + SUBAGENT_SILENCE_MS + 1000);
     expect(s.subagents[0]).toMatchObject({ state: 'waiting', waitReason: 'permission' });
+  });
+});
+
+/** A bare agent for the pure room functions. */
+function agent(kind: 'main' | 'sub', agentType: string, room: RoomId = 'atelier'): AgentView {
+  return { id: 'ag', sessionId: 's', kind, agentType, state: 'working', room, since: 0 };
+}
+
+describe('dungeon rooms: toolRoom', () => {
+  /**
+   * Verifies that every tool of the table maps to its dungeon room
+   */
+  it.each([
+    ['Read', 'biblio'],
+    ['Grep', 'biblio'],
+    ['Glob', 'biblio'],
+    ['LS', 'biblio'],
+    ['WebFetch', 'observatoire'],
+    ['WebSearch', 'observatoire'],
+    ['Edit', 'atelier'],
+    ['MultiEdit', 'atelier'],
+    ['Write', 'atelier'],
+    ['NotebookEdit', 'atelier'],
+    ['Bash', 'machines'],
+    ['PowerShell', 'machines'],
+    ['BashOutput', 'machines'],
+    ['KillShell', 'machines'],
+    ['Monitor', 'machines'],
+    ['EnterPlanMode', 'cartes'],
+    ['ExitPlanMode', 'cartes'],
+    ['TodoWrite', 'cartes'],
+  ])('%s → %s', (tool, room) => {
+    expect(toolRoom(tool)).toBe(room);
+  });
+
+  /**
+   * Verifies that tools outside the table, wrong case or prototype keys, have no room
+   */
+  it.each([['read'], ['AskUserQuestion'], ['Agent'], ['']])('%j has no room', (tool) => {
+    expect(toolRoom(tool)).toBeUndefined();
+  });
+
+  /**
+   * Verifies that tool names equal to Object prototype keys get no room
+   */
+  // SPEC CONFLICT: agentPost guards prototype keys with Object.hasOwn, toolRoom does not:
+  // TOOL_ROOMS['constructor'] is Object itself, so a hook with tool_name "constructor" would
+  // put a function in AgentView.room. This test fails until toolRoom uses Object.hasOwn too.
+  it.each([['constructor'], ['toString'], ['__proto__'], ['hasOwnProperty']])('prototype key %j has no room', (tool) => {
+    expect(toolRoom(tool)).toBeUndefined();
+    expect(workRoom(agent('main', 'Session principale', 'biblio'), tool)).toBe('biblio');
+  });
+});
+
+describe('dungeon rooms: agentPost', () => {
+  /**
+   * Verifies that each specialist agent type has its fixed post
+   */
+  it.each([
+    ['barbapapa', 'atelier'],
+    ['butt-stallion', 'detente'],
+    ['samuel-morse', 'pigeonnier'],
+    ['neo', 'garde'],
+    ['oracle', 'observatoire'],
+    ['dexter', 'epreuves'],
+    ['hermione', 'epreuves'],
+    ['gatsby', 'heraut'],
+    ['timmy', 'heraut'],
+    ['hancock', 'concierge'],
+    ['curator', 'scriptorium'],
+    ['otis', 'scriptorium'],
+    ['turing', 'arithmetique'],
+    ['plan', 'cartes'],
+    ['claude-code-guide', 'autel'],
+  ])('%s → %s', (type, room) => {
+    expect(agentPost(type)).toBe(room);
+  });
+
+  /**
+   * Verifies that agent types are matched case-insensitively
+   */
+  it.each([
+    ['Plan', 'cartes'],
+    ['NEO', 'garde'],
+    ['Hermione', 'epreuves'],
+    ['Claude-Code-Guide', 'autel'],
+  ])('%s → %s', (type, room) => {
+    expect(agentPost(type)).toBe(room);
+  });
+
+  /**
+   * Verifies that generic types, empty strings and prototype keys have no post
+   */
+  it.each([['Explore'], ['general-purpose'], ['Session principale'], [''], ['constructor'], ['toString'], ['__proto__'], ['hasOwnProperty'], ['valueOf']])(
+    '%j has no post',
+    (type) => {
+      expect(agentPost(type)).toBeUndefined();
+    },
+  );
+});
+
+describe('dungeon rooms: workRoom', () => {
+  /**
+   * Verifies that a specialist subagent stays at its post whatever the tool
+   */
+  it.each([['Read'], ['Bash'], ['Edit'], ['WebFetch'], ['Frobnicate'], [undefined]])('neo stays in garde with tool %j', (tool) => {
+    expect(workRoom(agent('sub', 'neo', 'autel'), tool)).toBe('garde');
+  });
+
+  /**
+   * Verifies that the janitor goes to the workshop only for editing tools
+   */
+  it.each([
+    ['Edit', 'atelier'],
+    ['MultiEdit', 'atelier'],
+    ['Write', 'atelier'],
+    ['NotebookEdit', 'atelier'],
+    ['Read', 'concierge'],
+    ['Bash', 'concierge'],
+    [undefined, 'concierge'],
+  ])('hancock with %j goes to %s', (tool, room) => {
+    expect(workRoom(agent('sub', 'hancock', 'concierge'), tool)).toBe(room);
+    expect(workRoom(agent('sub', 'Hancock', 'atelier'), tool)).toBe(room);
+  });
+
+  /**
+   * Verifies that specialist types are recognised case-insensitively
+   */
+  it('recognises specialist types whatever their case', () => {
+    expect(workRoom(agent('sub', 'Oracle'), 'Bash')).toBe('observatoire');
+    expect(workRoom(agent('sub', 'TURING'), 'Read')).toBe('arithmetique');
+  });
+
+  /**
+   * Verifies that the main agent and generic subagents follow their tool
+   */
+  it.each([
+    ['main', 'Session principale'],
+    ['sub', 'Explore'],
+    ['sub', 'general-purpose'],
+  ] as const)('%s %s goes by tool', (kind, type) => {
+    const a = agent(kind, type, 'autel');
+    expect(workRoom(a, 'Read')).toBe('biblio');
+    expect(workRoom(a, 'Bash')).toBe('machines');
+    expect(workRoom(a, 'WebSearch')).toBe('observatoire');
+    expect(workRoom(a, 'TodoWrite')).toBe('cartes');
+  });
+
+  /**
+   * Verifies that the main agent never takes a specialist post, even with a specialist name
+   */
+  it('ignores posts for the main agent', () => {
+    expect(workRoom(agent('main', 'neo', 'machines'), undefined)).toBe('machines');
+    expect(workRoom(agent('main', 'neo', 'autel'), undefined)).toBe('cartes');
+  });
+
+  /**
+   * Verifies that without a tool room an agent keeps a working room
+   */
+  it.each(['biblio', 'machines', 'atelier', 'observatoire', 'garde'] as const)('keeps room %s without tool room', (room) => {
+    expect(workRoom(agent('main', 'Session principale', room), undefined)).toBe(room);
+    expect(workRoom(agent('sub', 'Explore', room), 'Frobnicate')).toBe(room);
+  });
+
+  /**
+   * Verifies that agents at the altar or the tavern go home when no tool gives a room
+   */
+  it.each([
+    ['main', 'Session principale', 'autel', 'cartes'],
+    ['main', 'Session principale', 'taverne', 'cartes'],
+    ['sub', 'Explore', 'autel', 'biblio'],
+    ['sub', 'explore', 'taverne', 'biblio'],
+    ['sub', 'general-purpose', 'autel', 'atelier'],
+    ['sub', 'statusline-setup', 'taverne', 'atelier'],
+    ['sub', 'constructor', 'autel', 'atelier'],
+  ] as const)('%s %s in %s goes home to %s', (kind, type, from, home) => {
+    expect(workRoom(agent(kind, type, from), undefined)).toBe(home);
+    expect(workRoom(agent(kind, type, from), 'AskUserQuestion')).toBe(home);
+  });
+});
+
+describe('dungeon rooms: applyHook', () => {
+  /**
+   * Verifies that a new specialist subagent starts at its post, generic ones at home
+   */
+  it.each([
+    ['neo', 'garde'],
+    ['Oracle', 'observatoire'],
+    ['hancock', 'concierge'],
+    ['curator', 'scriptorium'],
+    ['claude-code-guide', 'autel'],
+    ['Explore', 'biblio'],
+    ['general-purpose', 'atelier'],
+    ['constructor', 'atelier'],
+    ['toString', 'atelier'],
+  ])('SubagentStart %s starts in %s', (type, room) => {
+    const s = run(stateWithEnvs(), [[1, hook('SubagentStart', { agent_id: 'ag-s', agent_type: type })]]);
+    expect(s.subagents[0]).toMatchObject({ agentType: type, kind: 'sub', state: 'working', room });
+  });
+
+  /**
+   * Verifies that a specialist subagent stays at its post while using any tool
+   */
+  it('keeps a specialist at its post whatever the tool', () => {
+    const state = stateWithEnvs();
+    run(state, [[1, hook('SubagentStart', { agent_id: 'ag-n', agent_type: 'neo' })]]);
+    for (const [at, tool] of [[2, 'Read'], [3, 'Bash'], [4, 'Edit'], [5, 'WebFetch']] as const) {
+      const s = run(state, [[at, hook('PreToolUse', { agent_id: 'ag-n', tool_name: tool })]]);
+      expect(s.subagents[0]).toMatchObject({ tool, room: 'garde', state: 'working' });
+    }
+  });
+
+  /**
+   * Verifies that hancock walks to the workshop to edit and back to his closet otherwise
+   */
+  it('sends hancock on rounds to the workshop while editing', () => {
+    const state = stateWithEnvs();
+    let s = run(state, [
+      [1, hook('SubagentStart', { agent_id: 'ag-h', agent_type: 'hancock' })],
+      [2, hook('PreToolUse', { agent_id: 'ag-h', tool_name: 'Edit', tool_input: { file_path: 'a.ts' } })],
+    ]);
+    expect(s.subagents[0].room).toBe('atelier');
+    s = run(state, [[3, hook('PostToolUse', { agent_id: 'ag-h', tool_name: 'Edit' })]]);
+    expect(s.subagents[0].room).toBe('atelier');
+    s = run(state, [[4, hook('PreToolUse', { agent_id: 'ag-h', tool_name: 'Grep' })]]);
+    expect(s.subagents[0].room).toBe('concierge');
+  });
+
+  /**
+   * Verifies that a generic subagent follows its tools and keeps its room for unknown tools
+   */
+  it('moves a generic subagent by tool', () => {
+    const state = stateWithEnvs();
+    let s = run(state, [
+      [1, hook('SubagentStart', { agent_id: 'ag-g', agent_type: 'general-purpose' })],
+      [2, hook('PreToolUse', { agent_id: 'ag-g', tool_name: 'Bash' })],
+    ]);
+    expect(s.subagents[0].room).toBe('machines');
+    s = run(state, [[3, hook('PreToolUse', { agent_id: 'ag-g', tool_name: 'Frobnicate' })]]);
+    expect(s.subagents[0].room).toBe('machines');
+  });
+
+  /**
+   * Verifies that agent types are matched case-insensitively in the event flow
+   */
+  it('matches specialist types case-insensitively on hooks', () => {
+    const s = run(stateWithEnvs(), [
+      [1, hook('SubagentStart', { agent_id: 'ag-1', agent_type: 'HANCOCK' })],
+      [2, hook('SubagentStart', { agent_id: 'ag-2', agent_type: 'Neo' })],
+      [3, hook('PreToolUse', { agent_id: 'ag-1', tool_name: 'Write' })],
+      [4, hook('PreToolUse', { agent_id: 'ag-2', tool_name: 'Read' })],
+    ]);
+    expect(s.subagents.map((a) => a.room)).toEqual(['atelier', 'garde']);
+  });
+
+  /**
+   * Verifies that a prototype-key agent type behaves as a generic subagent
+   */
+  it('treats prototype-key agent types as generic', () => {
+    const s = run(stateWithEnvs(), [
+      [1, hook('SubagentStart', { agent_id: 'ag-c', agent_type: 'constructor' })],
+      [2, hook('PreToolUse', { agent_id: 'ag-c', tool_name: 'Read' })],
+    ]);
+    expect(s.subagents[0]).toMatchObject({ agentType: 'constructor', room: 'biblio', state: 'working' });
+  });
+
+  /**
+   * Verifies that a new prompt sends the main agent to the map room
+   */
+  it('UserPromptSubmit moves main to cartes', () => {
+    const state = stateWithEnvs();
+    let s = run(state, [
+      [1, hook('Stop')],
+      [2, hook('UserPromptSubmit', { prompt: 'go' })],
+    ]);
+    expect(s.main).toMatchObject({ state: 'working', room: 'cartes' });
+    s = run(state, [
+      [3, hook('PreToolUse', { tool_name: 'Bash' })],
+      [4, hook('UserPromptSubmit', { prompt: 'again' })],
+    ]);
+    expect(s.main.room).toBe('cartes');
+  });
+
+  /**
+   * Verifies that after a permission the main agent leaves the altar for its tool room
+   */
+  it.each([['PostToolUse'], ['PostToolUseFailure']])('%s after PermissionRequest moves main back to work', (post) => {
+    const s = run(stateWithEnvs(), [
+      [1, hook('PreToolUse', { tool_name: 'Bash', tool_input: { command: 'rm -rf build' } })],
+      [2, hook('PermissionRequest', { tool_name: 'Bash', tool_input: { command: 'rm -rf build' } })],
+      [3, hook(post, { tool_name: 'Bash' })],
+    ]);
+    expect(s.main).toMatchObject({ state: 'working', room: 'machines', tool: 'Bash', since: 3 });
+    expect(s.main.waitReason).toBeUndefined();
+  });
+
+  /**
+   * Verifies that after answering a question main leaves the altar for the map room
+   */
+  it('PostToolUse after AskUserQuestion moves main home to cartes', () => {
+    const s = run(stateWithEnvs(), [
+      [1, hook('PreToolUse', { tool_name: 'AskUserQuestion', tool_input: { questions: [{ question: 'Which?' }] } })],
+      [2, hook('PostToolUse', { tool_name: 'AskUserQuestion' })],
+    ]);
+    expect(s.main).toMatchObject({ state: 'working', room: 'cartes' });
+  });
+
+  /**
+   * Verifies that a specialist subagent returns to its post after a permission
+   */
+  it('PostToolUse after PermissionRequest sends a specialist back to its post', () => {
+    const state = stateWithEnvs();
+    let s = run(state, [
+      [1, hook('SubagentStart', { agent_id: 'ag-n', agent_type: 'neo' })],
+      [2, hook('PermissionRequest', { agent_id: 'ag-n', tool_name: 'Bash' })],
+    ]);
+    expect(s.subagents[0]).toMatchObject({ state: 'waiting', waitReason: 'permission', room: 'autel' });
+    s = run(state, [[3, hook('PostToolUse', { agent_id: 'ag-n', tool_name: 'Bash' })]]);
+    expect(s.subagents[0]).toMatchObject({ state: 'working', room: 'garde' });
+    expect(s.subagents[0].waitReason).toBeUndefined();
+  });
+
+  /**
+   * Verifies that a generic subagent goes home when its tool gives no room after a wait
+   */
+  it('PostToolUse after a wait on a roomless tool sends Explore home to biblio', () => {
+    const state = stateWithEnvs();
+    withSubagent(state, 1000);
+    const s = run(state, [
+      [1100, hook('PermissionRequest', { agent_id: 'ag-1', tool_name: 'Frobnicate' })],
+      [1200, hook('PostToolUse', { agent_id: 'ag-1', tool_name: 'Frobnicate' })],
+    ]);
+    expect(s.subagents[0]).toMatchObject({ state: 'working', room: 'biblio' });
+  });
+
+  /**
+   * Verifies that a finished specialist goes to the tavern and stays there
+   */
+  it('sends a done subagent to the tavern and keeps it there', () => {
+    const state = stateWithEnvs();
+    let s = run(state, [
+      [1, hook('SubagentStart', { agent_id: 'ag-n', agent_type: 'neo' })],
+      [2, hook('PreToolUse', { agent_id: 'ag-n', tool_name: 'Read' })],
+      [3, hook('SubagentStop', { agent_id: 'ag-n' })],
+    ]);
+    expect(s.subagents[0]).toMatchObject({ state: 'done', room: 'taverne' });
+    s = run(state, [[4, hook('PostToolUse', { agent_id: 'ag-n', tool_name: 'Read' })]]);
+    expect(s.subagents[0]).toMatchObject({ state: 'done', room: 'taverne' });
+  });
+
+  /**
+   * Verifies that a busy process moves an idle main agent out of the altar to the map room
+   */
+  it('moves main out of the altar when the inventory reports busy', () => {
+    const state = createState();
+    applyInventory(state, inventory({ desktopSessions: [desk()], live: [proc({ status: 'idle' })] }), 1000);
+    expect(state.sessions.get(LOCAL_A)!.main).toMatchObject({ state: 'waiting', room: 'autel' });
+    applyInventory(state, inventory({ desktopSessions: [desk()], live: [proc({ status: 'busy' })] }), 100_000);
+    expect(state.sessions.get(LOCAL_A)!.main).toMatchObject({ state: 'working', room: 'cartes' });
   });
 });
