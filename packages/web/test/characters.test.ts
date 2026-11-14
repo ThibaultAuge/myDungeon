@@ -21,6 +21,7 @@ import {
   type Look,
   type PropRef,
 } from '../src/scene/characters.ts';
+import { HIT_CLIPS } from '../src/scene/slap.ts';
 
 const STATES: AgentState[] = ['working', 'waiting', 'done'];
 /** Agent types that are not in LOOKS, including edge cases (empty, unicode, huge). */
@@ -80,6 +81,12 @@ describe('character constants', () => {
   /** Verifies that the clip list has no duplicate name */
   it('lists each clip once', () => {
     expect(new Set(CLIPS).size).toBe(CLIPS.length);
+  });
+
+  /** Verifies that every slap hit clip is listed in CLIPS, so it is loaded and GLB-checked */
+  it('lists every hit clip of the slap in CLIPS', () => {
+    expect(HIT_CLIPS.length).toBeGreaterThan(0);
+    expect(HIT_CLIPS.filter((c) => !(CLIPS as readonly string[]).includes(c))).toEqual([]);
   });
 
   /** Verifies that speeds and rates are positive and consistent with each other */
@@ -473,16 +480,101 @@ describe('clipFor', () => {
     expect(clip({ state: 'waiting' })).toEqual({ name: 'Idle_B', loop: true, timeScale: 1, frozen: false, frozenAt: 0 });
   });
 
+  // ---- slap hit
+
+  /** Verifies that a slapped still figure plays the given hit clip once at normal speed */
+  it.each(HIT_CLIPS)('plays %s once at rate 1 when slapped', (hit) => {
+    expect(clip({ hit })).toEqual({ name: hit, loop: false, timeScale: 1, frozen: false, frozenAt: 0 });
+  });
+
+  /** Verifies that the hit wins over walking and running */
+  it.each(HIT_CLIPS)('lets %s win over a moving figure, walking or running', (hit) => {
+    for (const speed of [0, WALK_CLIP_SPEED, RUN_THRESHOLD, RUN_CLIP_SPEED, 100]) {
+      expect(clip({ hit, moving: true, speed }), `speed ${speed}`).toEqual({
+        name: hit,
+        loop: false,
+        timeScale: 1,
+        frozen: false,
+        frozenAt: 0,
+      });
+    }
+  });
+
+  /** Verifies that the hit wins over every agent state, including working and done */
+  it.each(STATES)('lets the hit win in state %s', (state) => {
+    for (const hit of HIT_CLIPS) {
+      const c = clip({ hit, state });
+      expect(c.name, hit).toBe(hit);
+      expect(c.frozen, hit).toBe(false);
+      expect(c.loop, hit).toBe(false);
+    }
+  });
+
+  /** Verifies that the hit wins over kneeling at the altar, in every state */
+  it.each(STATES)('lets the hit win over kneeling in state %s', (state) => {
+    for (const hit of HIT_CLIPS) {
+      expect(clip({ hit, kneeling: true, state }), hit).toEqual({ name: hit, loop: false, timeScale: 1, frozen: false, frozenAt: 0 });
+    }
+  });
+
+  /** Verifies that a spawning figure keeps Spawn_Ground even when slapped */
+  it.each(HIT_CLIPS)('lets spawning win over %s', (hit) => {
+    expect(clip({ hit, spawning: true, moving: true, speed: 5, kneeling: true, state: 'working' })).toEqual({
+      name: 'Spawn_Ground',
+      loop: false,
+      timeScale: SPAWN_TIME_SCALE,
+      frozen: false,
+      frozenAt: 0,
+    });
+  });
+
+  /** Verifies that reduced motion ignores the hit and gives the same clip as without it */
+  it.each(HIT_CLIPS)('ignores %s under reduced motion', (hit) => {
+    const variants: Partial<ClipInput>[] = [
+      {},
+      { state: 'working' },
+      { state: 'done' },
+      { moving: true, speed: RUN_CLIP_SPEED },
+      { kneeling: true },
+      { spawning: true },
+    ];
+    for (const v of variants) {
+      const withHit = clip({ ...v, hit, reducedMotion: true });
+      expect(withHit, JSON.stringify(v)).toEqual(clip({ ...v, reducedMotion: true }));
+      expect(withHit.name, JSON.stringify(v)).not.toBe(hit);
+    }
+  });
+
+  /** Verifies that reduced motion keeps the kneeling pose for a slapped figure at the altar */
+  it('holds PickUp for a slapped kneeling figure under reduced motion', () => {
+    expect(clip({ hit: 'Hit_A', kneeling: true, reducedMotion: true })).toEqual({
+      name: 'PickUp',
+      loop: false,
+      timeScale: 0,
+      frozen: true,
+      frozenAt: KNEEL_POSE_TIME,
+    });
+  });
+
+  /** Verifies that an absent hit leaves the usual choice unchanged */
+  it('chooses as before when hit is undefined', () => {
+    for (const v of [{}, { state: 'working' as const }, { moving: true, speed: 2 }, { kneeling: true }]) {
+      expect(clip({ ...v, hit: undefined }), JSON.stringify(v)).toEqual(clip(v));
+    }
+  });
+
   // ---- invariants over every combination
 
   const SPEEDS = [-1, 0, WALK_CLIP_SPEED, RUN_THRESHOLD - 1e-9, RUN_THRESHOLD, RUN_CLIP_SPEED, 100];
+  const HITS: ClipInput['hit'][] = [undefined, ...HIT_CLIPS];
   const ALL: ClipInput[] = [];
   for (const moving of [false, true])
     for (const spawning of [false, true])
       for (const kneeling of [false, true])
         for (const reducedMotion of [false, true])
           for (const state of STATES)
-            for (const speed of SPEEDS) ALL.push({ moving, spawning, kneeling, reducedMotion, state, speed });
+            for (const hit of HITS)
+              for (const speed of SPEEDS) ALL.push({ moving, spawning, kneeling, reducedMotion, state, speed, hit });
 
   /** Verifies that every returned clip name is one of the known CLIPS */
   it('always returns a clip from CLIPS', () => {
@@ -514,11 +606,22 @@ describe('clipFor', () => {
     }
   });
 
-  /** Verifies that only Spawn_Ground plays once; every other playing clip loops */
-  it('plays only the spawn clip without looping', () => {
+  /** Verifies that only Spawn_Ground and the hit clips play once; every other playing clip loops */
+  it('plays only the spawn and hit clips without looping', () => {
+    const once = new Set<string>(['Spawn_Ground', ...HIT_CLIPS]);
     for (const input of ALL) {
       const c = clipFor(input);
-      if (!c.frozen) expect(c.loop, JSON.stringify(input)).toBe(c.name !== 'Spawn_Ground');
+      if (!c.frozen) expect(c.loop, JSON.stringify(input)).toBe(!once.has(c.name));
+    }
+  });
+
+  /** Verifies that a hit clip is returned exactly when slapped, not spawning, no reduced motion */
+  it('returns the hit clip if and only if a hit applies', () => {
+    for (const input of ALL) {
+      const c = clipFor(input);
+      const applies = !!input.hit && !input.spawning && !input.reducedMotion;
+      expect(c.name === input.hit, JSON.stringify(input)).toBe(applies);
+      expect((HIT_CLIPS as readonly string[]).includes(c.name), JSON.stringify(input)).toBe(applies);
     }
   });
 

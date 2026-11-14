@@ -70,8 +70,14 @@ export const fr = {
     folder: 'Dossier',
     lastMessage: 'Dernier message',
   },
+  slap: {
+    /** Comic sound word of the slap, shown in a bubble over the slapped agent. */
+    sound: 'PAF !',
+  },
   info: {
     label: (name: string) => `Informations sur ${name}`,
+    slap: 'Baffer',
+    slapLabel: (name: string) => `Baffer ${name} (pour rire, sans effet sur l’agent)`,
     session: 'Session',
     agent: 'Agent',
     sessionName: 'Nom',

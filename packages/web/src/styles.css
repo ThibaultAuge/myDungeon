@@ -542,6 +542,201 @@ select,
   }
 }
 
+/* The slap (a nod to Dungeon Keeper): hand sweeping across the head, stars, comic bubble.
+   Purely visual; remounted on every slap so the animations start over. */
+.slap-anchor {
+  pointer-events: none;
+}
+
+.slap {
+  position: relative;
+  display: block;
+  width: 0;
+  height: 0;
+}
+
+.slap__hand {
+  position: absolute;
+  left: -36px;
+  top: -36px;
+  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.5));
+  opacity: 0;
+  animation: slap-swipe 0.35s ease-in forwards;
+}
+
+.slap--flip .slap__hand {
+  animation-name: slap-swipe-flip;
+}
+
+.slap__hand-shape {
+  fill: #f2c9a0;
+  stroke: #3a2614;
+  stroke-width: 2.5;
+  stroke-linejoin: round;
+}
+
+.slap__hand-line {
+  fill: none;
+  stroke: #3a2614;
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+.slap__hand-cuff {
+  fill: #8a6a2f;
+  stroke: #3a2614;
+  stroke-width: 2.5;
+}
+
+@keyframes slap-swipe {
+  0% {
+    opacity: 1;
+    transform: translateX(70px) rotate(-20deg);
+  }
+  70% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(-70px) rotate(15deg);
+  }
+}
+
+@keyframes slap-swipe-flip {
+  0% {
+    opacity: 1;
+    transform: translateX(-70px) scaleX(-1) rotate(-20deg);
+  }
+  70% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(70px) scaleX(-1) rotate(15deg);
+  }
+}
+
+/* Stars turning over the head: the ring spins, each star sits on it. */
+.slap__stars {
+  position: absolute;
+  left: 0;
+  /* Above the name tag, which hides the head in the top-down view. */
+  top: -66px;
+  width: 0;
+  height: 0;
+  opacity: 0;
+  animation:
+    slap-stars-spin 0.7s linear 0.2s infinite,
+    slap-fade 1.3s ease-out 0.2s forwards;
+}
+
+.slap__star {
+  position: absolute;
+  left: -9px;
+  top: -10px;
+  font-size: 19px;
+  line-height: 1;
+  color: #ffd84a;
+  text-shadow:
+    0 0 2px #3a2614,
+    0 1px 1px #3a2614;
+}
+
+.slap__star:nth-child(1) {
+  transform: translate(28px, 0);
+}
+
+.slap__star:nth-child(2) {
+  transform: translate(-14px, 24px);
+}
+
+.slap__star:nth-child(3) {
+  transform: translate(-14px, -24px);
+}
+
+@keyframes slap-stars-spin {
+  from {
+    transform: scaleY(0.45) rotate(0deg);
+  }
+  to {
+    transform: scaleY(0.45) rotate(360deg);
+  }
+}
+
+@keyframes slap-fade {
+  0%,
+  75% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+/* Comic sound word, popping up beside the head. */
+.slap__bubble {
+  position: absolute;
+  left: 26px;
+  top: -100px;
+  padding: 2px 8px;
+  font: 900 16px/1.2 'Comic Sans MS', 'Chalkboard SE', system-ui, sans-serif;
+  letter-spacing: 0.02em;
+  color: #2a0d0c;
+  background: #ffd84a;
+  border: 2px solid #2a0d0c;
+  border-radius: 10px;
+  white-space: nowrap;
+  transform: rotate(-8deg);
+  opacity: 0;
+  animation:
+    slap-pop 0.25s ease-out 0.1s forwards,
+    slap-fade 1.3s ease-out 0.1s forwards;
+}
+
+@keyframes slap-pop {
+  0% {
+    transform: rotate(-8deg) scale(0.3);
+  }
+  70% {
+    transform: rotate(-8deg) scale(1.2);
+  }
+  100% {
+    transform: rotate(-8deg) scale(1);
+  }
+}
+
+/* Reduced motion: no sweeping hand nor spinning stars, only the bubble, still. */
+@media (prefers-reduced-motion: reduce) {
+  .slap__hand,
+  .slap__stars {
+    display: none;
+  }
+  .slap__bubble {
+    opacity: 1;
+    animation: none;
+  }
+}
+
+@media (forced-colors: active) {
+  .slap__hand-shape,
+  .slap__hand-cuff {
+    fill: Canvas;
+    stroke: CanvasText;
+  }
+  .slap__hand-line {
+    stroke: CanvasText;
+  }
+  .slap__star {
+    color: CanvasText;
+    text-shadow: none;
+  }
+  .slap__bubble {
+    color: CanvasText;
+    background: Canvas;
+    border-color: CanvasText;
+  }
+}
+
 .session-list,
 .session-list ul,
 .history {
@@ -765,6 +960,23 @@ select,
   color: #e9c97f;
 }
 
+.agent-info__slap {
+  margin: 8px 0 0;
+  min-height: 28px;
+  padding: 4px 14px;
+  border: 1px solid var(--dlg-gold);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--dlg-text);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.agent-info__slap:hover {
+  background: rgba(233, 201, 127, 0.15);
+}
+
 .agent-info__servers {
   margin: 0;
   padding: 0;
@@ -773,6 +985,7 @@ select,
 
 .agent-info__body:focus-visible,
 .agent-info__close:focus-visible,
+.agent-info__slap:focus-visible,
 .agent-info a:focus-visible,
 .agent-info .link-button:focus-visible,
 .agent-info h2:focus-visible {
@@ -948,7 +1161,8 @@ select,
   .agent-dialog__close,
   .agent-info,
   .agent-info__plate,
-  .agent-info__close {
+  .agent-info__close,
+  .agent-info__slap {
     border-color: CanvasText;
   }
   .agent-dialog__log:focus-visible,
@@ -956,6 +1170,7 @@ select,
   .agent-dialog .link-button:focus-visible,
   .agent-info__body:focus-visible,
   .agent-info__close:focus-visible,
+  .agent-info__slap:focus-visible,
   .agent-info a:focus-visible,
   .agent-info .link-button:focus-visible,
   .agent-info h2:focus-visible {

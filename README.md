@@ -37,6 +37,9 @@ Un petit bureau en 3D où chaque agent Claude Code du poste local est un personn
   - le contexte de sa session : origine (app Claude ou terminal, en cours ou terminée), worktree (oui ou non) et son nom, dossier, branche et branche d'origine, modèle, effort, mode de permission, heure de début (sessions de l'app), nombre de tours, sous-agents actifs, version de Claude Code ;
   - les serveurs web que la session a lancés, sous forme de liens `http://localhost:<port>` qui s'ouvrent dans un nouvel onglet. Ils sont détectés toutes les 10 s : un port en écoute ouvert par un processus lancé par la session, ou un port déclaré dans `.claude/launch.json` du dossier de la session et servi depuis ce dossier. Un port ouvert par un outil ou un serveur MCP lancé par Claude apparaît aussi. Seules les adresses locales sont détectées.
   - Le × de la fiche désélectionne l'agent : la fiche et la boîte de dialogue se ferment. La liste latérale, nommée « Agents et lieux », est l'équivalent complet de la vue 3D au clavier et au lecteur d'écran. Sa liste « Lieux du bureau », groupée par pièce, ouvre la même carte que le clic sur un poste ; fermer la carte rend le focus au bouton choisi.
+- **Une baffe façon Dungeon Keeper** (purement pour le plaisir). Un clic droit sur un personnage, sans glisser, le « baffe » : il encaisse le coup, une grande main balaie sa tête, des étoiles tournent au-dessus de son étiquette et une bulle « PAF ! » apparaît (« SLAP! » en anglais, « KLATSCH! » en allemand), avec un bruit de claque. Cet effet est purement esthétique : il n'agit ni sur l'agent ni sur sa session.
+  - Un clic droit glissé déplace toujours la caméra, sans baffer. Au clavier, le bouton « Baffer » de la fiche de l'agent fait la même chose ; il n'apparaît que tant que l'agent a un personnage dans la scène.
+  - Avec « réduire les animations », seule la bulle s'affiche, immobile, et le personnage ne bouge pas.
 - **L'historique** liste les sessions terminées.
 - **`/debug`** montre le flux brut des événements reçus.
 
@@ -72,6 +75,8 @@ Pour le développement, `npm run dev` lance le serveur et Vite (http://127.0.0.1
 ### Modèles 3D
 
 La carte utilise les packs gratuits KayKit de Kay Lousberg (www.kaylousberg.com) : Dungeon Pack 1.1, RPG Tools Bits 1.0 et Fantasy Weapons Bits 1.0. Les personnages utilisent KayKit Adventurers 2.0. Ils sont sous licence CC0 : le crédit n'est pas obligatoire, on le donne quand même (voir `packages/web/public/kaykit/LICENSE.txt`). Les modèles utilisés sont déjà dans le dépôt.
+
+Le bruit de la baffe est « Slap.m4a » de TheNerdClubBoi sur Freesound (https://freesound.org/s/667099/), sous licence CC0 : le crédit n'est pas obligatoire, on le donne quand même (voir `packages/web/public/sounds/LICENSE.txt`).
 
 Pour en ajouter un :
 

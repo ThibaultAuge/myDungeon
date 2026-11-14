@@ -1,5 +1,5 @@
 ---
-description: Use when changing the 3D dungeon map — rooms, floors, walls, castle gate, cutaway, props, lighting, KayKit models or their import — clickable workstations (posts, hover glow, post card and list), pointer/cursor handling of 3D targets, agent figures (walking motion, character models, role looks and held props, animations, destination badge), room or post icons, or when previewing the web scene.
+description: Use when changing the 3D dungeon map — rooms, floors, walls, castle gate, cutaway, props, lighting, KayKit models or their import — clickable workstations (posts, hover glow, post card and list), pointer/cursor handling of 3D targets, agent figures (walking motion, character models, role looks and held props, animations, destination badge, agent slap gag), room or post icons, or when previewing the web scene.
 ---
 
 # 3D dungeon scene (KayKit assets)
@@ -71,7 +71,8 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cast
   every pointer over/move and on click. Posts never `stopPropagation` on hover;
   `AgentFigure` stops on pointerover and click. `CLICK_MAX_DRAG_PX = 2` (R3F's pointer-missed
   limit) is shared by agents and posts: a release after a camera drag selects nothing.
-  Resting tavern figures have no handlers and no target flag.
+  Right click on an agent slaps it (see Slap gag below). Resting tavern figures have no
+  handlers and no target flag.
 - Store: `selectedPost` / `selectPost`, reset on route change; Canvas `onPointerMissed`
   clears both agent and post selection.
 - `ui/PostCard.tsx`: card at the top right of `.office__scene` (top 24px, width
@@ -116,7 +117,8 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cast
   with exponential rates (`WALK_TURN_RATE` 14, `REST_TURN_RATE` 6).
 - Clips: `clipFor` (pure, in `characters.ts`) picks, in priority order: spawn
   (`Spawn_Ground`, once, ×1.5, only for a figure whose `start` is the lockers `SPAWN` and not
-  done; one coming from a resting seat just walks) > moving (`Walking_A`, or `Running_A` above
+  done; one coming from a resting seat just walks) > hit (`Hit_A` / `Hit_B`, once, not
+  looped; ignored under reduced motion) > moving (`Walking_A`, or `Running_A` above
   `RUN_THRESHOLD`; rate = speed / measured clip speed, capped at `MAX_CLIP_RATE`, with a
   0.5 floor for `Walking_A` only) >
   kneeling at the altar (`PickUp` frozen at `KNEEL_POSE_TIME`) > done (`Idle_A` frozen, no
@@ -146,6 +148,43 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cast
   the accessible source). `DestinationIcon` is used by `DestinationBadge` and by the post
   card (icon of `postDestination(post)`, the same SVG an agent carries while walking to
   that post). Rooms have no title signs, so no room-sign icon exists.
+- Slap gag (user request: purely visual and humorous, à la Dungeon Keeper, no other effect):
+  - Trigger: right click without drag on a selectable figure; left click still selects.
+    Decided on RELEASE: `onPointerDown` / `onPointerUp` with `button === 2`, distance
+    ≤ `CLICK_MAX_DRAG_PX` from `clientX/Y`, both gated by `nearestTarget(e.intersections)`
+    being the figure's group. `onContextMenu` only calls `preventDefault`: `contextmenu`
+    fires on press on macOS/Linux, so it cannot tell a click from an OrbitControls right-drag
+    pan. Resting tavern figures cannot be slapped.
+  - Bus (`slap.ts`): `slapAgent(id)` / `onSlap(id, cb)` per agent; `hasSlapTarget(id)` +
+    `watchSlapTargets(cb)` (notified on first listener added / last removed).
+    `hitClipFor(count)` alternates `Hit_A` / `Hit_B` (NaN/Infinity → `Hit_A`);
+    `SLAP_EFFECT_MS` 1500.
+  - Figure: `Motion` gains `hit` / `hitId` / `hitLeft`. The walk pauses while `hitLeft > 0`
+    (`HIT_FALLBACK` 0.6 s until `Character` sets the clip's real duration), then
+    re-accelerates from 0. `Character` restarts the hit clip on a new `hitId` (`reset().play()`
+    if it is the current action, else deletes it from the weights so the normal path restarts
+    it). While spawning/loading (`spawnLeft !== 0`) or under reduced motion the hit clip is
+    skipped but the DOM effect and sound still play.
+  - Effect: one stable drei `<Html>` per selectable figure at `SLAP_Y` 1.5 (class
+    `slap-anchor`, `zIndexRange [30, 20]`) holding `<SlapEffect key={slap}>`; the key remount
+    restarts the CSS animations. State is cleared after `SLAP_EFFECT_MS` and in the effect
+    cleanup (Suspense re-run). `SlapEffect`: `aria-hidden` hand SVG sweeping (direction flips
+    every other slap), 3 ★ stars spinning above the name tag, comic bubble `t.slap.sound`.
+    CSS `.slap*`: reduced motion hides hand and stars and keeps the bubble static;
+    forced-colors rules.
+  - Sound (`ui/slapSound.ts`): recorded file `public/sounds/slap.m4a` (Freesound #667099,
+    CC0, copied unmodified from the gitignored `assets-src/`; credit in
+    `public/sounds/LICENSE.txt`). `preloadSlapSound()` (called in `AgentFigure`'s slap
+    effect) fetches the bytes with no `AudioContext`. On a slap, the single page
+    `AudioContext` (created lazily in the gesture, never closed or recreated) decodes a copy
+    once and plays an `AudioBufferSourceNode` at gain 0.6, max 3 overlapping voices. A failed
+    fetch or decode clears the cache (next slap retries) and logs one `console.warn`. Plays
+    only when `running`, else after one in-flight `resume()`; slaps during a pending resume
+    are dropped, not queued.
+  - Keyboard route: `AgentInfo` "Baffer" button `.agent-info__slap`, `aria-label`
+    `t.info.slapLabel(name)` containing the visible text (tested in `i18n.test.ts`), shown
+    only while `hasSlapTarget` (`useSyncExternalStore`); if it disappears while focused,
+    focus moves to `#agent-info-title`.
 - Spots (`layout.ts`): `Spot` carries `room: RoomId` and optional `station?: StationId`
   (key absent, not `undefined`). `RoomDef.stations` is `Partial<Record<StationId, Seat[]>>`,
   `STATIONS` maps agent type → `StationId`, `candidateSeats` returns
@@ -176,7 +215,10 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cast
 - `packages/web/src/scene/characters.ts` — pure, no three.js: `MAIN_BODY`, `SUB_BODIES`,
   `LOOKS`, `lookFor`, `PROP_GRIP`, `gripFor`, `clipFor` and the clip constants.
 - `packages/web/src/scene/AgentFigure.tsx` — walk, `Character` (takes a `Look`), `Held`,
-  `CharacterBoundary`, tag, destination badge toggle.
+  `CharacterBoundary`, tag, destination badge toggle, slap handlers and anchor.
+- `packages/web/src/scene/slap.ts` (pure bus and clip choice), `scene/SlapEffect.tsx`,
+  `ui/slapSound.ts`, slap button in `ui/AgentInfo.tsx`; `.slap*` in `styles.css`;
+  `packages/web/public/sounds/` (`slap.m4a`, `LICENSE.txt`).
 - `packages/web/src/scene/destinations.ts` — pure: `Destination = RoomId | StationId`,
   `destinationOf(spot)` (station ?? room), `postDestination(post: PostId)` (identity; it
   compiles only because every `PostId` is a `RoomId` or a `StationId`).
@@ -190,7 +232,7 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cast
   pointer rules.
 - `packages/web/src/ui/PostCard.tsx`, `PostList.tsx`; `packages/web/src/store.ts`
   (`selectedPost`, `selectPost`); Canvas `onPointerMissed` is in `Office.tsx`.
-- `packages/web/test/dungeon.test.ts`, `walk.test.ts`, `characters.test.ts`,
+- `packages/web/test/dungeon.test.ts`, `walk.test.ts`, `characters.test.ts`, `slap.test.ts`,
   `layout.test.ts` (`layout.ts`: `ROOMS`, seats and `assignSpots`, altar `queueSpot`,
   `SPAWN`, `corridorPath`, `routeBetween`, `reroute`, post tagging, `postGroups`,
   `POST_ROOM`, spot `room`/`station`), `highlight.test.ts`, `cursor.test.ts`,
@@ -213,6 +255,8 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cast
   group under the hand bone live, then copy the values into `PROP_GRIP`.
 - Repeated pieces go through `<KitInstances>`; one-off furniture through `<Kit>`; a new
   prop is a `PROPS` entry. Put placement logic in `dungeon.ts` so it stays testable.
+- Any other per-agent visual reaction: reuse the `slap.ts` bus pattern (per-id listeners,
+  target watch for a keyboard button) and the keyed `<Html>` remount to replay CSS effects.
 - Agent motion logic goes in `walk.ts`, clip choice in `clipFor` (both tested), never
   inline in `AgentFigure`'s `useFrame`, which only calls them.
 - New decor must not cover seats or a door entry (tested in `dungeon.test.ts`).
@@ -253,6 +297,9 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cast
   verification. Headless Playwright renders about 1–2 fps (software GL): wait about 2 s
   before checking rAF-driven effects (focus return, highlight screenshots). Give Playwright
   file outputs absolute paths inside the worktree; relative paths resolve elsewhere.
+  A headless screenshot takes about 4 s, longer than the 1.5 s slap effect: to capture it,
+  patch `window.setTimeout` for the 1500 ms delay and pause `document.getAnimations()` on
+  `.slap*` elements first.
   `.playwright-mcp/` is gitignored because captures may show real session names; keep it so.
 - Where figures rest, wait, appear and leave (tavern, altar, roster):
   `docs/ai/agent-lifecycle.md`.
@@ -276,7 +323,7 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cast
   to 0.1 m inside the room edge.
 - Orientation-based cutaway was tried and rejected; keep the cursor parabola.
 - Tests must not import `kit.ts` or any `.tsx` file (drei / `import.meta.env`); test
-  `dungeon.ts`, `layout.ts`, `walk.ts`, `characters.ts`, `destinations.ts`, `forest.ts` and
+  `dungeon.ts`, `layout.ts`, `walk.ts`, `characters.ts`, `slap.ts`, `destinations.ts`, `forest.ts` and
   the manifest JSON.
 - Walk speed was set so figures reach the room before short tasks finish (user request).
   The chibi legs walk naturally at 0.57 (`Walking_A`) and 1.4 u/s (`Running_A`) at
@@ -310,6 +357,12 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cast
 - Destination badge accepted limits (not done): an altar-queue shuffle (rank n → n-1)
   shows the altar badge about 1 s and hides an urgent agent's request bubble meanwhile; the
   visibility logic has no unit test (depends on drei ref placement; verified in Playwright).
+- Slap accepted limits (not done): rapid alternating slaps snap the weight of a fading-out
+  hit clip for a frame; `Character`'s restart logic has no unit test (in `.tsx`); a stale
+  right-press position is only cleared by a right release on that figure; one extra drei
+  `<Html>` per selectable figure (per-frame projection cost); no mute switch for the sound;
+  the server SPA fallback answers a missing `/sounds/` file with `index.html` (status 200),
+  so a missing `slap.m4a` fails decoding silently and is refetched on every slap.
 - Post card plate layout, keep it: `.post-card__plate` is IN THE FLOW with
   `margin-top: -16px` (not `position: absolute` like the agent plates), so a two-line title
   (FR "Rayonnages et tables de lecture" wraps) pushes the text down. Its

@@ -115,7 +115,7 @@ export function gripFor(ref: PropRef): Grip {
 }
 
 /** Clips used by the figures, from Rig_Medium_General and Rig_Medium_MovementBasic. */
-export const CLIPS = ['Walking_A', 'Running_A', 'Interact', 'Idle_A', 'Idle_B', 'PickUp', 'Spawn_Ground'] as const;
+export const CLIPS = ['Walking_A', 'Running_A', 'Interact', 'Idle_A', 'Idle_B', 'PickUp', 'Spawn_Ground', 'Hit_A', 'Hit_B'] as const;
 export type ClipName = (typeof CLIPS)[number];
 
 /**
@@ -148,6 +148,8 @@ export interface ClipInput {
   /** The figure is first of the altar queue, at its spot. */
   kneeling: boolean;
   reducedMotion: boolean;
+  /** The figure was just slapped: the hit reaction to play (once). Absent otherwise. */
+  hit?: 'Hit_A' | 'Hit_B';
 }
 
 export interface ClipChoice {
@@ -167,8 +169,10 @@ const hold = (name: ClipName, at = 0): ClipChoice => ({ name, loop: false, timeS
  * still changes (that is information), the limbs do not.
  */
 export function clipFor(input: ClipInput): ClipChoice {
-  const { moving, speed, state, spawning, kneeling, reducedMotion } = input;
+  const { moving, speed, state, spawning, kneeling, reducedMotion, hit } = input;
   if (spawning && !reducedMotion) return play('Spawn_Ground', SPAWN_TIME_SCALE, false);
+  // A slap (purely visual) interrupts everything but the spawn; reduced motion keeps the pose.
+  if (hit && !reducedMotion) return play(hit, 1, false);
   if (moving) {
     if (reducedMotion) return hold('Idle_A');
     return speed >= RUN_THRESHOLD

@@ -1,4 +1,4 @@
-import { useEffect, useRef, type CSSProperties } from 'react';
+import { useEffect, useRef, useSyncExternalStore, type CSSProperties } from 'react';
 import type { AgentView, SessionView } from '@agent-office/shared';
 import {
   agentName,
@@ -14,6 +14,7 @@ import {
   statusKind,
 } from '../format.ts';
 import { useT } from '../i18n/useT.ts';
+import { hasSlapTarget, slapAgent, watchSlapTargets } from '../scene/slap.ts';
 import { useOffice } from '../store.ts';
 import { useNow } from '../useNow.ts';
 import { rowId } from './SessionList.tsx';
@@ -137,6 +138,16 @@ export function AgentInfo({ sessions }: { sessions: SessionView[] }) {
   const session = selectedId ? sessions.find((s) => s.main.id === selectedId || s.subagents.some((a) => a.id === selectedId)) : undefined;
   const agent = session && (session.main.id === selectedId ? session.main : session.subagents.find((a) => a.id === selectedId));
   const shown = !!session && !!agent;
+  // The slap button only while the agent has a figure in the scene (not a finished subagent gone from it).
+  const slappable = useSyncExternalStore(watchSlapTargets, () => !!selectedId && hasSlapTarget(selectedId));
+  /** True while the slap button holds the focus: removing a focused node fires no blur. */
+  const slapFocused = useRef(false);
+  // The button vanishes with the figure while the card stays: keep the focus in the card.
+  useEffect(() => {
+    if (slappable || !slapFocused.current) return;
+    slapFocused.current = false;
+    document.getElementById(INFO_TITLE_ID)?.focus();
+  }, [slappable]);
 
   // The card can also vanish on its own (agent gone from a snapshot, navigation): when it
   // held the focus, give it to the session list instead of leaving it on <body>.
@@ -192,6 +203,19 @@ export function AgentInfo({ sessions }: { sessions: SessionView[] }) {
           <StatusIcon kind={statusKind(agent)} />
           {t.panel.stateSince(stateLabel(agent, t), elapsed(agent.since, now, t))} · {t.rooms[agent.room] ?? agent.room}
         </p>
+        {/* The keyboard route to the right-click slap: the same purely visual gag. */}
+        {slappable && (
+          <button
+            type="button"
+            className="agent-info__slap"
+            aria-label={t.info.slapLabel(name)}
+            onClick={() => slapAgent(agent.id)}
+            onFocus={() => (slapFocused.current = true)}
+            onBlur={() => (slapFocused.current = false)}
+          >
+            {t.info.slap}
+          </button>
+        )}
         <h3>{t.info.session}</h3>
         <SessionDetails session={session} agent={agent} now={now} />
         <h3>{t.info.agent}</h3>
