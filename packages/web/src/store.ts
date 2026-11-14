@@ -38,6 +38,8 @@ interface OfficeStore {
   sessions: SessionView[];
   /** Agent types resting in the tavern of the shown environment. */
   roster: string[];
+  /** True once a snapshot for the current route arrived; reset on every route change. */
+  snapshotReceived: boolean;
   /** Server clock of the last snapshot, to compute elapsed times without client clock drift. */
   serverOffset: number;
   events: HookEventSummary[];
@@ -54,13 +56,14 @@ export const useOffice = create<OfficeStore>((set) => ({
   environments: [],
   sessions: [],
   roster: [],
+  snapshotReceived: false,
   serverOffset: 0,
   events: [],
   selectedAgentId: null,
   lang: startLang,
   navigate(r) {
     history.pushState(null, '', routePath(r));
-    set({ route: r, sessions: [], roster: [], selectedAgentId: null });
+    set({ route: r, sessions: [], roster: [], snapshotReceived: false, selectedAgentId: null });
     connect();
   },
   select(agentId) {
@@ -74,7 +77,13 @@ export const useOffice = create<OfficeStore>((set) => ({
 }));
 
 window.addEventListener('popstate', () => {
-  useOffice.setState({ route: parseRoute(location.pathname), sessions: [], roster: [], selectedAgentId: null });
+  useOffice.setState({
+    route: parseRoute(location.pathname),
+    sessions: [],
+    roster: [],
+    snapshotReceived: false,
+    selectedAgentId: null,
+  });
   connect();
 });
 
@@ -93,6 +102,7 @@ function onMessage(msg: ServerMessage): void {
       sessions: msg.sessions,
       environments: msg.environments,
       roster: msg.roster ?? [],
+      snapshotReceived: true,
       serverOffset: msg.at - Date.now(),
       selectedAgentId: stillThere ? selected : null,
     });

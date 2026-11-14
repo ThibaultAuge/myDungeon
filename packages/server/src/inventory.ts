@@ -196,6 +196,11 @@ export function matchEnvironment(folders: string[], environments: Environment[])
 /** Agent type names we accept from a definition: what Claude Code itself accepts, short. */
 export const AGENT_NAME = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$/;
 /**
+ * Agent types we accept from a hook: a definition name, optionally namespaced by its plugin
+ * (`plugin:agent`). One colon at most, no backtracking: each part is a bounded single class.
+ */
+export const HOOK_AGENT_TYPE = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}(?::[A-Za-z0-9][A-Za-z0-9_.-]{0,63})?$/;
+/**
  * Subagent ids we accept from a hook. No `:` nor `#`, so an id can never take the place of a
  * client resting figure (`rest:<type>`) or of a main agent (`<session>#main`).
  */
@@ -216,6 +221,8 @@ const FRONTMATTER_OPEN = /^﻿?---\r?\n([\s\S]*?)(?:\r?\n---|$(?![\s\S]))/;
  * frontmatter runs to the end of the text. A complete text needs its closing `---`.
  */
 export function agentNameFromDefinition(text: string, truncated = false): string | undefined {
+  // The cut may fall inside a line (`name: herm|ione`): a truncated head ends at its last line break.
+  if (truncated) text = text.slice(0, text.lastIndexOf('\n') + 1);
   const fm = (truncated ? FRONTMATTER_OPEN : FRONTMATTER).exec(text);
   if (!fm) return undefined;
   // Plain string handling, no regex over the value: a file from a cloned repo must not be
@@ -258,11 +265,36 @@ export function isRemotePath(p: string): boolean {
 }
 
 /**
- * Agent types of an `agents` folder, or null when the folder exists but could not be
- * listed (busy or sleeping drive): absence then proves nothing.
+ * True when a path component between `root` (excluded) and `dir` (included) is a symlink or
+ * a junction. Those components come from a cloned repository: a link could send the reads to
+ * a network share (an SMB connection leaks NTLM credentials) or an automount, out of reach of
+ * `isRemotePath`. Only `lstat` is used: resolving the target would already contact the host.
  */
-function listAgentTypes(dir: string): string[] | null {
+function linkedBelow(root: string, dir: string): boolean {
+  const rel = path.relative(root, dir);
+  let current = root;
+  for (const part of rel.split(path.sep).filter(Boolean)) {
+    current = path.join(current, part);
+    let st: fs.Stats | undefined;
+    try {
+      st = fs.lstatSync(current, { throwIfNoEntry: false });
+    } catch {
+      return true;
+    }
+    if (!st) return false; // absent: opendir reports it as an empty folder
+    if (st.isSymbolicLink()) return true;
+  }
+  return false;
+}
+
+/**
+ * Agent types of an `agents` folder, or null when the folder exists but could not be
+ * listed (busy or sleeping drive): absence then proves nothing. With `trustedRoot`, the
+ * components below that root must not be links (see `linkedBelow`).
+ */
+function listAgentTypes(dir: string, trustedRoot?: string): string[] | null {
   if (isRemotePath(dir)) return [];
+  if (trustedRoot !== undefined && linkedBelow(trustedRoot, dir)) return [];
   let handle: fs.Dir;
   try {
     handle = fs.opendirSync(dir);
@@ -280,7 +312,11 @@ function listAgentTypes(dir: string): string[] | null {
   } catch {
     return null;
   } finally {
-    handle.closeSync();
+    try {
+      handle.closeSync();
+    } catch {
+      /* a failed close must not override the result, nor escape the inventory read */
+    }
   }
   const out: string[] = [];
   for (const f of files) {
@@ -312,10 +348,10 @@ export const AGENTS_CACHE_MS = 60_000;
 export type AgentsCache = Map<string, { at: number; types: string[] }>;
 
 /** Reads a folder's agents at most once per `AGENTS_CACHE_MS`; a failed read keeps the last list. */
-function cachedAgentTypes(dir: string, cache: AgentsCache | undefined, now: number): string[] {
+function cachedAgentTypes(dir: string, cache: AgentsCache | undefined, now: number, trustedRoot?: string): string[] {
   const hit = cache?.get(dir);
   if (hit && now - hit.at < AGENTS_CACHE_MS) return hit.types;
-  const types = listAgentTypes(dir) ?? hit?.types ?? [];
+  const types = listAgentTypes(dir, trustedRoot) ?? hit?.types ?? [];
   cache?.set(dir, { at: now, types });
   return types;
 }
@@ -329,12 +365,13 @@ function readDefinedAgents(
   environmentsKnown: boolean,
 ): DefinedAgents {
   const used = new Set<string>();
-  const read = (dir: string) => {
+  const read = (dir: string, trustedRoot?: string) => {
     used.add(dir);
-    return cachedAgentTypes(dir, cache, now);
+    return cachedAgentTypes(dir, cache, now, trustedRoot);
   };
   const byEnv = new Map<string, string[]>();
-  for (const env of environments) byEnv.set(env.id, env.folders.flatMap((f) => read(path.join(f, '.claude', 'agents'))));
+  // The environment folder comes from the user's presets; its `.claude/agents` from the repository.
+  for (const env of environments) byEnv.set(env.id, env.folders.flatMap((f) => read(path.join(f, '.claude', 'agents'), f)));
   const global = read(path.join(claudeHome, 'agents'));
   // Folders of removed or edited environments: the cache must not grow for ever. Without the
   // presets the environments are unknown, not gone: their folders stay cached.

@@ -1,4 +1,4 @@
-import { Component, Suspense, useEffect, useMemo, useRef, type CSSProperties, type ReactNode, type RefObject } from 'react';
+import { Component, memo, Suspense, useEffect, useMemo, useRef, type CSSProperties, type ReactNode, type RefObject } from 'react';
 import { createPortal, useFrame, useThree } from '@react-three/fiber';
 import { Html, useAnimations } from '@react-three/drei';
 import { LoopOnce, LoopRepeat, Vector3, type AnimationClip, type Group, type Mesh, type Object3D, type SkinnedMesh } from 'three';
@@ -226,7 +226,13 @@ interface Props {
   onArrive?(id: string): void;
 }
 
-export function AgentFigure({ agent, name, color, spot, start, selected, onSelect, onArrive }: Props) {
+/**
+ * Memoised: the scene re-renders every second for the clock, and a figure whose props did
+ * not change (same agent object, spot and callbacks) has nothing to redraw.
+ */
+export const AgentFigure = memo(AgentFigureImpl);
+
+function AgentFigureImpl({ agent, name, color, spot, start, selected, onSelect, onArrive }: Props) {
   const group = useRef<Group>(null);
   const ring = useRef<Mesh>(null);
   const bubble = useRef<Mesh>(null);
