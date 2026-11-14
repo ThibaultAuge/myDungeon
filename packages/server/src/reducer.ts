@@ -9,7 +9,7 @@ import type {
   WaitReason,
 } from '@agent-office/shared';
 import { NO_ENV_ID } from '@agent-office/shared';
-import { AGENT_ID, HOOK_AGENT_TYPE, matchEnvironment, type DefinedAgents, type Environment, type Inventory, type LiveProcess } from './inventory.ts';
+import { AGENT_ID, HOOK_AGENT_TYPE, label, matchEnvironment, type DefinedAgents, type Environment, type Inventory, type LiveProcess } from './inventory.ts';
 
 // State machine of the office. No I/O here: every function takes the state and `now`,
 // so the whole behaviour is testable with fixtures.
@@ -38,6 +38,8 @@ export interface OfficeState {
   definedAgents: DefinedAgents;
   /** Agent types seen at work, by environment key: built-in types rest in the tavern after their first call. */
   seenTypes: Map<string, string[]>;
+  /** Pid of the Claude Code process running each live session, for the port scan. */
+  livePids: Map<string, number>;
 }
 
 /** A subagent silent for this long is considered finished (its SubagentStop was missed). */
@@ -54,6 +56,7 @@ export function createState(): OfficeState {
     pendingSpawns: new Map(),
     definedAgents: { global: [], byEnv: new Map() },
     seenTypes: new Map(),
+    livePids: new Map(),
   };
 }
 
@@ -218,6 +221,7 @@ function setDone(a: AgentView, now: number): void {
 
 function markSessionDone(s: SessionView, now: number): void {
   s.live = false;
+  s.servers = [];
   setDone(s.main, now);
   for (const sub of s.subagents) setDone(sub, now);
 }
@@ -236,6 +240,8 @@ function createSession(
     cwd: fields.cwd,
     live: false,
     archived: false,
+    info: {},
+    servers: [],
     createdAt: fields.now,
     lastActivityAt: fields.now,
     main: { ...newAgent(`${id}#main`, id, 'main', 'Session principale', fields.now), state: 'done' },
@@ -308,6 +314,7 @@ export function applyInventory(state: OfficeState, inv: Inventory, now: number):
   const liveByCli = new Map(inv.live.map((p) => [p.cliSessionId, p]));
   const liveByHost = new Map(inv.live.filter((p) => p.hostSessionId).map((p) => [p.hostSessionId!, p]));
   const seen = new Set<string>();
+  state.livePids.clear();
 
   for (const ds of inv.desktopSessions) {
     seen.add(ds.localId);
@@ -334,10 +341,13 @@ export function applyInventory(state: OfficeState, inv: Inventory, now: number):
       lastActivityAt: Math.max(ds.lastActivityAt, s.lastActivityAt),
       parent: ds.parent,
     });
+    const proc = hostLive ?? cliIds.map((c) => liveByCli.get(c)).find(Boolean);
+    s.info = proc?.version ? { ...ds.info, cliVersion: proc.version } : ds.info;
+    if (proc) state.livePids.set(s.id, proc.pid);
     // An absorbed `cli:` session noted its types under its own environment key, matched
     // from its cwd: note them again under the desktop session's environment.
     for (const a of absorbed) noteSeenType(state, s, a.agentType);
-    reconcileLive(state, s, hostLive ?? cliIds.map((c) => liveByCli.get(c)).find(Boolean), now);
+    reconcileLive(state, s, proc, now);
   }
 
   for (const p of inv.live) {
@@ -359,6 +369,17 @@ export function applyInventory(state: OfficeState, inv: Inventory, now: number):
       state.cliIndex.set(p.cliSessionId, id);
     }
     seen.add(id);
+    if (s.origin === 'cli') {
+      const worktreeName = p.worktree ? label(path.basename(p.cwd)) : undefined;
+      s.info = {
+        ...(worktreeName ? { worktree: { name: worktreeName } } : {}),
+        ...(p.version ? { cliVersion: p.version } : {}),
+      };
+    } else if (p.version) {
+      // A desktop session missing from this read (file mid-write) keeps its richer info.
+      s.info = { ...s.info, cliVersion: p.version };
+    }
+    state.livePids.set(id, p.pid);
     reconcileLive(state, s, p, now);
   }
 

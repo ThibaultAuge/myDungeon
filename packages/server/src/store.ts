@@ -1,5 +1,6 @@
-import type { HookEventSummary, ServerMessage } from '@agent-office/shared';
+import type { HookEventSummary, ListeningServer, ServerMessage } from '@agent-office/shared';
 import type { Inventory } from './inventory.ts';
+import type { PortTarget } from './ports.ts';
 import {
   applyHook,
   applyInventory,
@@ -46,6 +47,29 @@ export class OfficeStore {
     for (const sub of this.subscribers) sub.send({ type: 'event', event: summary });
     this.schedule();
     return summary;
+  }
+
+  /** Live sessions the port scan must look at, with their Claude Code pid when known. */
+  portTargets(launchPorts: (cwd: string) => number[]): PortTarget[] {
+    const out: PortTarget[] = [];
+    for (const s of this.state.sessions.values()) {
+      if (!s.live) continue;
+      out.push({ sessionId: s.id, cwd: s.cwd, pid: this.state.livePids.get(s.id), launchPorts: s.cwd ? launchPorts(s.cwd) : [] });
+    }
+    return out;
+  }
+
+  /** Replaces every session's servers; broadcasts only when something changed. */
+  ingestServers(bySession: Map<string, ListeningServer[]>): void {
+    let changed = false;
+    for (const s of this.state.sessions.values()) {
+      const next = s.live ? (bySession.get(s.id) ?? []) : [];
+      if (JSON.stringify(next) !== JSON.stringify(s.servers)) {
+        s.servers = next;
+        changed = true;
+      }
+    }
+    if (changed) this.schedule();
   }
 
   tick(): void {

@@ -10,7 +10,7 @@ description: Use when changing the agent conversation box (AgentDialog), how tra
   `dialogOpen = id !== null`; `closeDialog` (× button, Escape) closes it without
   deselecting. A list row whose agent is selected with the box closed reopens it; a row
   click on the selected agent with the box open deselects. Row `aria-pressed` =
-  `selected && dialogOpen`.
+  `selected && dialogOpen`. The details card shown on selection: `docs/ai/agent-info.md`.
 - Accessibility: the log is `role="log"` with `aria-live="off"` (it is polled, so it must not
   chatter); opening is announced by an sr-only `role="status"`, and error notices by a second
   sr-only `role="status"`.
