@@ -68,7 +68,9 @@ Les pièces à plusieurs fonctions ont un poste par fonction :
 - la Salle des épreuves (table de relecture et laboratoire d'alchimie) ;
 - la Salle Accessibilité / SEO (estrade du héraut et pupitre d'inspection).
 
-Le décor (caisses, tonneaux, coffres, pièces, bougies, tapis) ne réagit pas au survol. Si un agent se tient devant un meuble, le plus proche sous le pointeur l'emporte : l'agent ou le poste.
+Chaque pièce a aussi son identité : ses variantes de murs, des objets accrochés (cadres, boucliers, chaînes, clés), une lumière d'ambiance à sa couleur et son propre décor, sur un ton médiéval avec quelques clins d'œil modernes. Le détail par pièce est dans [Lieux](lieux.md#décor-propre-à-chaque-pièce).
+
+Le décor (caisses, tonneaux, coffres, pièces, bougies, tapis, et le décor propre à chaque pièce) ne réagit pas au survol. Si un agent se tient devant un meuble, le plus proche sous le pointeur l'emporte : l'agent ou le poste.
 
 ## La forêt de nuit
 

@@ -5,6 +5,7 @@ import { useOffice } from '../store.ts';
 import { CLICK_MAX_DRAG_PX, nearestTarget, setPointerHover, TARGET_USER_DATA } from './cursor.ts';
 import { setHighlight } from './highlight.ts';
 import type { PostId } from './layout.ts';
+import { mergeStatic, unmerge } from './merge.ts';
 
 /** Margin around each piece's hit box, in metres. */
 const HIT_PAD = 0.05;
@@ -48,8 +49,15 @@ export function Post({ post, children }: { post: PostId; children: ReactNode }) 
   const cursorKey = `post:${post}`;
 
   // The furniture is static and already loaded here (the dungeon's Suspense waits for it).
+  // Hit boxes first, from the pieces as they are; then the pieces sharing a look are merged
+  // into one mesh each, which saves most of the post's draw calls.
   useLayoutEffect(() => {
-    if (pieces.current) setBoxes(hitBoxes(pieces.current));
+    const g = pieces.current;
+    if (!g) return;
+    setBoxes(hitBoxes(g));
+    const merged = mergeStatic(g);
+    if (merged.meshes.length) g.add(...merged.meshes);
+    return () => unmerge(merged);
   }, []);
 
   useEffect(() => {

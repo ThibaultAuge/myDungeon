@@ -26,6 +26,8 @@ import {
   roomFloor,
   seeded,
   sharedSides,
+  tallKey,
+  tallModel,
   wallLayout,
   wallRuns,
   type CutItem,
@@ -49,6 +51,7 @@ import {
   type PropKind,
   type RoomDef,
   type Side,
+  type WallHang,
 } from '../src/scene/layout.ts';
 import { CLIPS, LOOKS, MAIN_BODY, SUB_BODIES, type PropRef } from '../src/scene/characters.ts';
 
@@ -170,7 +173,8 @@ function makeGlb(json: unknown, patch: GlbPatch = {}): Buffer {
 
 const ACCENTS: Accent[] = ['red', 'blue', 'green', 'yellow', 'white', 'brown'];
 const BANNER_STYLES = ['', 'patternA_', 'patternB_', 'patternC_', 'shield_', 'triple_'];
-const DECOR: PropKind[] = ['crates', 'barrels', 'chest', 'coins', 'candle'];
+/** Decoration with a footprint (rugs, grass and cobwebs are walked through or overhead). */
+const DECOR: PropKind[] = ['crates', 'barrels', 'chest', 'coins', 'candle', 'chartChest', 'sacks', 'bookPile', 'lumber', 'forge', 'fuel', 'treasury', 'gamerCorner', 'prison', 'beartrap', 'skeleton', 'logs', 'pantry'];
 
 const WALLED = ROOMS.filter((r) => !r.insideOf);
 const WALLED_CASES = WALLED.map((r) => [r.id, r] as const);
@@ -343,13 +347,21 @@ describe('kit manifest', () => {
   /**
    * Verifies that the manifest declares every pack the scene loads from, forest included
    */
-  it('declares the dungeon, tools, weapons and adventurers packs with safe names', () => {
+  it('declares the map, character and decoration packs with safe names', () => {
     expect(Object.keys(MANIFEST).sort()).toEqual([
       'adventurers',
       'adventurers_anim',
       'adventurers_props',
       'dungeon',
       'forest',
+      'furniture',
+      'halloween',
+      'mixed1',
+      'mixed2',
+      'resources',
+      'restaurant',
+      'skeleton_props',
+      'skeletons',
       'tools',
       'weapons',
     ]);
@@ -365,8 +377,21 @@ describe('kit manifest', () => {
    */
   it('gives every pack the gltf (default) or glb format', () => {
     for (const [pack, spec] of packs) expect(['gltf', 'glb'], pack).toContain(formatOf(spec));
-    expect(glbPacks.map(([p]) => p).sort()).toEqual(['adventurers', 'adventurers_anim']);
-    expect(gltfPacks.map(([p]) => p).sort()).toEqual(['adventurers_props', 'dungeon', 'forest', 'tools', 'weapons']);
+    expect(glbPacks.map(([p]) => p).sort()).toEqual(['adventurers', 'adventurers_anim', 'skeletons']);
+    expect(gltfPacks.map(([p]) => p).sort()).toEqual([
+      'adventurers_props',
+      'dungeon',
+      'forest',
+      'furniture',
+      'halloween',
+      'mixed1',
+      'mixed2',
+      'resources',
+      'restaurant',
+      'skeleton_props',
+      'tools',
+      'weapons',
+    ]);
   });
 
   /**
@@ -538,10 +563,15 @@ describe('kit manifest', () => {
     foundation(floors);
     for (const name of floors.keys()) used.add(name);
     for (const name of LAYOUT.low.keys()) used.add(name);
-    for (const name of LAYOUT.tall.keys()) used.add(name);
+    const missing: string[] = [];
+    for (const key of LAYOUT.tall.keys()) {
+      const { pack, name } = tallModel(key);
+      if (pack === 'dungeon') used.add(name);
+      else if (!MANIFEST[pack as keyof typeof MANIFEST]?.models.includes(name)) missing.push(key);
+    }
 
     const dungeon = new Set(MANIFEST.dungeon.models);
-    expect([...used].filter((n) => !dungeon.has(n))).toEqual([]);
+    expect([...[...used].filter((n) => !dungeon.has(n)), ...missing]).toEqual([]);
   });
 
   /**
@@ -869,7 +899,7 @@ describe('corridorFloor', () => {
    */
   it('uses large stone tiles only', () => {
     expect(tiles.length).toBeGreaterThan(0);
-    for (const [name] of tiles) expect(['floor_tile_large', 'floor_tile_large_rocks']).toContain(name);
+    for (const [name] of tiles) expect(name).toBe('floor_tile_large');
   });
 
   /**
@@ -2038,5 +2068,241 @@ describe('decor props', () => {
       }
     }
     expect(clashes).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------- room identity
+
+/** Tall keys of a room's hangs. */
+const hangKeys = (r: RoomDef) => new Set((r.hangs ?? []).map((h) => tallKey(h.pack, h.name)));
+
+/** "x,z" of an anchor, rounded so that equal anchors compare equal. */
+const anchorKey = (i: CutItem) => `${i.ax.toFixed(6)},${i.az.toFixed(6)}`;
+
+describe('tallKey / tallModel', () => {
+  /**
+   * Verifies that a dungeon-pack model is keyed by its bare name, any other pack as pack:name
+   */
+  it('keys dungeon models by bare name and other packs as pack:name', () => {
+    expect(tallKey('dungeon', 'wall')).toBe('wall');
+    expect(tallKey('furniture', 'pictureframe_medium')).toBe('furniture:pictureframe_medium');
+  });
+
+  /**
+   * Verifies that a bare key resolves to the dungeon pack and a prefixed key to its pack
+   */
+  it('resolves a bare key to the dungeon pack and splits pack:name at the first colon', () => {
+    expect(tallModel('torch_mounted')).toEqual({ pack: 'dungeon', name: 'torch_mounted' });
+    expect(tallModel('mixed1:chain_hanging_A')).toEqual({ pack: 'mixed1', name: 'chain_hanging_A' });
+    expect(tallModel('a:b:c')).toEqual({ pack: 'a', name: 'b:c' });
+  });
+
+  /**
+   * Verifies that tallModel undoes tallKey for every hang of the map and every manifest model
+   */
+  it('round-trips every hang and every manifest model', () => {
+    const pairs = [
+      ...ROOMS.flatMap((r) => r.hangs ?? []).map((h) => ({ pack: h.pack, name: h.name })),
+      ...Object.entries(MANIFEST).flatMap(([pack, spec]) => spec.models.map((name) => ({ pack, name }))),
+    ];
+    expect(pairs.length).toBeGreaterThan(0);
+    for (const p of pairs) expect(tallModel(tallKey(p.pack, p.name))).toEqual(p);
+  });
+});
+
+describe('room identity data', () => {
+  const withWalls = ROOMS.filter((r) => r.walls).map((r) => [r.id, r] as const);
+  const withHangs = ROOMS.filter((r) => r.hangs).map((r) => [r.id, r] as const);
+
+  /**
+   * Verifies that several rooms have their own wall mix and their own hangs
+   */
+  it('gives several rooms their own walls and hangs', () => {
+    expect(withWalls.length).toBeGreaterThanOrEqual(3);
+    expect(withHangs.length).toBeGreaterThanOrEqual(3);
+  });
+
+  /**
+   * Verifies that a room's wall models are dungeon-pack models with positive finite weights
+   */
+  it.each(withWalls)('%s wall variants are dungeon models with positive weights', (_id, r) => {
+    const dungeon = new Set(MANIFEST.dungeon.models);
+    expect(r.walls!.length).toBeGreaterThan(0);
+    for (const [name, weight] of r.walls!) {
+      expect(dungeon.has(name), name).toBe(true);
+      expect(name.startsWith('wall'), name).toBe(true);
+      expect(Number.isFinite(weight) && weight > 0, `${name} weight ${weight}`).toBe(true);
+    }
+  });
+
+  /**
+   * Verifies that a room's hangs are manifest models with a sane height, back and scale
+   */
+  it.each(withHangs)('%s hangs are manifest models with a sane height, back and scale', (_id, r) => {
+    expect(r.hangs!.length).toBeGreaterThan(0);
+    for (const h of r.hangs!) {
+      expect(MANIFEST[h.pack]?.models.includes(h.name), `${h.pack}/${h.name}`).toBe(true);
+      expect(h.y).toBeGreaterThanOrEqual(0);
+      expect(h.y).toBeLessThan(3);
+      expect(Number.isFinite(h.back ?? 0)).toBe(true);
+      expect(h.s ?? 1).toBeGreaterThan(0);
+    }
+  });
+
+  /**
+   * Verifies that every walled room has a #RRGGBB mood light with a positive intensity
+   */
+  it.each(WALLED_CASES)('%s has a #RRGGBB light with a positive intensity', (_id, r) => {
+    expect(r.light).toBeDefined();
+    expect(r.light!.color).toMatch(/^#[0-9A-Fa-f]{6}$/);
+    expect(Number.isFinite(r.light!.intensity)).toBe(true);
+    expect(r.light!.intensity).toBeGreaterThan(0);
+  });
+
+  /**
+   * Verifies that a zone inside another room has no light of its own
+   */
+  it('gives no light to a zone inside another room', () => {
+    const zones = ROOMS.filter((r) => r.insideOf);
+    expect(zones.length).toBeGreaterThan(0);
+    for (const z of zones) expect(z.light, z.id).toBeUndefined();
+  });
+});
+
+describe('wallLayout: room walls and hangs', () => {
+  const HANGS: WallHang[] = [
+    { pack: 'furniture', name: 'pictureframe_medium', y: 1.6, back: 0, s: 1 },
+    { pack: 'mixed1', name: 'chain_hanging_A', y: 2.6, back: 0.15, s: 0.8 },
+  ];
+  const HANG_KEYS = new Set(HANGS.map((h) => tallKey(h.pack, h.name)));
+  // A large room of plain walls: every chunk is 'wall' and over 2 m, so each one rolls for
+  // decor. About thirty rolls: the seeded dice are certain to land on hangs a few times.
+  const big = (extra: Partial<RoomDef>) => makeRoom('hang-test', 0, -2, 30, 16, { walls: [['wall', 1]], ...extra });
+  const hung = big({ hangs: HANGS });
+  const WITH = wallLayout([hung]);
+  const WITHOUT = wallLayout([big({})]);
+  const hangItems = [...WITH.tall].filter(([k]) => HANG_KEYS.has(k)).flatMap(([k, items]) => items.map((item) => ({ k, item })));
+
+  /**
+   * Verifies that a room with hangs gets its hang models and no banner at all
+   */
+  it('hangs the room models in place of banners', () => {
+    expect(hangItems.length).toBeGreaterThan(0);
+    expect([...WITH.tall.keys()].filter((k) => k.startsWith('banner_'))).toEqual([]);
+    expect([...WITHOUT.tall.keys()].some((k) => k.startsWith('banner_'))).toBe(true);
+  });
+
+  /**
+   * Verifies that hangs take exactly the wall spots banners take, torches unchanged
+   */
+  it('puts hangs on the same spots as the banners they replace, torches unchanged', () => {
+    const banners = [...WITHOUT.tall].filter(([k]) => k.startsWith('banner_')).flatMap(([, items]) => items);
+    expect(hangItems.map(({ item }) => anchorKey(item)).sort()).toEqual(banners.map(anchorKey).sort());
+    expect(WITH.tall.get('torch_mounted')).toEqual(WITHOUT.tall.get('torch_mounted'));
+  });
+
+  /**
+   * Verifies that an empty hangs list falls back to the banners
+   */
+  it('falls back to banners for an empty hangs list', () => {
+    expect(wallLayout([big({ hangs: [] })])).toEqual(WITHOUT);
+  });
+
+  /**
+   * Verifies that each hang is anchored on its wall chunk and faces into the room like a banner
+   */
+  it('anchors every hang on its wall chunk, facing into the room', () => {
+    const walls = [...WITH.tall].filter(([k]) => k.startsWith('wall')).flatMap(([, items]) => items);
+    for (const { k, item } of hangItems) {
+      const side = sideOfRotation(item.rotY);
+      expect(side, `${k} rotY ${item.rotY}`).toBeDefined();
+      const chunk = walls.find((w) => Math.abs(w.ax - item.ax) < 1e-9 && Math.abs(w.az - item.az) < 1e-9);
+      expect(chunk, `${k} at (${item.x}, ${item.z})`).toBeDefined();
+      expect(item.rotY).toBeCloseTo(chunk!.rotY, 12);
+      // Its inward direction points to the room centre.
+      const [ix, iz] = INWARD[side!];
+      expect((hung.cx - item.ax) * ix + (hung.cz - item.az) * iz).toBeGreaterThan(0);
+    }
+  });
+
+  /**
+   * Verifies that a hang stands at its height, scale s × KIT_SCALE, its back on the wall face
+   */
+  it('places each hang at its height and scale, its back against the wall face', () => {
+    for (const { k, item } of hangItems) {
+      const h = HANGS.find((x) => tallKey(x.pack, x.name) === k)!;
+      const s = (h.s ?? 1) * KIT_SCALE;
+      expect(item.y).toBe(h.y);
+      expect(item.scale).toEqual([s, s, s]);
+      const [ix, iz] = INWARD[sideOfRotation(item.rotY)!];
+      const d = WALL_T / 2 - (h.back ?? 0) * s;
+      expect(item.x - item.ax).toBeCloseTo(ix * d, 9);
+      expect(item.z - item.az).toBeCloseTo(iz * d, 9);
+    }
+  });
+
+  /**
+   * Verifies that a room with its own walls uses only those models on chunks of 1.5 m or more
+   */
+  it("uses only the room's wall models, plain 'wall' on chunks shorter than 1.5 m", () => {
+    // 4 × 6 m, door north: the two north stretches are 0.95 m, the others 2.85 m and 3.7 m.
+    const r = makeRoom('variant-test', 0, -2, 4, 6, { walls: [['wall_scaffold', 1]] });
+    const inRoom = (i: CutItem) => Math.abs(i.ax - r.cx) < r.w / 2 && Math.abs(i.az - r.cz) < r.d / 2;
+    const walls = [...wallLayout([r]).tall]
+      .filter(([k]) => k.startsWith('wall'))
+      .flatMap(([k, items]) => items.filter(inRoom).map((item) => ({ k, item })));
+    expect(walls).toHaveLength(7);
+    for (const { k, item } of walls) {
+      const chunk = item.scale![0] * 4;
+      expect(k, `chunk ${chunk.toFixed(2)} m`).toBe(chunk < 1.5 ? 'wall' : 'wall_scaffold');
+    }
+    expect(walls.filter(({ k }) => k === 'wall')).toHaveLength(2);
+  });
+
+  /**
+   * Verifies that in the real map, a room with its own walls only draws those on long chunks
+   */
+  it('keeps every map room with walls to its own wall models', () => {
+    const problems: string[] = [];
+    let checked = 0;
+    for (const { name, item } of TALL.filter((t) => t.name.startsWith('wall'))) {
+      const r = roomFacedBy(item);
+      if (!r?.walls) continue;
+      const chunk = item.scale![0] * 4;
+      const allowed = chunk < 1.5 ? ['wall'] : r.walls.map(([n]) => n);
+      checked++;
+      if (!allowed.includes(name)) problems.push(`${r.id}: ${name} on a ${chunk.toFixed(2)} m chunk`);
+    }
+    expect(checked).toBeGreaterThan(0);
+    expect(problems).toEqual([]);
+  });
+
+  /**
+   * Verifies that in the real map, every hang faces a room that lists it, on its wall chunk
+   */
+  it('hangs every map hang in a room that lists it, anchored on a wall chunk', () => {
+    const all = new Set(ROOMS.flatMap((r) => [...hangKeys(r)]));
+    const walls = TALL.filter((t) => t.name.startsWith('wall')).map((t) => t.item);
+    const items = TALL.filter((t) => all.has(t.name));
+    expect(items.length).toBeGreaterThan(0);
+    const problems: string[] = [];
+    for (const { name, item } of items) {
+      const r = roomFacedBy(item);
+      if (!r || !hangKeys(r).has(name)) problems.push(`${name} at (${item.x}, ${item.z}) faces ${r?.id ?? 'no room'}`);
+      const onChunk = walls.some((w) => anchorKey(w) === anchorKey(item) && Math.abs(w.rotY - item.rotY) < TOL);
+      if (!onChunk) problems.push(`${name} at (${item.x}, ${item.z}) is on no wall chunk`);
+    }
+    expect(problems).toEqual([]);
+  });
+
+  /**
+   * Verifies that in the real map, a room with hangs gets no random banner
+   */
+  it('hangs no random banner in a map room that has hangs', () => {
+    const stray = TALL.filter((t) => t.name.startsWith('banner_'))
+      .map(({ name, item }) => ({ name, item, r: roomFacedBy(item) }))
+      .filter(({ name, r }) => r?.hangs?.length && !hangKeys(r).has(name))
+      .map(({ name, r }) => `${r!.id}: ${name}`);
+    expect(stray).toEqual([]);
   });
 });

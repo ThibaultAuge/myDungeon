@@ -1153,7 +1153,7 @@ describe('standing places', () => {
 // ---------------------------------------------------------------- workstations (posts)
 
 /** Decoration kinds: no workstation of their own. */
-const DECOR_KINDS: PropKind[] = ['crates', 'barrels', 'chest', 'coins', 'candle', 'rug'];
+const DECOR_KINDS: PropKind[] = ['crates', 'barrels', 'chest', 'coins', 'candle', 'chartChest', 'sacks', 'bookPile', 'lumber', 'forge', 'fuel', 'treasury', 'gamerCorner', 'prison', 'beartrap', 'skeleton', 'logs', 'pantry', 'rug', 'weeds', 'cobwebs'];
 
 /** The room every workstation is expected to stand in. */
 const EXPECTED_POST_ROOM: Record<PostId, RoomId> = {

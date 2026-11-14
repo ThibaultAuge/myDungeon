@@ -33,7 +33,8 @@ Un **donjon de fantasy coloré et joyeux**, pas sombre : proportions trapues, co
 - la boîte de dialogue en lecture seule, ouverte par un clic sur un personnage ou sur sa ligne, lisible sans connexion depuis la page servie en local ;
 - la fiche d'agent avec le contexte de la session et les serveurs web détectés ;
 - les postes de travail : survol et clic sur le mobilier (`packages/web/src/scene/Post.tsx`), carte du poste (`packages/web/src/ui/PostCard.tsx`), un poste par fonction dans les pièces à plusieurs fonctions, et la liste « Lieux du bureau » du panneau latéral ;
-- la forêt de nuit, avec les douves, le pont-levis et la porte du château.
+- la forêt de nuit, avec les douves, le pont-levis et la porte du château ;
+- l'identité de chaque pièce : variantes de murs, objets accrochés, lumière d'ambiance et décor propre.
 
 ### Reste à faire
 
@@ -54,6 +55,6 @@ Les événements de hook portent un champ `permission_mode` (`plan` en mode plan
 
 ## Limites et suite
 
-- La scène fait environ 700 appels de dessin par image, ombres comprises, parce que le mobilier isolé n'est pas encore regroupé en instances. Les pièces répétées (sols, forêt, pièces de kit répétées) passent déjà par des instances (`KitInstances.tsx`). Des assets Unreal ne seraient utilisables que si leur licence Fab autorise un usage hors Unreal Engine.
+- La scène fait 443 appels de dessin par image avec la forêt, ombres comprises (368 sans elle). Le décor est dessiné par instances, et les pièces fixes de chaque poste sont regroupées par matériau : sans ces regroupements, la scène en faisait 618. Les 15 lumières des pièces ajoutent un coût GPU, non mesuré. Des assets Unreal ne seraient utilisables que si leur licence Fab autorise un usage hors Unreal Engine.
 - La boîte de dialogue est en lecture seule. Répondre aux agents depuis la 3D (permission, question) fera l'objet d'une phase distincte, avec sa propre protection d'accès. Envoyer un prompt libre à une session déjà ouverte n'a pas encore de solution officielle.
 - Le plan complet se trouve dans [plans/plan-agent-office-2026-11-13.md](../plans/plan-agent-office-2026-11-13.md).

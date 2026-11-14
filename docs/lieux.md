@@ -51,6 +51,29 @@ Le `║` sur le bord sud marque la porte du château, entre l'Accessibilité / S
 | **Réduit du concierge** | Balais, seaux, chariot | Base de Hancock, qui fait des tournées dans l'Atelier | Hancock |
 | **Taverne** | Grandes tables, cheminée, tonneaux, casiers | Agents disponibles, sans tâche | Un exemplaire de chaque type d'agent, et l'agent principal en attente de ton prochain prompt |
 
+## Décor propre à chaque pièce
+
+Chaque pièce a ses variantes de murs, des objets accrochés, une lumière d'ambiance à sa
+couleur et son décor. Ce décor s'ajoute aux postes du tableau ci-dessus. Il ne réagit pas
+au survol.
+
+| Lieu | Décor propre |
+|---|---|
+| Observatoire | Coffre à cartes, fenêtres en arc |
+| Pigeonnier | Sacs, herbe, poulets en peluche en guise de pigeons dans la volière |
+| Salle des cartes | Coffre à cartes, cadres et boucliers aux murs |
+| Bibliothèque | Étagères murales, pile de livres dont un livre piège (mimic) |
+| Atelier | Bois d'œuvre, forge (enclume, meule), murs d'échafaudage |
+| Autel des requêtes | Autel de bougies (thème Halloween), triple bannière |
+| Salle des machines | Poêle à bois, tonneaux de combustible, chaînes suspendues |
+| Cabinet de l'arithméticien | Trésor : lingots d'or et d'argent |
+| Coin détente | Canapé, tapis ovale, coin gamer (fauteuil, console portable, guitare), cube-énigme |
+| Réduit du concierge | Toiles d'araignée dans les coins, murs fissurés |
+| Poste de garde | Ossements, entraves, piège à ours, boucliers, trousseau de clés et épées aux murs |
+| Salle des épreuves | Squelette, sujet d'essai au repos |
+| Salle Accessibilité / SEO | Cadres aux murs |
+| Taverne | Bûches, caisses de réserve, tonneaux, ragoût et assiettes |
+
 ## L'autel et la file d'attente
 
 Les agents qui ont besoin de l'humain (permission, question, erreur) viennent devant l'autel. Un agent qui attend seulement ton prochain prompt reste à la taverne. Plutôt que de s'agglutiner, les agents de l'autel **se mettent en file**, les uns derrière les autres dans l'allée :
