@@ -49,7 +49,7 @@ Le `║` sur le bord sud marque la porte du château, entre l'Accessibilité / S
 | **Coin détente** | Banquettes, jeu de dés, mur d'affiches | Idées décalées | Butt Stallion |
 | **Scriptorium** (dans la Bibliothèque) | Pupitres de copistes | Documentation | Curator (pour les IA), Otis (pour les humains) |
 | **Réduit du concierge** | Balais, seaux, chariot | Base de Hancock, qui fait des tournées dans l'Atelier | Hancock |
-| **Taverne** | Grandes tables, cheminée, tonneaux, casiers | Agents disponibles, sans tâche | Un exemplaire de chaque type d'agent, et l'agent principal en attente de ton prochain prompt |
+| **Taverne** | Grandes tables, cheminée, tonneaux, casiers | Agents disponibles, sans tâche | Un exemplaire de chaque type d'agent, l'agent principal en attente de ton prochain prompt, et le chevalier endormi d'une session arrêtée |
 
 ## Décor propre à chaque pièce
 
@@ -108,7 +108,7 @@ La taverne montre l'équipe disponible, même quand rien ne tourne.
 4. **Fin de tâche.** Le sous-agent qui a fini reprend la couleur neutre et retourne à la taverne. Il disparaît en arrivant. Le type reprend alors une seule figure au repos, sur la place occupée par le dernier agent revenu. Quand une session se termine, ses sous-agents retournent aussi à la taverne.
 5. **Chargement de la page.** Les agents déjà au travail apparaissent directement à leur poste. Personne ne sort des casiers.
 
-**L'agent principal fait exception.** Il représente la session elle-même. Quand elle attend ton prochain prompt, il se repose à la taverne, dans la couleur de sa session, avec un losange ambre au-dessus de son étiquette. Il ne fait la queue à l'autel que pour une permission, une question ou une erreur.
+**L'agent principal fait exception.** Il représente la session elle-même. Quand elle attend ton prochain prompt, il se repose à la taverne, dans la couleur de sa session, avec un losange ambre au-dessus de son étiquette. Il ne fait la queue à l'autel que pour une permission, une question ou une erreur. Il entre au château et en sort par le pont-levis : voir [personnages.md](personnages.md#entrée-et-sortie-du-chevalier).
 
 ### Liste des types au repos
 

@@ -15,14 +15,14 @@ La carte utilise des packs gratuits de Kay Lousberg (www.kaylousberg.com). Ce do
 | Restaurant Bits 1.0 | `gh-restaurant/repo/` | Plats, bocaux, caisses de légumes |
 | Resource Bits 1.0 | `resourcebits/` | Lingots, bois, barils, pièces mécaniques, tissus |
 | Mixed Bag 1 et 2 | `mixed_bag/` | Poêle à bois, chaînes, peluches, guitare, toiles d'araignée, piège, coin gamer |
-| Skeletons 1.1 | `skeletons/` | Squelette animé et bouclier |
+| Skeletons 1.1 | `skeletons/` | Squelette animé `Skeleton_Minion`, partagé entre l'embuscade et le mannequin d'entraînement de la Salle des épreuves ; armes et bouclier dans le dossier `skeleton_props/`, dont le bouclier sert de décor |
 | Adventurers 2.0 | `adventurers/` | Personnages animés et leurs accessoires |
 
 Les modèles utilisés sont déjà dans le dépôt.
 
 ## Licence
 
-Les personnages utilisent KayKit Adventurers 2.0. Tous ces packs sont sous licence CC0 : le crédit n'est pas obligatoire, on le donne quand même (voir `packages/web/public/kaykit/LICENSE.txt`).
+Les personnages utilisent KayKit Adventurers 2.0, et les squelettes utilisent KayKit Skeletons 1.1. Tous ces packs sont sous licence CC0 : le crédit n'est pas obligatoire, on le donne quand même (voir `packages/web/public/kaykit/LICENSE.txt`).
 
 Le dépôt est public : on n'y met que des paliers gratuits en CC0. Les paliers payants (EXTRA, SOURCE) ne peuvent pas être redistribués. Les images d'aperçu des Mixed Bag montrent des objets EXTRA (borne d'arcade, lampes à lave…) absents du zip gratuit : ne les ajoute pas.
 

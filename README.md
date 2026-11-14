@@ -4,6 +4,7 @@ Un petit bureau en 3D où chaque agent Claude Code du poste local est un personn
 
 - **Un donjon en 3D** de 14 lieux, entouré d'une forêt de nuit.
 - **Un personnage par agent**, de la couleur de sa session. Les sous-agents apparaissent, puis retournent à la taverne.
+- **Entrées et sorties** : le chevalier d'une session entre au château par le pont-levis. Quand la session disparaît, il sort par la porte et meurt sous les coups de squelettes.
 - **Trois états lisibles** : il travaille, il attend ton prochain message, il a terminé.
 - **L'autel des requêtes** : les agents qui ont besoin de toi (permission, question, erreur) font la queue.
 - **Une fiche par agent** : contexte de sa session, serveurs web locaux, conversation en lecture seule.
@@ -56,5 +57,5 @@ npm run typecheck
 - [Sécurité](docs/securite.md) : accès local, conversations, poste partagé.
 - [Modèles 3D](docs/modeles-3d.md) : packs KayKit, licence, ajout d'un modèle.
 - [Lieux](docs/lieux.md) : plan du donjon, pièces, places, taverne et cycle de vie.
-- [Personnages](docs/personnages.md) : représentation des agents, tenues, changement de look.
+- [Personnages](docs/personnages.md) : représentation des agents, tenues, entrée et sortie du chevalier, changement de look.
 - [Conception](docs/conception.md) : ambiance, décisions, état de l'implémentation, limites.

@@ -18,6 +18,54 @@ Quand il attend ton prochain prompt, il se repose à la taverne (voir [lieux.md]
 
 Les tenues prévues selon le mode de travail ne sont pas encore en place. Elles sont décrites dans [conception.md](conception.md).
 
+### Entrée et sortie du chevalier
+
+Seul l'agent principal de chaque session entre et sort du château, sous la forme d'un chevalier. Les sous-agents suivent toujours le cycle de la taverne, décrit dans [lieux.md](lieux.md#la-taverne-et-le-cycle-de-vie-dun-agent).
+
+- **Arrivée.** Quand une nouvelle session apparaît, son chevalier arrive à pied par le chemin de la forêt, juste au-delà de la zone visible. Il traverse le pont-levis, passe la porte du château, puis marche jusqu'à son poste. Au chargement de la page, ou quand on change d'environnement, les agents déjà présents restent à leur place.
+- **Session arrêtée.** Une session dont le processus Claude est fermé, mais qui peut encore être reprise, garde son chevalier endormi à la taverne, dans la couleur de la session. Ce chevalier ne se sélectionne pas en 3D : la liste latérale ne montre que les sessions actives.
+- **Départ.** Quand une session disparaît (supprimée, archivée, purgée au bout de 60 minutes une fois terminée, ou repoussée hors de l'historique des 30 dernières sessions), son chevalier quitte le château par la porte et marche jusqu'à un point du chemin, en dehors du donjon.
+- **Embuscade.** Trois squelettes au plus sortent du sol autour du chevalier et le frappent. Ce sont des `Skeleton_Minion` nus, armés d'une épée, d'une hache et d'une épée (pack KayKit Skeletons 1.1, voir [modeles-3d.md](modeles-3d.md)). Le chevalier tombe, puis son corps s'enfonce dans le sol. Chaque squelette marche ensuite vers l'arbre le plus proche, s'il est assez près, et s'y fond. Sinon, il retourne sous terre.
+- **Plusieurs départs à la fois.** Les squelettes sont partagés : chaque chevalier en a au moins un. Les autres victimes attendent debout sur le chemin.
+- **Retour pendant une mort.** Si la session revient pendant que son chevalier meurt, la mort se termine d'abord. Un nouveau chevalier arrive ensuite par le chemin.
+
+Le schéma suivant montre le départ d'un chevalier, de la suppression de la session à la disparition des squelettes.
+
+```mermaid
+sequenceDiagram
+    participant Session
+    participant Chevalier
+    participant Squelettes
+    participant Arbre
+
+    Session->>Chevalier: session disparue
+    Note over Chevalier: sort par la porte jusqu'au chemin
+    Squelettes->>Chevalier: surgissent du sol et frappent
+    Note over Chevalier: tombe, puis s'enfonce dans le sol
+    Squelettes->>Arbre: marchent vers l'arbre le plus proche
+    Note over Squelettes: s'y fondent, ou retournent sous terre
+```
+*Figure : Départ d'un chevalier après la suppression de sa session.*
+
+Le schéma suivant résume les états du chevalier de l'agent principal.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Entree
+    Entree --> Poste : arrive à son poste
+    Entree --> Taverne : attend un prompt
+    Poste --> Taverne : attend un prompt
+    Taverne --> Poste : nouveau prompt
+    Poste --> Taverne : session arrêtée
+    Poste --> Sortie : session disparue
+    Taverne --> Sortie : session disparue
+    Sortie --> Mort : squelettes
+    Mort --> Disparu : corps enfoui
+    Disparu --> Entree : session revenue
+    Disparu --> [*]
+```
+*Figure : États du chevalier de l'agent principal, de l'entrée à la disparition.*
+
 ## Les sous-agents spécialisés
 
 Ce sont les agents définis dans `~/.claude/agents/`, ou dans le `.claude/agents/` d'un dossier de l'environnement. Le hook `SubagentStart` donne leur type dans `agent_type`, ce qui permet de choisir la silhouette.

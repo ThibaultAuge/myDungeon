@@ -10,15 +10,20 @@ export type CharacterModel = 'Knight' | 'Barbarian' | 'Mage' | 'Ranger' | 'Rogue
 export const MAIN_BODY: CharacterModel = 'Knight';
 export const SUB_BODIES: readonly CharacterModel[] = ['Barbarian', 'Mage', 'Ranger', 'Rogue', 'Rogue_Hooded'];
 
-/** A model held in a hand: an Adventurers prop, or an RPG Tools item. */
+/** Character models of the `skeletons` pack: the enemies outside the castle. */
+export type SkeletonModel = 'Skeleton_Minion';
+
+/** A model held in a hand: an Adventurers prop, an RPG Tools item, or a skeleton's weapon. */
 export interface PropRef {
-  pack: 'adventurers_props' | 'tools';
+  pack: 'adventurers_props' | 'tools' | 'skeleton_props';
   model: string;
 }
 
 /** What a figure looks like: a body and what it holds. */
 export interface Look {
-  body: CharacterModel;
+  /** Pack of the body; the adventurers when absent. */
+  pack?: 'adventurers' | 'skeletons';
+  body: CharacterModel | SkeletonModel;
   right?: PropRef;
   left?: PropRef;
 }
@@ -51,6 +56,19 @@ export const LOOKS: Readonly<Record<string, Look>> = {
   'claude-code-guide': { body: 'Rogue_Hooded', right: tool('lantern') },
   'statusline-setup': { body: 'Rogue', right: tool('wrench_A') },
 };
+
+const weapon = (model: string): PropRef => Object.freeze({ pack: 'skeleton_props', model });
+
+/**
+ * The three skeletons: all the bare Minion, the only body that reads as a skeleton from
+ * above (user decision: the Warrior's helmet and the Rogue's red hood hide the skull).
+ * They differ by their weapon.
+ */
+export const SKELETON_LOOKS: readonly Look[] = Object.freeze([
+  Object.freeze({ pack: 'skeletons', body: 'Skeleton_Minion', right: weapon('Skeleton_Blade') }),
+  Object.freeze({ pack: 'skeletons', body: 'Skeleton_Minion', right: weapon('Skeleton_Axe') }),
+  Object.freeze({ pack: 'skeletons', body: 'Skeleton_Minion', right: weapon('Skeleton_Blade') }),
+] satisfies Look[]);
 
 // Shared by every figure of a type: frozen, with their PropRefs and the grips, so that no
 // caller can change them all at once.
@@ -115,7 +133,18 @@ export function gripFor(ref: PropRef): Grip {
 }
 
 /** Clips used by the figures, from Rig_Medium_General and Rig_Medium_MovementBasic. */
-export const CLIPS = ['Walking_A', 'Running_A', 'Interact', 'Idle_A', 'Idle_B', 'PickUp', 'Spawn_Ground'] as const;
+export const CLIPS = [
+  'Walking_A',
+  'Running_A',
+  'Interact',
+  'Idle_A',
+  'Idle_B',
+  'PickUp',
+  'Spawn_Ground',
+  'Hit_A',
+  'Death_A',
+  'Use_Item',
+] as const;
 export type ClipName = (typeof CLIPS)[number];
 
 /**
@@ -132,6 +161,15 @@ export const RUN_THRESHOLD = 1.2;
  * legs flail; above this rate the figure slides a little instead (barely visible from above).
  */
 export const MAX_CLIP_RATE = 1.8;
+/**
+ * Lengths of the one-shot clips, in seconds at timeScale 1, read from Rig_Medium_General.glb
+ * (a test checks them against the file). The death outside the castle is timed on them.
+ */
+export const SPAWN_CLIP_TIME = 1.3;
+export const HIT_CLIP_TIME = 2 / 3;
+export const DEATH_CLIP_TIME = 0.8;
+export const USE_ITEM_CLIP_TIME = 1.6;
+
 /** Spawn_Ground is sped up a little: the subagent should not wait long before walking. */
 export const SPAWN_TIME_SCALE = 1.5;
 /** Time in PickUp where the figure is crouched: the kneeling pose at the altar. */
@@ -148,6 +186,8 @@ export interface ClipInput {
   /** The figure is first of the altar queue, at its spot. */
   kneeling: boolean;
   reducedMotion: boolean;
+  /** A clip imposed by a scripted scene (the death outside the castle), over everything else. */
+  scripted?: ClipChoice | null;
 }
 
 export interface ClipChoice {
@@ -159,15 +199,17 @@ export interface ClipChoice {
   frozenAt: number;
 }
 
-const play = (name: ClipName, timeScale = 1, loop = true): ClipChoice => ({ name, loop, timeScale, frozen: false, frozenAt: 0 });
-const hold = (name: ClipName, at = 0): ClipChoice => ({ name, loop: false, timeScale: 0, frozen: true, frozenAt: at });
+export const play = (name: ClipName, timeScale = 1, loop = true): ClipChoice => ({ name, loop, timeScale, frozen: false, frozenAt: 0 });
+export const hold = (name: ClipName, at = 0): ClipChoice => ({ name, loop: false, timeScale: 0, frozen: true, frozenAt: at });
 
 /**
  * The clip for a frame. Reduced motion keeps every figure on a still pose: the position
  * still changes (that is information), the limbs do not.
  */
 export function clipFor(input: ClipInput): ClipChoice {
-  const { moving, speed, state, spawning, kneeling, reducedMotion } = input;
+  const { moving, speed, state, spawning, kneeling, reducedMotion, scripted } = input;
+  // Reduced motion wins even over a scripted scene: limbs stay still.
+  if (scripted && !reducedMotion) return scripted;
   if (spawning && !reducedMotion) return play('Spawn_Ground', SPAWN_TIME_SCALE, false);
   if (moving) {
     if (reducedMotion) return hold('Idle_A');

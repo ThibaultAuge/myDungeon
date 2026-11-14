@@ -322,7 +322,9 @@
       "skeleton_texture.png"
     ],
     "models": [
-      "Skeleton_Shield_Large_A"
+      "Skeleton_Shield_Large_A",
+      "Skeleton_Blade",
+      "Skeleton_Axe"
     ]
   },
   "forest": {

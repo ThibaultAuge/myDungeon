@@ -9,10 +9,14 @@ import { useT } from '../i18n/useT.ts';
 import { useOffice } from '../store.ts';
 import { useNow } from '../useNow.ts';
 import { AgentFigure, agentPositions } from './AgentFigure.tsx';
+import { Ambush } from './ambush.ts';
+import { AmbushScene } from './Ambush.tsx';
 import { Forest } from './Forest.tsx';
-import { NIGHT_SKY } from './forest.ts';
+import { NIGHT_SKY, scatterTrees } from './forest.ts';
 import { assignSpots, BOUNDS, SPAWN, type SeatMemory, type SeatRequest, type Spot } from './layout.ts';
+import { ENTRY_SPOT, PAN_MARGIN } from './outside.ts';
 import { OfficeRooms } from './Room.tsx';
+import { Stage } from './stage.ts';
 import { inheritSeats, NEUTRAL_COLOR, restId, restingAgent, restingTypes, startOrigins } from './tavern.ts';
 
 /**
@@ -30,13 +34,14 @@ interface Placed {
 }
 
 /**
- * Agents shown in 3D: main agents of live sessions and their recent subagents. The
- * subagents of a session that just ended still walk back to the tavern.
+ * Agents shown in 3D: main agents of every session still listed (a stopped one rests in the
+ * tavern until it is deleted) and their recent subagents. The subagents of a session that
+ * just ended still walk back to the tavern.
  */
 export function visibleAgents(sessions: SessionView[], now: number): Placed[] {
   const out: Placed[] = [];
   for (const s of sessions) {
-    if (s.live) out.push({ agent: s.main, session: s });
+    if (s.live || !s.archived) out.push({ agent: s.main, session: s });
     for (const sub of s.subagents) {
       if (!s.live && sub.state !== 'done') continue;
       if (sub.state !== 'done' || now - sub.since < DONE_VISIBLE_MS) out.push({ agent: sub, session: s });
@@ -82,6 +87,7 @@ function useStarts(
   resting: AgentView[],
   spots: Map<string, Spot>,
   snapshotReceived: boolean,
+  stage: Stage,
 ): Map<string, Spot> {
   const mounted = useRef(new Set<string>());
   const previous = useRef<{ resting: Set<string>; spots: Map<string, Spot> }>({ resting: new Set(), spots: new Map() });
@@ -89,23 +95,22 @@ function useStarts(
   // place: nobody walks in. Only the ones appearing in later snapshots walk.
   const loaded = useRef(false);
   const newcomers = shown.filter((a) => !mounted.current.has(a.id));
-  const origins = startOrigins(newcomers, previous.current.resting);
+  const origins = startOrigins(newcomers, previous.current.resting, stage.fromForest);
   const starts = new Map<string, Spot>();
   for (const a of loaded.current ? newcomers : []) {
     const origin = origins.get(a.id);
     if (origin === 'rest') starts.set(a.id, previous.current.spots.get(restId(a.agentType)) ?? SPAWN);
     else if (origin === 'lockers') starts.set(a.id, SPAWN);
+    else if (origin === 'forest') starts.set(a.id, ENTRY_SPOT);
   }
   useEffect(() => {
+    stage.shown(shown);
     mounted.current = new Set(shown.map((a) => a.id));
     loaded.current = snapshotReceived;
     previous.current = { resting: new Set(resting.map((a) => a.agentType.toLowerCase())), spots };
   });
   return starts;
 }
-
-/** How far the camera target may be panned past the castle walls: the forest has an edge. */
-const PAN_MARGIN = 20;
 
 function CameraFollow({ selected }: { selected: string | null }) {
   const controls = useThree((s) => s.controls) as OrbitControlsImpl | null;
@@ -164,14 +169,37 @@ export function OfficeScene() {
     setArrived((prev) => ([...prev].every((id) => ids.has(id)) ? prev : new Set([...prev].filter((id) => ids.has(id)))));
   }, [sessions]);
 
-  const placed = visibleAgents(sessions, now).filter((p) => !(p.agent.state === 'done' && arrived.has(p.agent.id)));
+  // Deleted sessions: their main agent walks out and dies at the skeletons' hands.
+  // useState, not useMemo: these hold state for the scene's whole life, never a cache.
+  const [ambush] = useState(() => new Ambush(scatterTrees().near.map((tree) => ({ x: tree.x, z: tree.z }))));
+  const [stage] = useState(() => new Stage());
+  const lastSpots = useRef(new Map<string, Spot>());
+  const [, setGoneCount] = useState(0);
+  const onGone = useCallback(
+    (id: string) => {
+      stage.gone(id);
+      ambush.release(id);
+      setGoneCount((n) => n + 1);
+    },
+    [stage, ambush],
+  );
+  // Computed during render, not in an effect: a departed figure must not unmount for a frame.
+  // Idempotent for the same sessions, so a repeated render (StrictMode) changes nothing more.
+  useMemo(() => {
+    for (const id of stage.update(sessions, snapshotReceived, lastSpots.current)) ambush.release(id);
+  }, [sessions, snapshotReceived, stage, ambush]);
+
+  const placed = visibleAgents(sessions, now).filter(
+    (p) => !(p.agent.state === 'done' && arrived.has(p.agent.id)) && !stage.hidden(p.agent.id),
+  );
   const shown = placed.map((p) => p.agent);
   // Stable objects while the resting types do not change, so memoised figures skip renders.
   const restingKey = restingTypes(roster, shown).join('\n');
   const resting = useMemo(() => (restingKey ? restingKey.split('\n').map(restingAgent) : []), [restingKey]);
   const returned = sessions.flatMap((s) => s.subagents.filter((a) => arrived.has(a.id)));
   const spots = useSpots(placed, resting, returned);
-  const starts = useStarts(shown, resting, spots, snapshotReceived);
+  lastSpots.current = spots;
+  const starts = useStarts(shown, resting, spots, snapshotReceived, stage);
 
   return (
     <Canvas
@@ -201,19 +229,41 @@ export function OfficeScene() {
           selected={false}
         />
       ))}
-      {placed.map(({ agent, session }) => (
-        <AgentFigure
-          key={agent.id}
-          agent={agent}
-          name={agentName(agent, session, t)}
-          color={agent.state === 'done' ? NEUTRAL_COLOR : sessionColor(session.main.id)}
-          spot={spots.get(agent.id)!}
-          start={starts.get(agent.id) ?? spots.get(agent.id)!}
-          selected={selected === agent.id}
-          onSelect={select}
-          onArrive={agent.kind === 'sub' ? onArrive : undefined}
-        />
-      ))}
+      {/* One list, so a figure whose session leaves keeps its mount (and position) as it walks
+          out; the key changes once it is gone, so a reappeared agent is a new figure. */}
+      {[
+        ...placed.map(({ agent, session }) => (
+          <AgentFigure
+            key={stage.key(agent.id)}
+            agent={agent}
+            name={agentName(agent, session, t)}
+            // A stopped session's main agent keeps its colour in the tavern: still recognisable.
+            color={agent.state === 'done' && agent.kind === 'sub' ? NEUTRAL_COLOR : sessionColor(session.main.id)}
+            spot={spots.get(agent.id)!}
+            start={starts.get(agent.id) ?? spots.get(agent.id)!}
+            selected={selected === agent.id}
+            // A stopped session's main agent rests, not selectable: the side panel (the
+            // keyboard route) lists live sessions only.
+            onSelect={agent.kind === 'main' && !session.live ? undefined : select}
+            onArrive={agent.kind === 'sub' ? onArrive : undefined}
+          />
+        )),
+        ...[...stage.leaving.values()].map(({ agent, session, spot }) => (
+          <AgentFigure
+            key={stage.key(agent.id)}
+            agent={agent}
+            name={agentName(agent, session, t)}
+            color={sessionColor(session.main.id)}
+            spot={spot}
+            start={spot}
+            selected={false}
+            exit={ambush}
+            onGone={onGone}
+          />
+        )),
+      ]}
+      <AmbushScene ambush={ambush} />
+
       <OrbitControls makeDefault target={CENTER} enableDamping maxPolarAngle={1.35} minDistance={8} maxDistance={80} />
       <CameraFollow selected={selected} />
     </Canvas>

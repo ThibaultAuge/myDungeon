@@ -41,7 +41,7 @@ Un agent qui attend seulement ton prochain message ne fait pas la queue. Il rest
 
 ### La taverne
 
-La taverne montre l'équipe disponible, même quand rien ne tourne. Elle contient un exemplaire de chaque type d'agent connu. Quand une session lance un sous-agent, son exemplaire quitte la taverne et prend la couleur de la session. Quand le sous-agent a fini, il retourne à la taverne et disparaît. L'agent principal attend ton prochain message à la taverne, dans la couleur de sa session.
+La taverne montre l'équipe disponible, même quand rien ne tourne. Elle contient un exemplaire de chaque type d'agent connu. Quand une session lance un sous-agent, son exemplaire quitte la taverne et prend la couleur de la session. Quand le sous-agent a fini, il retourne à la taverne et disparaît. L'agent principal attend ton prochain message à la taverne, dans la couleur de sa session. Une session arrêtée, mais reprenable, y garde son chevalier endormi : il ne se sélectionne pas en 3D.
 
 Le détail du fonctionnement est dans [lieux.md](lieux.md#la-taverne-et-le-cycle-de-vie-dun-agent).
 
@@ -121,7 +121,7 @@ Tous les agents d'un même type se ressemblent, y compris au repos à la taverne
 - **Déplacement.** Ils marchent ou courent entre les pièces. Ils font une animation de travail quand ils travaillent.
 - **Attente.** Ils regardent autour d'eux, le losange ambre restant affiché. Le premier de la file s'agenouille devant l'autel.
 - **Couleur.** Chaque personnage a un disque au sol de la couleur de sa session, et le bord de son étiquette porte cette même couleur. L'étiquette du personnage sélectionné a un contour bleu et du texte en gras.
-- **Réduction des animations.** Si la réduction des animations est activée dans le système, les personnages gardent une pose fixe et n'effectuent pas de surgissement. Ils se déplacent toujours d'une pièce à l'autre.
+- **Réduction des animations.** Si la réduction des animations est activée dans le système, les personnages gardent une pose fixe et n'effectuent pas de surgissement. Ils se déplacent toujours d'une pièce à l'autre. Le chevalier d'une session supprimée disparaît sans marche ni combat, et les squelettes ne s'affichent pas.
 
 ## La fiche d'agent
 

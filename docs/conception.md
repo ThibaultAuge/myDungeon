@@ -9,6 +9,8 @@ Un **donjon de fantasy coloré et joyeux**, pas sombre : proportions trapues, co
 ## Décisions
 
 - **L'humain n'est pas représenté.** La bulle et la file à l'autel suffisent.
+- **Seul l'agent principal entre et sort du château.** Les sous-agents restent dans le cycle de la taverne. Une session arrêtée n'a pas de cible cliquable en 3D, seulement sa ligne dans la liste latérale : une cible réservée à la 3D ne serait accessible ni au clavier ni au lecteur d'écran.
+- **Squelettes nus.** Les attaquants de l'embuscade sont des `Skeleton_Minion` sans casque ni capuche. Vus de haut, les autres corps du pack ne se lisent pas comme des squelettes.
 - **Sessions lancées par une autre session** (`spawnedFrom`). Chacune est un agent principal à part entière, avec sa propre couleur. En général elle travaille dans son propre worktree et ne dépend pas de la session qui l'a lancée. Le lien est donc secondaire : une mention « lancée depuis… » dans la fiche de l'agent suffit, un repère visuel dans la 3D est facultatif.
 - **Skills** (`jira-comment`, `knowledge`…). Ce ne sont pas des personnages. Un agent qui utilise un skill porte un **badge** à son nom : un petit insigne en 3D sur le personnage, ou au minimum un badge dans la fiche de l'agent. Ce badge n'est pas encore en place (voir « Reste à faire »).
 - **Le Scriptorium** est un coin de la Bibliothèque.
@@ -27,6 +29,7 @@ Un **donjon de fantasy coloré et joyeux**, pas sombre : proportions trapues, co
 - les places par pièce, les postes attitrés, le débordement le long des murs ;
 - la file d'attente à l'autel, réservée aux permissions, questions et erreurs ;
 - le cycle de vie de la taverne : un exemplaire neutre de chaque type au repos, appel, appels simultanés depuis les casiers, retour et disparition, et l'agent principal au repos pendant l'attente d'un prompt ;
+- l'entrée et la sortie du chevalier de l'agent principal : arrivée à pied par le chemin, pont-levis et porte ; chevalier endormi à la taverne pour une session arrêtée ; à la suppression d'une session, embuscade de trois squelettes (pack KayKit Skeletons 1.1, CC0), avec les départs multiples et le retour pendant une mort ;
 - la bulle de requête à l'autel (« … », « ? », « ! ») et le losange ambre de l'attente d'un prompt ;
 - les icônes d'état (marteau, sablier, bulle rouge « … », « Zzz ») dans la liste latérale et la fiche d'agent ;
 - le pictogramme de destination au-dessus d'un agent qui marche ;
