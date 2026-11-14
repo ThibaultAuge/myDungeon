@@ -8,7 +8,10 @@ import manifest from './kit-manifest.json';
 export type Pack = keyof typeof manifest;
 
 function kitUrl(pack: Pack, name: string): string {
-  const spec = manifest[pack];
+  // Pack and model names come from static scene data, some typed as plain strings: only a
+  // model the manifest lists can turn into a URL.
+  const spec = Object.hasOwn(manifest, pack) ? manifest[pack] : undefined;
+  if (!spec || !(spec.models as readonly string[]).includes(name)) throw new Error(`KayKit model not in the manifest: ${pack}/${name}`);
   const format = 'format' in spec ? spec.format : 'gltf';
   return `${import.meta.env.BASE_URL}kaykit/${pack}/${name}.${format}`;
 }

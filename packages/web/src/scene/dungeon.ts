@@ -1,4 +1,4 @@
-import { BOUNDS, doorOf, inFootprint, ROOMS, type FloorKind, type RoomDef, type Side } from './layout.ts';
+import { BOUNDS, doorOf, inFootprint, ROOMS, type FloorKind, type RoomDef, type Side, type WallHang } from './layout.ts';
 
 // Where the KayKit floor tiles, walls and wall decor go. Pure geometry, no three.js scene:
 // testable in node. Every list is grouped by model name, ready for <KitInstances>.
@@ -134,7 +134,8 @@ export function corridorFloor(out: Placement = new Map()): Placement {
           z + LARGE_TILE <= r.cz + r.d / 2 + 1e-6,
       );
       if (covered) continue;
-      add(out, rand() < 0.06 ? 'floor_tile_large_rocks' : 'floor_tile_large', {
+      // Plain flagstones only: the rocky variant looked like a boulder lying in the corridor.
+      add(out, 'floor_tile_large', {
         x: x + LARGE_TILE / 2,
         y: CORRIDOR_FLOOR_Y,
         z: z + LARGE_TILE / 2,
@@ -312,6 +313,20 @@ const WALL_VARIANTS: [string, number][] = [
 
 const BANNER_STYLES = ['', 'patternA_', 'patternB_', 'patternC_', 'shield_'];
 
+/**
+ * Key of a tall piece in WallLayout.tall: the bare model name for the dungeon pack, else
+ * `pack:name` (a frame, a shield, a chain hung by a room).
+ */
+export function tallKey(pack: string, name: string): string {
+  return pack === 'dungeon' ? name : `${pack}:${name}`;
+}
+
+/** Pack and model of a WallLayout.tall key. */
+export function tallModel(key: string): { pack: string; name: string } {
+  const i = key.indexOf(':');
+  return i < 0 ? { pack: 'dungeon', name: key } : { pack: key.slice(0, i), name: key.slice(i + 1) };
+}
+
 /** True when nothing stands against the wall at (x, z), so a torch or a banner can hang there. */
 function wallIsFree(room: RoomDef, x: number, z: number, side: Side): boolean {
   const [ix, iz] = INWARD[side];
@@ -366,7 +381,15 @@ export function sharedSides(room: RoomDef, rooms: RoomDef[] = walledRooms()): Se
   return out;
 }
 
-/** Tall wall pieces, the low wall inside them, and torches or banners on plain stretches. */
+/** Hangs a room's wall piece on the wall at (x, z), its back against the wall face. */
+function hang(layout: WallLayout, h: WallHang, x: number, z: number, side: Side): void {
+  const [ix, iz] = INWARD[side];
+  const s = (h.s ?? 1) * KIT_SCALE;
+  const d = WALL_T / 2 - (h.back ?? 0) * s;
+  addTall(layout, tallKey(h.pack, h.name), { x: x + ix * d, y: h.y, z: z + iz * d, rotY: FACE_IN[side], scale: [s, s, s], ax: x, az: z });
+}
+
+/** Tall wall pieces, the low wall inside them, and torches, banners or hangs on plain stretches. */
 function placeRun(layout: WallLayout, run: WallRun, rand: () => number): void {
   const { side, a, b, room } = run;
   const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
@@ -377,7 +400,7 @@ function placeRun(layout: WallLayout, run: WallRun, rand: () => number): void {
     const x = a[0] + (b[0] - a[0]) * t;
     const z = a[1] + (b[1] - a[1]) * t;
     const rotY = FACE_IN[side];
-    const model = chunk < 1.5 ? 'wall' : pick(rand, WALL_VARIANTS);
+    const model = chunk < 1.5 ? 'wall' : pick(rand, room?.walls ?? WALL_VARIANTS);
     addTall(layout, model, { x, y: 0, z, rotY, scale: [chunk / 4, KIT_SCALE, WALL_T], ax: x, az: z });
     // Slightly thinner than the tall wall, so that it hides inside it without flickering.
     add(layout.low, 'barrier', { x, y: 0, z, rotY, scale: [chunk / 4, KIT_SCALE, (WALL_T - 0.03) / 0.5] });
@@ -388,6 +411,9 @@ function placeRun(layout: WallLayout, run: WallRun, rand: () => number): void {
     if (roll < 0.45) {
       const d = WALL_T / 2;
       addTall(layout, 'torch_mounted', { x: x + ix * d, y: 1.9, z: z + iz * d, rotY, ax: x, az: z });
+    } else if (roll < 0.75 && room?.hangs?.length) {
+      // The room's own wall pieces, in place of the banners.
+      hang(layout, room.hangs[Math.floor(rand() * room.hangs.length)], x, z, side);
     } else if (roll < 0.75 && room) {
       const style = BANNER_STYLES[Math.floor(rand() * BANNER_STYLES.length)];
       // The banner's back is 0.38 m in front of its origin in the pack.

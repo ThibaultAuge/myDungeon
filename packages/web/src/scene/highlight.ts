@@ -30,6 +30,12 @@ interface Swap {
 
 const SWAP = 'glowSwap';
 
+/** The mesh's own material, even while it holds a glowing copy. */
+export function baseMaterial(mesh: Mesh): Material | Material[] {
+  const swap = mesh.userData[SWAP] as Swap | undefined;
+  return swap && mesh.material === swap.glow ? swap.original : mesh.material;
+}
+
 /** Lights or dims every mesh under `root`. Calling it twice with the same value changes nothing. */
 export function setHighlight(root: Object3D, on: boolean): void {
   root.traverse((o) => {

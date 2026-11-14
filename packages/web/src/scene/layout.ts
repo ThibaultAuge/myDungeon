@@ -91,13 +91,74 @@ export type PropKind =
   | 'fireplace'
   | 'barrel'
   | 'lockers'
+  | 'keg'
   | 'rug'
   // Decoration: no seat of its own, but agents walk around it.
   | 'crates'
   | 'barrels'
   | 'chest'
   | 'coins'
-  | 'candle';
+  | 'candle'
+  | 'chartChest'
+  | 'sacks'
+  | 'weeds'
+  | 'bookPile'
+  | 'lumber'
+  | 'forge'
+  | 'fuel'
+  | 'treasury'
+  | 'gamerCorner'
+  | 'cobwebs'
+  | 'prison'
+  | 'beartrap'
+  | 'skeleton'
+  | 'logs'
+  | 'pantry';
+
+/** Decoration kinds: never part of a workstation (tested). */
+export const DECOR_KINDS: readonly PropKind[] = [
+  'rug',
+  'crates',
+  'barrels',
+  'chest',
+  'coins',
+  'candle',
+  'chartChest',
+  'sacks',
+  'weeds',
+  'bookPile',
+  'lumber',
+  'forge',
+  'fuel',
+  'treasury',
+  'gamerCorner',
+  'cobwebs',
+  'prison',
+  'beartrap',
+  'skeleton',
+  'logs',
+  'pantry',
+];
+
+/** A model hung on a room's wall (a frame, a shield, a chain…): it sinks with its wall. */
+export interface WallHang {
+  /** Manifest pack of the model. */
+  pack: string;
+  name: string;
+  /** Height of the model's origin above the floor. */
+  y: number;
+  /** Distance from the model's origin to its back, in pack units (a banner's is 0.38). */
+  back?: number;
+  /** Multiplies KIT_SCALE. */
+  s?: number;
+}
+
+/** The coloured light that gives a room its mood. */
+export interface RoomLight {
+  color: string;
+  /** Point light intensity (candela). */
+  intensity: number;
+}
 
 /**
  * A workstation: the furniture of one function of a room. Hovering it lights all its pieces,
@@ -154,6 +215,12 @@ export interface RoomDef {
   /** A zone inside another room (the Scriptorium): no walls, same door, same space. */
   insideOf?: RoomId;
   props: Prop[];
+  /** Wall models and their weights, instead of the default mix (windows, shelves, cracks…). */
+  walls?: [string, number][];
+  /** Models hung on the plain wall stretches, in turn with torches, instead of banners. */
+  hangs?: WallHang[];
+  /** Mood light; none for a zone inside another room. */
+  light?: RoomLight;
   /** Seats open to any agent, in order of preference. Relative to the room centre. */
   seats: Seat[];
   /** Seats of a dedicated post (the easel, the telescope…), keyed by station name. */
@@ -196,8 +263,11 @@ export const ROOMS: RoomDef[] = [
     floorKind: 'woodDark',
     accent: 'blue',
     door: { side: 's', at: 0 },
+    walls: [['wall', 3], ['wall_archedwindow_open', 4], ['wall_window_open', 2]],
+    light: { color: '#7FA6FF', intensity: 14 },
     props: [
       { kind: 'candle', x: 3.4, z: 1.4 },
+      { kind: 'chartChest', x: -3.3, z: 1.3 },
       { kind: 'telescope', x: 2.4, z: -0.7, post: 'observatoire' },
       { kind: 'starTable', x: -2, z: -0.9, post: 'observatoire' },
     ],
@@ -213,8 +283,12 @@ export const ROOMS: RoomDef[] = [
     floorKind: 'dirt',
     accent: 'white',
     door: { side: 's', at: 0 },
+    walls: [['wall', 4], ['wall_window_open', 3], ['wall_cracked', 1]],
+    light: { color: '#FFE9C4', intensity: 11 },
     props: [
-      { kind: 'barrels', x: -2.8, z: 1.3 },
+      { kind: 'sacks', x: -3, z: 1.2 },
+      { kind: 'weeds', x: 3.3, z: 1.5 },
+      { kind: 'weeds', x: 0.6, z: -1.6 },
       { kind: 'aviary', x: -2.4, z: -1.1, post: 'pigeonnier' },
       { kind: 'lectern', x: 2.2, z: -0.7, rot: 0, post: 'pigeonnier' },
     ],
@@ -229,8 +303,14 @@ export const ROOMS: RoomDef[] = [
     floorKind: 'wood',
     accent: 'yellow',
     door: { side: 'e', at: 0 },
+    hangs: [
+      { pack: 'dungeon', name: 'banner_shield_yellow', y: 0, back: 0.38 },
+      { pack: 'furniture', name: 'pictureframe_large_A', y: 1.6, back: 0, s: 1 },
+    ],
+    light: { color: '#FFD98A', intensity: 14 },
     props: [
       { kind: 'chest', x: -3.1, z: -3.8 },
+      { kind: 'chartChest', x: 3.2, z: 3.8, rot: N },
       { kind: 'mapTable', x: -0.6, z: -0.6, post: 'cartes' },
       { kind: 'globe', x: 2.6, z: -3.3, post: 'cartes' },
       { kind: 'rug', x: -0.6, z: -0.6 },
@@ -253,7 +333,10 @@ export const ROOMS: RoomDef[] = [
     floorKind: 'woodDark',
     accent: 'green',
     door: { side: 'e', at: 0 },
+    walls: [['wall_shelves', 6], ['wall', 3]],
+    light: { color: '#C9F2B8', intensity: 13 },
     props: [
+      { kind: 'bookPile', x: 3.4, z: 4 },
       { kind: 'bookcase', x: -2.6, z: -4.1, post: 'biblio' },
       { kind: 'bookcase', x: 0, z: -4.1, post: 'biblio' },
       { kind: 'bookcase', x: 2.6, z: -4.1, post: 'biblio' },
@@ -301,8 +384,11 @@ export const ROOMS: RoomDef[] = [
     floorKind: 'stoneFancy',
     accent: 'brown',
     door: { side: 's', at: 0 },
+    walls: [['wall', 5], ['wall_scaffold', 3], ['wall_cracked', 1]],
+    light: { color: '#FFC890', intensity: 14 },
     props: [
-      { kind: 'crates', x: 3.2, z: 3.4 },
+      { kind: 'lumber', x: 3.1, z: 3.4 },
+      { kind: 'forge', x: -3.4, z: -1, rot: E },
       { kind: 'bench', x: -2, z: -2.4, post: 'atelier' },
       { kind: 'bench', x: 2, z: -2.4, post: 'atelier' },
       { kind: 'bench', x: -2, z: 0.6, post: 'atelier' },
@@ -327,6 +413,9 @@ export const ROOMS: RoomDef[] = [
     floorKind: 'stone',
     accent: 'red',
     door: { side: 's', at: 0 },
+    walls: [['wall_arched', 5], ['wall', 3]],
+    hangs: [{ pack: 'dungeon', name: 'banner_triple_red', y: 0, back: 0.38 }],
+    light: { color: '#FF6A50', intensity: 16 },
     props: [
       { kind: 'altar', x: 0, z: -1.65, post: 'autel' },
       { kind: 'candles', x: -1.1, z: -1.8, post: 'autel' },
@@ -352,8 +441,11 @@ export const ROOMS: RoomDef[] = [
     floorKind: 'grate',
     accent: 'brown',
     door: { side: 's', at: 0 },
+    walls: [['wall', 4], ['wall_cracked', 3]],
+    hangs: [{ pack: 'mixed1', name: 'chain_hanging_A', y: 2.6, back: 0.15, s: 1 }],
+    light: { color: '#FF9A40', intensity: 18 },
     props: [
-      { kind: 'crates', x: 3.2, z: 1.4 },
+      { kind: 'fuel', x: 3.2, z: 1.3 },
       { kind: 'boiler', x: -2.7, z: -1, post: 'machines' },
       { kind: 'engine', x: 0.2, z: -1.3, post: 'machines' },
       { kind: 'engine', x: 2.7, z: -1.3, post: 'machines' },
@@ -369,8 +461,10 @@ export const ROOMS: RoomDef[] = [
     floorKind: 'stone',
     accent: 'yellow',
     door: { side: 's', at: 0 },
+    hangs: [{ pack: 'dungeon', name: 'banner_shield_yellow', y: 0, back: 0.38 }],
+    light: { color: '#FFE070', intensity: 14 },
     props: [
-      { kind: 'coins', x: 3.3, z: 1.6 },
+      { kind: 'treasury', x: 3.2, z: 1.6 },
       { kind: 'abacus', x: -1.8, z: -1.4, post: 'arithmetique' },
       { kind: 'slate', x: 1.9, z: -2, post: 'arithmetique' },
     ],
@@ -386,7 +480,13 @@ export const ROOMS: RoomDef[] = [
     floorKind: 'wood',
     accent: 'red',
     door: { side: 's', at: 0 },
+    hangs: [
+      { pack: 'furniture', name: 'pictureframe_medium', y: 1.6, back: 0, s: 1 },
+      { pack: 'furniture', name: 'pictureframe_small_A', y: 1.7, back: 0, s: 1 },
+    ],
+    light: { color: '#FF9FB0', intensity: 13 },
     props: [
+      { kind: 'gamerCorner', x: 3.2, z: 1.3, rot: W + 0.5 },
       { kind: 'couch', x: -2.3, z: -1.5, post: 'detente' },
       { kind: 'diceTable', x: 1.6, z: -0.2, post: 'detente' },
       { kind: 'posters', x: 1.6, z: -2.15, post: 'detente' },
@@ -402,7 +502,11 @@ export const ROOMS: RoomDef[] = [
     floorKind: 'dirt',
     accent: 'brown',
     door: { side: 'w', at: 0 },
+    walls: [['wall_cracked', 4], ['wall', 3]],
+    light: { color: '#D8CDB0', intensity: 10 },
     props: [
+      { kind: 'cobwebs', x: 3.72, z: -1.47, rot: E },
+      { kind: 'cobwebs', x: -3.72, z: -1.47, rot: N },
       { kind: 'brooms', x: 2.8, z: -1.3, post: 'concierge' },
       { kind: 'cart', x: 0.8, z: 0.6, post: 'concierge' },
       { kind: 'barrel', x: 3.2, z: 1, post: 'concierge' },
@@ -422,8 +526,15 @@ export const ROOMS: RoomDef[] = [
     floorKind: 'stone',
     accent: 'blue',
     door: { side: 'n', at: 0 },
+    hangs: [
+      { pack: 'skeleton_props', name: 'Skeleton_Shield_Large_A', y: 1.7, back: 0.2, s: 1 },
+      { pack: 'dungeon', name: 'keyring_hanging', y: 2.1, back: 0.2, s: 1 },
+      { pack: 'dungeon', name: 'sword_shield', y: 1.2, back: 0.1, s: 1 },
+    ],
+    light: { color: '#A8C4FF', intensity: 14 },
     props: [
-      { kind: 'crates', x: -3.5, z: 2.2 },
+      { kind: 'prison', x: -3.4, z: 2.2 },
+      { kind: 'beartrap', x: 3.5, z: 0.6 },
       { kind: 'portcullis', x: -4.4, z: 0.4, rot: E, post: 'garde' },
       { kind: 'weaponRack', x: 1.8, z: 2.7, post: 'garde' },
       { kind: 'lantern', x: -3.4, z: -2.2, post: 'garde' },
@@ -445,8 +556,10 @@ export const ROOMS: RoomDef[] = [
     floorKind: 'stone',
     accent: 'green',
     door: { side: 'n', at: 0 },
+    light: { color: '#9CFFB0', intensity: 16 },
     props: [
       { kind: 'barrels', x: -4.6, z: -2.2 },
+      { kind: 'skeleton', x: 4.7, z: -1.6, rot: W },
       { kind: 'readingTable', x: -2.6, z: 0.6, post: 'relecture' },
       { kind: 'alchemyBench', x: 2.8, z: 2.4, post: 'labo' },
     ],
@@ -465,6 +578,12 @@ export const ROOMS: RoomDef[] = [
     floorKind: 'wood',
     accent: 'yellow',
     door: { side: 'n', at: -2.4 },
+    hangs: [
+      { pack: 'furniture', name: 'pictureframe_large_A', y: 1.6, back: 0, s: 1 },
+      { pack: 'furniture', name: 'pictureframe_medium', y: 1.6, back: 0, s: 1 },
+      { pack: 'dungeon', name: 'banner_shield_yellow', y: 0, back: 0.38 },
+    ],
+    light: { color: '#FFE6A0', intensity: 14 },
     props: [
       { kind: 'chest', x: 3.3, z: 2.35 },
       { kind: 'stage', x: -1.6, z: 1.6, post: 'estrade' },
@@ -485,14 +604,16 @@ export const ROOMS: RoomDef[] = [
     floorKind: 'wood',
     accent: 'red',
     door: { side: 'w', at: 0 },
+    light: { color: '#FFB060', intensity: 22 },
     props: [
-      { kind: 'crates', x: -2.7, z: -10.6 },
+      { kind: 'logs', x: -2.6, z: -10.6 },
+      { kind: 'pantry', x: -3, z: 10.6, rot: E },
       { kind: 'fireplace', x: 0, z: -11, post: 'taverne' },
       { kind: 'longTable', x: 0.6, z: -6.5, post: 'taverne' },
       { kind: 'longTable', x: 0.6, z: -1, post: 'taverne' },
       { kind: 'longTable', x: 0.6, z: 4.5, post: 'taverne' },
-      { kind: 'barrel', x: 2.8, z: -9, post: 'taverne' },
-      { kind: 'barrel', x: 2.8, z: -8.1, post: 'taverne' },
+      { kind: 'keg', x: 2.8, z: -9, rot: W, post: 'taverne' },
+      { kind: 'keg', x: 2.8, z: -8.1, rot: W, post: 'taverne' },
       { kind: 'barrel', x: -2.8, z: -9.4, post: 'taverne' },
       { kind: 'lockers', x: 3.1, z: 9, post: 'taverne' },
     ],
@@ -630,7 +751,7 @@ export const MIN_SEAT_GAP = 0.75;
 const FOOTPRINTS: Record<PropKind, [number, number]> = {
   altar: [0.9, 0.35],
   pew: [1.1, 0.25],
-  candles: [0.2, 0.2],
+  candles: [0.3, 0.3],
   mapTable: [2, 1.1],
   globe: [0.45, 0.45],
   bench: [1, 0.5],
@@ -662,12 +783,29 @@ const FOOTPRINTS: Record<PropKind, [number, number]> = {
   fireplace: [1.5, 0.4],
   barrel: [0.4, 0.4],
   lockers: [0.25, 1.6],
+  keg: [0.4, 0.4],
   rug: [0, 0],
   crates: [0.6, 0.6],
   barrels: [0.8, 0.4],
   chest: [0.5, 0.45],
   coins: [0.3, 0.3],
   candle: [0.12, 0.12],
+  chartChest: [0.4, 0.35],
+  sacks: [0.6, 0.6],
+  // Grass tufts and cobwebs: agents walk through grass, cobwebs hang overhead.
+  weeds: [0, 0],
+  bookPile: [0.4, 0.35],
+  lumber: [0.65, 0.6],
+  forge: [0.7, 0.35],
+  fuel: [0.6, 0.6],
+  treasury: [0.7, 0.5],
+  gamerCorner: [0.45, 0.45],
+  cobwebs: [0, 0],
+  prison: [0.55, 0.45],
+  beartrap: [0.55, 0.4],
+  skeleton: [0.3, 0.3],
+  logs: [0.65, 0.55],
+  pantry: [0.8, 0.4],
 };
 
 /** True when (x, z), relative to the room centre, stands on the prop (plus a body's half width). */
