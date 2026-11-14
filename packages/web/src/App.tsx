@@ -11,7 +11,8 @@ import { StatusAnnouncer } from './ui/StatusAnnouncer.tsx';
 import { LangSwitcher } from './ui/LangSwitcher.tsx';
 import { PostCard } from './ui/PostCard.tsx';
 import { PostList } from './ui/PostList.tsx';
-import { envName, STATE_COLORS } from './format.ts';
+import { envName } from './format.ts';
+import { StatusIcon } from './ui/StatusIcon.tsx';
 import { useT } from './i18n/useT.ts';
 
 function Header({ children }: { children?: ReactNode }) {
@@ -79,18 +80,18 @@ function Home() {
 function Legend() {
   const { t } = useT();
   return (
-    <ul className="legend" aria-label={t.legend.label}>
+    <ul className="legend" role="list" aria-label={t.legend.label}>
       <li>
-        <span className="dot" style={{ background: STATE_COLORS.working }} aria-hidden="true" /> {t.legend.working}
+        <StatusIcon kind="working" /> {t.legend.working}
       </li>
       <li>
-        <span className="dot" style={{ background: STATE_COLORS.waiting }} aria-hidden="true" /> {t.legend.waitingPrompt}
+        <StatusIcon kind="prompt" /> {t.legend.waitingPrompt}
       </li>
       <li>
-        <span className="dot" style={{ background: '#E24B4A' }} aria-hidden="true" /> {t.legend.urgent}
+        <StatusIcon kind="urgent" /> {t.legend.urgent}
       </li>
       <li>
-        <span className="dot" style={{ background: STATE_COLORS.done }} aria-hidden="true" /> {t.legend.done}
+        <StatusIcon kind="done" /> {t.legend.done}
       </li>
     </ul>
   );

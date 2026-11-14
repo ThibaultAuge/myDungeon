@@ -11,12 +11,13 @@ import {
   sessionColor,
   sessionTitle,
   stateLabel,
-  STATE_COLORS,
+  statusKind,
 } from '../format.ts';
 import { useT } from '../i18n/useT.ts';
 import { useOffice } from '../store.ts';
 import { useNow } from '../useNow.ts';
 import { rowId } from './SessionList.tsx';
+import { StatusIcon } from './StatusIcon.tsx';
 
 export const INFO_TITLE_ID = 'agent-info-title';
 
@@ -188,7 +189,7 @@ export function AgentInfo({ sessions }: { sessions: SessionView[] }) {
       {/* Focusable: the card scrolls, and keyboard users must be able to scroll it. */}
       <div className="agent-info__body" role="group" aria-label={t.info.label(name)} tabIndex={0}>
         <p className="state-line">
-          <span className="dot" style={{ background: STATE_COLORS[agent.state] }} aria-hidden="true" />
+          <StatusIcon kind={statusKind(agent)} />
           {t.panel.stateSince(stateLabel(agent, t), elapsed(agent.since, now, t))} · {t.rooms[agent.room] ?? agent.room}
         </p>
         <h3>{t.info.session}</h3>

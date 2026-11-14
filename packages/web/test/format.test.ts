@@ -1,6 +1,21 @@
-import type { AgentView, EnvironmentView, SessionView } from '@agent-office/shared';
+import type { AgentView, EnvironmentView, SessionView, WaitReason } from '@agent-office/shared';
 import { describe, expect, it } from 'vitest';
-import { agentName, ago, branchLabel, elapsed, envName, modelLabel, rawLabel, serverUrl, sessionTitle, stateLabel } from '../src/format.ts';
+import {
+  agentName,
+  ago,
+  branchLabel,
+  elapsed,
+  envName,
+  modelLabel,
+  rawLabel,
+  serverUrl,
+  sessionTitle,
+  stateLabel,
+  STATE_COLORS,
+  STATUS_COLORS,
+  statusKind,
+  type StatusKind,
+} from '../src/format.ts';
 import { MESSAGES, type Lang } from '../src/i18n/index.ts';
 
 const SEC = 1000;
@@ -90,6 +105,72 @@ describe('stateLabel', () => {
     const t = MESSAGES.en;
     expect(stateLabel(agent({ state: 'working', waitReason: 'error' }), t)).toBe('Working');
     expect(stateLabel(agent({ state: 'done', waitReason: 'permission' }), t)).toBe('Done');
+  });
+});
+
+describe('statusKind', () => {
+  /**
+   * Verifies that non-waiting states map to the icon of the same name
+   */
+  it.each(['working', 'done'] as const)('maps %s to itself', (state) => {
+    expect(statusKind({ state })).toBe(state);
+  });
+
+  /**
+   * Verifies that each wait reason maps to the plain or the urgent icon
+   */
+  it.each([
+    ['prompt', 'prompt'],
+    ['permission', 'urgent'],
+    ['question', 'urgent'],
+    ['error', 'urgent'],
+  ] as [WaitReason, StatusKind][])('maps waiting/%s to %s', (waitReason, expected) => {
+    expect(statusKind({ state: 'waiting', waitReason })).toBe(expected);
+  });
+
+  /**
+   * Verifies that a waiting agent with no reason is shown as urgent
+   */
+  it('treats a reason-less wait as urgent', () => {
+    // Unlike stateLabel, which labels a reason-less wait as "prompt": the icon follows the
+    // scene's request bubble and the announcer, where only an explicit prompt wait is calm.
+    expect(statusKind({ state: 'waiting', waitReason: undefined })).toBe('urgent');
+    expect(statusKind({ state: 'waiting' })).toBe('urgent');
+  });
+
+  /**
+   * Verifies that working and done ignore a stale wait reason
+   */
+  it('ignores waitReason outside the waiting state', () => {
+    expect(statusKind({ state: 'working', waitReason: 'error' })).toBe('working');
+    expect(statusKind({ state: 'done', waitReason: 'permission' })).toBe('done');
+    expect(statusKind({ state: 'done', waitReason: 'prompt' })).toBe('done');
+  });
+});
+
+describe('STATUS_COLORS', () => {
+  /**
+   * Verifies that working, prompt and done reuse the 3D scene's state colours
+   */
+  it('reuses STATE_COLORS for the matching states', () => {
+    expect(STATUS_COLORS.working).toBe(STATE_COLORS.working);
+    expect(STATUS_COLORS.prompt).toBe(STATE_COLORS.waiting);
+    expect(STATUS_COLORS.done).toBe(STATE_COLORS.done);
+  });
+
+  /**
+   * Verifies that urgent has its own colour, distinct from every other status
+   */
+  it('gives urgent a dedicated colour distinct from the others', () => {
+    const others = (['working', 'prompt', 'done'] as const).map((k) => STATUS_COLORS[k].toUpperCase());
+    expect(others).not.toContain(STATUS_COLORS.urgent.toUpperCase());
+  });
+
+  /**
+   * Verifies that every status kind returned by statusKind has a valid hex colour
+   */
+  it('defines a hex colour for exactly the four status kinds', () => {
+    for (const color of Object.values(STATUS_COLORS)) expect(color).toMatch(/^#[0-9A-Fa-f]{6}$/);
   });
 });
 

@@ -4,7 +4,7 @@ import { Html, useAnimations } from '@react-three/drei';
 import { LoopOnce, LoopRepeat, Vector3, type AnimationClip, type Group, type Mesh, type Object3D, type SkinnedMesh } from 'three';
 import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import type { AgentState, AgentView } from '@agent-office/shared';
-import { STATE_COLORS } from '../format.ts';
+import { STATE_COLORS, statusKind } from '../format.ts';
 import { reducedMotion } from '../motion.ts';
 import { clipFor, CLIPS, gripFor, lookFor, SPAWN_TIME_SCALE, type ClipName, type Look, type PropRef } from './characters.ts';
 import { CLICK_MAX_DRAG_PX, setPointerHover, TARGET_USER_DATA } from './cursor.ts';
@@ -329,7 +329,7 @@ function AgentFigureImpl({ agent, name, color, spot, start, selected, onSelect, 
 
   const scale = agent.kind === 'sub' ? 0.85 : 1;
   const waiting = agent.state === 'waiting';
-  const urgent = waiting && agent.waitReason !== 'prompt';
+  const urgent = statusKind(agent) === 'urgent';
   const capsule = (
     <mesh position={[0, 0.65, 0]} castShadow>
       <capsuleGeometry args={[0.32, 0.6, 4, 12]} />
