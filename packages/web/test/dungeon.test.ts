@@ -41,6 +41,7 @@ import {
   type RoomDef,
   type Side,
 } from '../src/scene/layout.ts';
+import { CHARACTERS, CLIPS } from '../src/scene/characters.ts';
 
 // kit.ts and the .tsx files need drei and import.meta.env: they are not imported here. The
 // manifest is read as plain JSON and the geometry is tested through dungeon.ts directly.
@@ -50,6 +51,7 @@ const TOL = 1e-6;
 interface PackSpec {
   source: string;
   license: string | null;
+  format?: string;
   textures: string[];
   models: string[];
 }
@@ -62,6 +64,100 @@ const PUBLIC_KAYKIT = fileURLToPath(new URL('../public/kaykit/', import.meta.url
 /** Same rules as scripts/import-kaykit.mjs. */
 const SAFE_NAME = /^[A-Za-z0-9_]+$/;
 const SAFE_FILE = /^[A-Za-z0-9_]+\.(png|bin)$/;
+
+const formatOf = (spec: PackSpec) => spec.format ?? 'gltf';
+
+interface GlbJson {
+  extensionsUsed?: string[];
+  extensionsRequired?: string[];
+  buffers?: { uri?: string }[];
+  images?: { uri?: string; bufferView?: number }[];
+  animations?: { name?: string }[];
+}
+
+const JSON_CHUNK = 0x4e4f534a;
+const BIN_CHUNK = 0x004e4942;
+
+/**
+ * Same rules as scripts/import-kaykit.mjs (checkGlb): a self-contained binary glTF 2 with a
+ * consistent length; every chunk walked (the browser loader keeps the LAST JSON chunk, so a
+ * clean first chunk must not hide a second one), each with a whole header, a length that is
+ * a multiple of 4 and inside the file; exactly one JSON chunk first, optionally one BIN
+ * chunk after it; a parsable JSON; no extension, no external buffer or image.
+ * Returns the problem (null when safe) and the parsed JSON chunk when there is one.
+ */
+function readGlb(buf: Buffer): { problem: string | null; json?: GlbJson } {
+  if (buf.length < 20 || buf.toString('latin1', 0, 4) !== 'glTF') return { problem: 'not a binary glTF' };
+  if (buf.readUInt32LE(4) !== 2) return { problem: 'not version 2' };
+  if (buf.readUInt32LE(8) !== buf.length) return { problem: 'inconsistent length' };
+  const chunks: { type: number; start: number; length: number }[] = [];
+  for (let offset = 12; offset < buf.length; ) {
+    if (offset + 8 > buf.length) return { problem: 'truncated chunk' };
+    const length = buf.readUInt32LE(offset);
+    const type = buf.readUInt32LE(offset + 4);
+    if (length % 4 !== 0 || offset + 8 + length > buf.length) return { problem: 'invalid chunk length' };
+    chunks.push({ type, start: offset + 8, length });
+    offset += 8 + length;
+  }
+  if (chunks[0]?.type !== JSON_CHUNK) return { problem: 'no JSON chunk first' };
+  if (chunks.length > 2 || (chunks.length === 2 && chunks[1].type !== BIN_CHUNK)) return { problem: 'unexpected chunks' };
+  let json: GlbJson;
+  try {
+    json = JSON.parse(buf.toString('utf8', chunks[0].start, chunks[0].start + chunks[0].length));
+  } catch {
+    return { problem: 'unparsable JSON' };
+  }
+  const ext = [...(json.extensionsUsed ?? []), ...(json.extensionsRequired ?? [])];
+  if (ext.length) return { problem: `extensions: ${ext.join(', ')}`, json };
+  if ((json.buffers ?? []).some((b) => b.uri !== undefined)) return { problem: 'external buffer', json };
+  if ((json.images ?? []).some((i) => i.uri !== undefined || i.bufferView === undefined)) return { problem: 'external image', json };
+  return { problem: null, json };
+}
+
+/** A JSON chunk body, space-padded to a multiple of 4 bytes as the GLB format requires. */
+function jsonBody(json: unknown, raw?: string): Buffer {
+  let text = raw ?? JSON.stringify(json);
+  while (Buffer.byteLength(text) % 4) text += ' ';
+  return Buffer.from(text, 'utf8');
+}
+
+/** One chunk: 8-byte header (declared length, type) then the data, as given. */
+function chunk(type: number, data: Buffer, declaredLength = data.length): Buffer {
+  const head = Buffer.alloc(8);
+  head.writeUInt32LE(declaredLength, 0);
+  head.writeUInt32LE(type, 4);
+  return Buffer.concat([head, data]);
+}
+
+interface GlbPatch {
+  magic?: string;
+  version?: number;
+  /** Declared total length; defaults to the real one. */
+  length?: number;
+  /** Type of the first chunk; defaults to JSON. */
+  chunkType?: number;
+  /** Raw first-chunk text, for unparsable JSON. */
+  rawJson?: string;
+  /** Chunks appended after the first one (already built with `chunk`). */
+  extra?: Buffer[];
+  /** Raw bytes appended at the very end, outside any chunk. */
+  trailing?: Buffer;
+}
+
+/** Builds a GLB (header + JSON chunk + optional extra chunks) for the checker's own tests. */
+function makeGlb(json: unknown, patch: GlbPatch = {}): Buffer {
+  const head = Buffer.alloc(12);
+  const buf = Buffer.concat([
+    head,
+    chunk(patch.chunkType ?? JSON_CHUNK, jsonBody(json, patch.rawJson)),
+    ...(patch.extra ?? []),
+    patch.trailing ?? Buffer.alloc(0),
+  ]);
+  buf.write(patch.magic ?? 'glTF', 0, 'latin1');
+  buf.writeUInt32LE(patch.version ?? 2, 4);
+  buf.writeUInt32LE(patch.length ?? buf.length, 8);
+  return buf;
+}
 
 const ACCENTS: Accent[] = ['red', 'blue', 'green', 'yellow', 'white', 'brown'];
 const BANNER_STYLES = ['', 'patternA_', 'patternB_', 'patternC_', 'shield_', 'triple_'];
@@ -182,19 +278,31 @@ describe('kit manifest', () => {
   /**
    * Verifies that the manifest declares the three packs the scene loads from
    */
-  it('declares the dungeon, tools and weapons packs with safe names', () => {
-    expect(Object.keys(MANIFEST).sort()).toEqual(['dungeon', 'tools', 'weapons']);
+  it('declares the dungeon, tools, weapons and adventurers packs with safe names', () => {
+    expect(Object.keys(MANIFEST).sort()).toEqual(['adventurers', 'adventurers_anim', 'dungeon', 'tools', 'weapons']);
     for (const pack of Object.keys(MANIFEST)) expect(pack).toMatch(SAFE_NAME);
   });
 
   const packs = Object.entries(MANIFEST).map(([pack, spec]) => [pack, spec] as const);
+  const gltfPacks = packs.filter(([, spec]) => formatOf(spec) === 'gltf');
+  const glbPacks = packs.filter(([, spec]) => formatOf(spec) === 'glb');
+
+  /**
+   * Verifies that every pack has a known format, and the adventurers packs are binary glTF
+   */
+  it('gives every pack the gltf (default) or glb format', () => {
+    for (const [pack, spec] of packs) expect(['gltf', 'glb'], pack).toContain(formatOf(spec));
+    expect(glbPacks.map(([p]) => p).sort()).toEqual(['adventurers', 'adventurers_anim']);
+    expect(gltfPacks.map(([p]) => p).sort()).toEqual(['dungeon', 'tools', 'weapons']);
+  });
 
   /**
    * Verifies that every model and texture name of a pack is safe and listed only once
    */
   it.each(packs)('%s lists only safe, unique model and texture names', (_pack, spec) => {
     expect(spec.models.length).toBeGreaterThan(0);
-    expect(spec.textures.length).toBeGreaterThan(0);
+    // A .gltf pack shares external textures; a .glb pack embeds them and may list none.
+    if (formatOf(spec) === 'gltf') expect(spec.textures.length).toBeGreaterThan(0);
     for (const name of spec.models) expect(name).toMatch(SAFE_NAME);
     for (const tex of spec.textures) expect(tex).toMatch(SAFE_FILE);
     expect(new Set(spec.models).size).toBe(spec.models.length);
@@ -212,7 +320,7 @@ describe('kit manifest', () => {
   /**
    * Verifies that every model of a pack has its .gltf and .bin in public/kaykit/<pack>/
    */
-  it.each(packs)('%s models exist in public/kaykit as .gltf and .bin', (pack, spec) => {
+  it.each(gltfPacks)('%s models exist in public/kaykit as .gltf and .bin', (pack, spec) => {
     const missing = spec.models.flatMap((name) =>
       [`${name}.gltf`, `${name}.bin`].filter((f) => !fs.existsSync(path.join(PUBLIC_KAYKIT, pack, f))),
     );
@@ -222,7 +330,7 @@ describe('kit manifest', () => {
   /**
    * Verifies that a copied .gltf only points at its own buffer and at its pack's textures
    */
-  it.each(packs)('%s .gltf files reference only their own .bin and listed textures', (pack, spec) => {
+  it.each(gltfPacks)('%s .gltf files reference only their own .bin and listed textures', (pack, spec) => {
     const bad: string[] = [];
     for (const name of spec.models) {
       const file = path.join(PUBLIC_KAYKIT, pack, `${name}.gltf`);
@@ -235,6 +343,69 @@ describe('kit manifest', () => {
       for (const i of gltf.images ?? []) if (!i.uri || !spec.textures.includes(i.uri)) bad.push(`${name}: image ${i.uri}`);
     }
     expect(bad).toEqual([]);
+  });
+
+  /**
+   * Verifies that every model of a glb pack is in public/kaykit/<pack>/ as <name>.glb
+   */
+  it.each(glbPacks)('%s models exist in public/kaykit as .glb', (pack, spec) => {
+    const missing = spec.models.map((name) => `${name}.glb`).filter((f) => !fs.existsSync(path.join(PUBLIC_KAYKIT, pack, f)));
+    expect(missing).toEqual([]);
+  });
+
+  /**
+   * Verifies that a glb pack ships no separate .gltf or .bin next to its .glb files
+   */
+  it.each(glbPacks)('%s has no stray .gltf or .bin', (pack, spec) => {
+    const stray = spec.models
+      .flatMap((name) => [`${name}.gltf`, `${name}.bin`])
+      .filter((f) => fs.existsSync(path.join(PUBLIC_KAYKIT, pack, f)));
+    expect(stray).toEqual([]);
+  });
+
+  /**
+   * Verifies that every copied .glb is self-contained: no extension, external buffer or image
+   */
+  it.each(glbPacks)('%s .glb files pass the import safety checks', (pack, spec) => {
+    const bad: string[] = [];
+    for (const name of spec.models) {
+      const file = path.join(PUBLIC_KAYKIT, pack, `${name}.glb`);
+      if (!fs.existsSync(file)) continue; // reported by the existence test
+      const { problem } = readGlb(fs.readFileSync(file));
+      if (problem) bad.push(`${name}: ${problem}`);
+    }
+    expect(bad).toEqual([]);
+  });
+
+  /**
+   * Verifies that a pack with a license has its License.txt copied next to its models
+   */
+  it.each(packs.filter(([, spec]) => spec.license))('%s ships its License.txt', (pack) => {
+    expect(fs.existsSync(path.join(PUBLIC_KAYKIT, pack, 'License.txt'))).toBe(true);
+  });
+
+  /**
+   * Verifies that every character skin used by an agent kind is a model of the adventurers pack
+   */
+  it('contains every character model used by the agents', () => {
+    const models = new Set(MANIFEST.adventurers.models);
+    const used = Object.values(CHARACTERS).flat();
+    expect(used.length).toBeGreaterThan(0);
+    expect(used.filter((n) => !models.has(n))).toEqual([]);
+  });
+
+  /**
+   * Verifies that every clip the figures play exists in one of the adventurers_anim files
+   */
+  it('contains every animation clip played by the figures', () => {
+    const names = new Set<string>();
+    for (const name of MANIFEST.adventurers_anim.models) {
+      const file = path.join(PUBLIC_KAYKIT, 'adventurers_anim', `${name}.glb`);
+      const { json } = readGlb(fs.readFileSync(file));
+      for (const a of json?.animations ?? []) if (a.name) names.add(a.name);
+    }
+    expect(names.size).toBeGreaterThan(0);
+    expect(CLIPS.filter((c) => !names.has(c))).toEqual([]);
   });
 
   /**
@@ -268,6 +439,132 @@ describe('kit manifest', () => {
    */
   it('gives every room an accent that has banners', () => {
     for (const r of ROOMS) expect(ACCENTS).toContain(r.accent);
+  });
+});
+
+// ---------------------------------------------------------------- glb checker
+
+// The manifest tests above rely on readGlb; these make sure it really rejects what the
+// import script rejects, so a passing manifest test means something.
+describe('readGlb (copy of checkGlb)', () => {
+  const SAFE = { asset: { version: '2.0' }, buffers: [{ byteLength: 4 }], images: [{ bufferView: 0, mimeType: 'image/png' }] };
+
+  /**
+   * Verifies that a self-contained GLB is accepted and its JSON chunk returned
+   */
+  it('accepts an embedded-only GLB and returns its JSON', () => {
+    const { problem, json } = readGlb(makeGlb({ ...SAFE, animations: [{ name: 'Idle_A' }] }));
+    expect(problem).toBeNull();
+    expect(json?.animations?.[0].name).toBe('Idle_A');
+  });
+
+  /**
+   * Verifies that a GLB without buffers or images is accepted
+   */
+  it('accepts a GLB with no buffer and no image', () => {
+    expect(readGlb(makeGlb({ asset: { version: '2.0' } })).problem).toBeNull();
+  });
+
+  /**
+   * Verifies that files too short, with a wrong magic, version or length are rejected
+   */
+  it.each([
+    ['shorter than a header', Buffer.from('glTF')],
+    ['a wrong magic', makeGlb(SAFE, { magic: 'gltf' })],
+    ['a text glTF', Buffer.from(JSON.stringify(SAFE).padEnd(40, ' '))],
+    ['version 1', makeGlb(SAFE, { version: 1 })],
+    ['a declared length too long', makeGlb(SAFE, { length: 9999 })],
+    ['a declared length one byte short', (() => { const b = makeGlb(SAFE); b.writeUInt32LE(b.length - 1, 8); return b; })()],
+    ['a first chunk that is not JSON', makeGlb(SAFE, { chunkType: 0x004e4942 })],
+    ['a JSON chunk longer than the file', (() => { const b = makeGlb(SAFE); b.writeUInt32LE(b.length, 12); return b; })()],
+    ['unparsable JSON', makeGlb(null, { rawJson: '{"asset": ' })],
+  ])('rejects %s', (_label, buf) => {
+    expect(readGlb(buf).problem).not.toBeNull();
+  });
+
+  // ---- chunk walk (hardened checkGlb: every chunk is checked, not only the first)
+
+  const bin = (bytes = 8) => chunk(BIN_CHUNK, Buffer.alloc(bytes));
+  const EVIL = { ...SAFE, buffers: [{ byteLength: 4, uri: 'https://example.invalid/evil.bin' }] };
+
+  /**
+   * Verifies that a file with only the JSON chunk is accepted
+   */
+  it('accepts a JSON-only file', () => {
+    const buf = makeGlb(SAFE);
+    expect(buf.length % 4).toBe(0);
+    expect(readGlb(buf).problem).toBeNull();
+  });
+
+  /**
+   * Verifies that a JSON chunk followed by one BIN chunk is accepted, JSON read from the first
+   */
+  it('accepts a JSON + BIN file and reads the JSON chunk', () => {
+    const { problem, json } = readGlb(makeGlb({ ...SAFE, animations: [{ name: 'Walking_A' }] }, { extra: [bin(16)] }));
+    expect(problem).toBeNull();
+    expect(json?.animations?.[0].name).toBe('Walking_A');
+  });
+
+  /**
+   * Verifies that an empty BIN chunk (length 0, a multiple of 4) is accepted
+   */
+  it('accepts an empty BIN chunk', () => {
+    expect(readGlb(makeGlb(SAFE, { extra: [bin(0)] })).problem).toBeNull();
+  });
+
+  /**
+   * Verifies that a malformed or extra chunk is rejected with the matching problem
+   */
+  it.each([
+    // The bypass: a clean first JSON, then a BIN, then an evil JSON the browser would keep.
+    ['an evil JSON chunk after the BIN chunk', makeGlb(SAFE, { extra: [bin(), chunk(JSON_CHUNK, jsonBody(EVIL))] }), 'unexpected chunks'],
+    ['a second JSON chunk right after the first', makeGlb(SAFE, { extra: [chunk(JSON_CHUNK, jsonBody(EVIL))] }), 'unexpected chunks'],
+    ['a second chunk of unknown type', makeGlb(SAFE, { extra: [chunk(0x12345678, Buffer.alloc(4))] }), 'unexpected chunks'],
+    ['three chunks (JSON, BIN, BIN)', makeGlb(SAFE, { extra: [bin(), bin()] }), 'unexpected chunks'],
+    ['a chunk length that is not a multiple of 4', makeGlb(SAFE, { extra: [chunk(BIN_CHUNK, Buffer.alloc(6))] }), 'invalid chunk length'],
+    ['a chunk declaring more bytes than the file has', makeGlb(SAFE, { extra: [chunk(BIN_CHUNK, Buffer.alloc(8), 16)] }), 'invalid chunk length'],
+    ['4 trailing bytes, too short for a chunk header', makeGlb(SAFE, { trailing: Buffer.alloc(4) }), 'truncated chunk'],
+    ['7 trailing bytes after a BIN chunk', makeGlb(SAFE, { extra: [bin()], trailing: Buffer.alloc(7) }), 'truncated chunk'],
+  ])('rejects %s', (_label, buf, problem) => {
+    expect(readGlb(buf).problem).toBe(problem);
+  });
+
+  /**
+   * Verifies that any used or required extension is rejected (decoders load from a CDN)
+   */
+  it.each([
+    ['extensionsUsed', { ...SAFE, extensionsUsed: ['KHR_draco_mesh_compression'] }],
+    ['extensionsRequired', { ...SAFE, extensionsRequired: ['EXT_meshopt_compression'] }],
+  ])('rejects a GLB with %s', (_label, json) => {
+    expect(readGlb(makeGlb(json)).problem).toMatch(/extensions/);
+  });
+
+  /**
+   * Verifies that empty extension lists are not a problem
+   */
+  it('accepts empty extension lists', () => {
+    expect(readGlb(makeGlb({ ...SAFE, extensionsUsed: [], extensionsRequired: [] })).problem).toBeNull();
+  });
+
+  /**
+   * Verifies that a buffer with any uri, even a data URI or empty string, is rejected
+   */
+  it.each(['model.bin', 'data:application/octet-stream;base64,AAAA', '', 'https://example.invalid/x.bin'])(
+    'rejects a buffer with uri %j',
+    (uri) => {
+      expect(readGlb(makeGlb({ ...SAFE, buffers: [{ byteLength: 4 }, { byteLength: 4, uri }] })).problem).toBe('external buffer');
+    },
+  );
+
+  /**
+   * Verifies that an image with a uri, or without a bufferView, is rejected
+   */
+  it.each([
+    ['a uri', { uri: 'texture.png' }],
+    ['a uri and a bufferView', { uri: 'texture.png', bufferView: 0 }],
+    ['no bufferView', { mimeType: 'image/png' }],
+  ])('rejects an image with %s', (_label, image) => {
+    expect(readGlb(makeGlb({ ...SAFE, images: [image] })).problem).toBe('external image');
   });
 });
 

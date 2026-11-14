@@ -32,6 +32,15 @@ export function nextSpeed(speed: number, remaining: number, dt: number): number 
 }
 
 /**
+ * Turns an angle `current` towards `target` by a `fraction` of the gap, along the shortest
+ * arc, so a figure never spins a full turn. `fraction` 1 snaps to the target.
+ */
+export function turnToward(current: number, target: number, fraction: number): number {
+  const diff = Math.atan2(Math.sin(target - current), Math.cos(target - current));
+  return current + diff * Math.min(1, Math.max(0, fraction));
+}
+
+/**
  * Moves `pos` by `step` along `path`. Reached waypoints are removed from `path` and the
  * rest of the step carries on to the next one, so a corner never costs a frame.
  * Returns the heading towards the last waypoint aimed at (as `atan2(dx, dz)`), even for a

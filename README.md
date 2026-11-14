@@ -19,8 +19,13 @@ Un petit bureau en 3D où chaque agent Claude Code du poste local est un personn
 - **Trois états.**
   - Vert : il travaille.
   - Ambre : il attend ton prochain message. La bulle devient rouge quand il attend ta permission ou ta réponse, ou qu'il est bloqué par une erreur.
-  - Gris : il a terminé.
-- **Les sous-agents** apparaissent comme des collègues de la même couleur que leur session.
+  - Gris : il a terminé. Il reste immobile, en pose calme.
+- **Les sous-agents** apparaissent comme des collègues de la même couleur que leur session. Ils surgissent du sol à leur arrivée.
+- **Des personnages animés** (pack KayKit Adventurers 2.0) : un chevalier pour l'agent principal, un voyou encapuchonné pour les sous-agents.
+  - Ils marchent ou courent entre les pièces, et font une animation de travail quand ils travaillent.
+  - En attente, ils regardent autour d'eux, la bulle d'attente restant affichée. Le premier de la file s'agenouille devant l'autel.
+  - Chaque personnage a un disque au sol de la couleur de sa session, et le bord de son étiquette porte cette même couleur. L'étiquette du personnage sélectionné a un contour bleu et du texte en gras.
+  - Si la réduction des animations est activée dans le système, les personnages gardent une pose fixe et n'effectuent pas de surgissement, mais ils se déplacent toujours d'une pièce à l'autre.
 - **Un clic sur un personnage**, ou sur sa ligne dans la liste, affiche sa tâche, son outil, le temps écoulé et son dernier message. La liste latérale est l'équivalent complet de la vue 3D au clavier et au lecteur d'écran.
 - **L'historique** liste les sessions terminées.
 - **`/debug`** montre le flux brut des événements reçus.
@@ -56,17 +61,25 @@ Pour le développement, `npm run dev` lance le serveur et Vite (http://127.0.0.1
 
 ### Modèles 3D
 
-La carte utilise les packs gratuits KayKit de Kay Lousberg (www.kaylousberg.com) : Dungeon Pack 1.1, RPG Tools Bits 1.0 et Fantasy Weapons Bits 1.0. Ils sont sous licence CC0 : le crédit n'est pas obligatoire, on le donne quand même (voir `packages/web/public/kaykit/LICENSE.txt`). Les modèles utilisés sont déjà dans le dépôt.
+La carte utilise les packs gratuits KayKit de Kay Lousberg (www.kaylousberg.com) : Dungeon Pack 1.1, RPG Tools Bits 1.0 et Fantasy Weapons Bits 1.0. Les personnages utilisent KayKit Adventurers 2.0. Ils sont sous licence CC0 : le crédit n'est pas obligatoire, on le donne quand même (voir `packages/web/public/kaykit/LICENSE.txt`). Les modèles utilisés sont déjà dans le dépôt.
 
 Pour en ajouter un :
 
 1. Télécharge le pack sur https://kaylousberg.itch.io/ (prix libre, 0 € convient).
-2. Décompresse-le dans son propre dossier sous `assets-src/` (`dungeon/`, `rpg-tools/` ou `weapons/`). Ce dossier n'est pas versionné.
+2. Décompresse-le dans son propre dossier sous `assets-src/` (`dungeon/`, `rpg-tools/`, `weapons/` ou `adventurers/`). Ce dossier n'est pas versionné. Par exemple, `KayKit_Adventurers_2.0_FREE.zip` se décompresse dans `assets-src/adventurers/`.
 3. Ajoute le nom du modèle dans `packages/web/src/scene/kit-manifest.json`.
 4. Lance la copie vers `packages/web/public/kaykit/` :
 
 ```bash
 npm run kaykit:import
+```
+
+Un pack peut être en `"format": "glb"` : ses modèles sont alors des fichiers `.glb` autonomes, sans texture séparée (`"textures": []`). L'import refuse un `.glb` qui pointe vers des fichiers externes, qui utilise une extension (comme Draco) ou dont les blocs internes (chunks) sont inattendus.
+
+Sous Windows, l'import peut faire apparaître des `.gltf` comme modifiés, à cause des fins de ligne seulement. Pour les restaurer :
+
+```bash
+git checkout -- packages/web/public/kaykit/dungeon packages/web/public/kaykit/tools packages/web/public/kaykit/weapons
 ```
 
 ## Comment ça marche
@@ -152,7 +165,7 @@ npm run typecheck
 
 ## Limites et suite
 
-- La carte utilise des modèles KayKit, mais les personnages sont encore des formes simples. Leur remplacement par des modèles glTF animés est la prochaine étape.
+- Tous les sous-agents portent le même modèle (Rogue_Hooded). Les silhouettes propres à chaque type d'agent (Hermione, Dexter…) restent à faire.
 - La scène fait environ 700 appels de dessin par image, ombres comprises : les meubles ne sont pas encore regroupés en instances. Des assets Unreal ne seraient utilisables que si leur licence Fab autorise un usage hors Unreal Engine.
 - Répondre aux agents depuis la 3D (permission, question) fera l'objet d'une phase distincte, qui demandera une authentification forte du serveur. Envoyer un prompt libre à une session déjà ouverte n'a pas encore de solution officielle.
 - Le plan complet se trouve dans [plans/plan-agent-office-2026-11-13.md](plans/plan-agent-office-2026-11-13.md).

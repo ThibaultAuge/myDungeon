@@ -1,15 +1,183 @@
-import { useEffect, useMemo, useRef } from 'react';
-import { useFrame } from '@react-three/fiber';
-import { Html } from '@react-three/drei';
-import { Vector3, type Group, type Mesh } from 'three';
-import type { AgentView } from '@agent-office/shared';
+import { Component, Suspense, useEffect, useMemo, useRef, type CSSProperties, type ReactNode, type RefObject } from 'react';
+import { useFrame, useThree } from '@react-three/fiber';
+import { Html, useAnimations } from '@react-three/drei';
+import { LoopOnce, LoopRepeat, Vector3, type AnimationClip, type Group, type Mesh, type Object3D, type SkinnedMesh } from 'three';
+import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js';
+import type { AgentState, AgentView } from '@agent-office/shared';
 import { STATE_COLORS } from '../format.ts';
 import { reducedMotion } from '../motion.ts';
-import { reroute, routeBetween, type Point, type Spot } from './layout.ts';
-import { advance, nextSpeed, remainingDistance } from './walk.ts';
+import { characterFor, clipFor, CLIPS, SPAWN_TIME_SCALE, type CharacterModel, type ClipName } from './characters.ts';
+import { KIT_SCALE } from './dungeon.ts';
+import { useKitGLTF } from './kit.ts';
+import { reroute, routeBetween, SPAWN, type Point, type Spot } from './layout.ts';
+import { advance, nextSpeed, remainingDistance, turnToward } from './walk.ts';
 
 /** Live positions of the figures, read by the camera to follow the selected agent. */
 export const agentPositions = new Map<string, Vector3>();
+
+/** Time to blend from one clip to the next, in seconds. */
+const FADE = 0.2;
+/** Turn rates (per second, exponential): smooth turns at corners, slower towards the desk. */
+const WALK_TURN_RATE = 14;
+const REST_TURN_RATE = 6;
+/** Height of the name tag and of the waiting bubble, above the tallest helmet. */
+const TAG_Y = 2.45;
+const BUBBLE_Y = 2.1;
+
+/** What the figure does this frame, written by the walk and read by the character. */
+interface Motion {
+  moving: boolean;
+  speed: number;
+  kneeling: boolean;
+  /** Seconds of spawn clip left; -1 until the character has loaded and set it. */
+  spawnLeft: number;
+}
+
+/** Share of the gap to close this frame for an exponential turn; all of it under reduced motion. */
+function turnFraction(rate: number, dt: number, still: boolean): number {
+  return still ? 1 : 1 - Math.exp(-rate * dt);
+}
+
+/** The animation clips shared by every character, loaded once. */
+function useClips(): AnimationClip[] {
+  const general = useKitGLTF('adventurers_anim', 'Rig_Medium_General');
+  const movement = useKitGLTF('adventurers_anim', 'Rig_Medium_MovementBasic');
+  return useMemo(() => {
+    const wanted = new Set<string>(CLIPS);
+    const clips = [...general.animations, ...movement.animations].filter((c) => wanted.has(c.name));
+    if (import.meta.env.DEV) {
+      const found = clips.map((c) => c.name);
+      const missing = CLIPS.filter((n) => !found.includes(n));
+      // A missing clip leaves a figure in its bind pose without any other sign.
+      if (missing.length || found.length !== new Set(found).size) console.warn('KayKit clips missing or duplicated', { missing, found });
+    }
+    return clips;
+  }, [general.animations, movement.animations]);
+}
+
+/**
+ * The animated KayKit character. It suspends while its files load, so it sits in its own
+ * Suspense and error boundary: the tag, ring and disc next to it never wait for it.
+ */
+function Character({ model: name, state, motion }: { model: CharacterModel; state: AgentState; motion: RefObject<Motion> }) {
+  // One skinned clone per figure: the skeleton is its own, geometry and materials are shared.
+  const { scene } = useKitGLTF('adventurers', name);
+  const model = useMemo(() => {
+    const m = cloneSkinned(scene) as Object3D;
+    m.traverse((o) => {
+      if ((o as Mesh).isMesh) o.castShadow = true;
+    });
+    // Hidden until the first clip is applied: no bind-pose (T-pose) frame.
+    m.visible = false;
+    return m;
+  }, [scene]);
+  // The cloned skeletons own a bone texture each; geometry and materials are shared, kept.
+  useEffect(
+    () => () =>
+      model.traverse((o) => {
+        if ((o as SkinnedMesh).isSkinnedMesh) (o as SkinnedMesh).skeleton.dispose();
+      }),
+    [model],
+  );
+  const clips = useClips();
+  const { actions, mixer } = useAnimations(clips, model);
+  /** Clips being played and their blend weight; the current one goes to 1, the others to 0. */
+  const weights = useRef(new Map<ClipName, number>());
+  const current = useRef<ClipName | null>(null);
+
+  useFrame((_, delta) => {
+    const m = motion.current;
+    const still = reducedMotion();
+    if (m.spawnLeft < 0) {
+      const spawn = actions.Spawn_Ground;
+      m.spawnLeft = still || !spawn ? 0 : spawn.getClip().duration / SPAWN_TIME_SCALE;
+    }
+    const choice = clipFor({
+      moving: m.moving,
+      speed: m.speed,
+      state,
+      spawning: m.spawnLeft > 0,
+      kneeling: m.kneeling,
+      reducedMotion: still,
+    });
+    // When Suspense hides and shows the scene again (while the kit loads), React runs the
+    // effect cleanups: drei's useAnimations then stops every action, but these refs survive.
+    // A current clip that is no longer active means: start over.
+    if (current.current !== null && !actions[current.current]?.isScheduled()) {
+      weights.current.clear();
+      current.current = null;
+    }
+    const next = actions[choice.name];
+    // A missing clip (flagged in development) shows the bind pose rather than no figure.
+    if (!next) {
+      model.visible = true;
+      return;
+    }
+    const first = current.current === null;
+    if (current.current !== choice.name) {
+      // A clip still fading out is picked up where it is; a new one starts from the beginning.
+      if (!weights.current.has(choice.name)) {
+        next.reset();
+        next.setLoop(choice.loop ? LoopRepeat : LoopOnce, Infinity);
+        next.clampWhenFinished = !choice.loop;
+        next.play();
+        weights.current.set(choice.name, first ? 1 : 0);
+      }
+      current.current = choice.name;
+    }
+    if (choice.frozen) {
+      next.paused = true;
+      next.time = choice.frozenAt;
+    } else {
+      next.paused = false;
+      next.timeScale = choice.timeScale;
+    }
+
+    // Blend from each clip's current weight (not a fixed 1 → 0 curve), normalised so the
+    // weights always add up to 1: quick changes never snap a pose.
+    const step = still ? 1 : delta / FADE;
+    let total = 0;
+    for (const [clip, w] of weights.current) {
+      const target = clip === choice.name ? 1 : 0;
+      const nw = target > w ? Math.min(1, w + step) : Math.max(0, w - step);
+      weights.current.set(clip, nw);
+      total += nw;
+    }
+    for (const [clip, w] of weights.current) {
+      const action = actions[clip];
+      if (clip !== choice.name && w <= 0) {
+        action?.stop();
+        weights.current.delete(clip);
+      } else {
+        action?.setEffectiveWeight(total > 0 ? w / total : 0);
+      }
+    }
+    if (first) {
+      mixer.update(0);
+      model.visible = true;
+    }
+  });
+
+  return <primitive object={model} scale={KIT_SCALE} />;
+}
+
+/** If a character cannot load, the figure falls back to a plain capsule instead of breaking the scene. */
+class CharacterBoundary extends Component<{ fallback: ReactNode; onError(): void; children: ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+
+  componentDidCatch(error: unknown) {
+    console.error('KayKit character failed to load', error);
+    this.props.onError();
+  }
+
+  render() {
+    return this.state.failed ? this.props.fallback : this.props.children;
+  }
+}
 
 interface Props {
   agent: AgentView;
@@ -27,14 +195,23 @@ interface Props {
 
 export function AgentFigure({ agent, name, color, spot, start, selected, onSelect, onArrive }: Props) {
   const group = useRef<Group>(null);
-  const body = useRef<Mesh>(null);
   const ring = useRef<Mesh>(null);
   const bubble = useRef<Mesh>(null);
+  // drei's Html loses the content of a tag mounted before the canvas is connected to its
+  // events (its target changes and the new root is never rendered): wait for the connection.
+  const connected = useThree((s) => !!s.events.connected);
   const pos = useMemo(() => new Vector3(start.x, 0, start.z), []); // eslint-disable-line react-hooks/exhaustive-deps
   const path = useRef<Point[]>(start.id === spot.id ? [] : routeBetween(start, spot));
   const last = useRef<Spot>(spot);
-  const speed = useRef(0);
   const arrived = useRef(false);
+  // A figure coming out of the lockers rises from the ground before it walks; one coming
+  // from a resting seat just walks, and one already finished does not rise.
+  const motion = useRef<Motion>({
+    moving: false,
+    speed: 0,
+    kneeling: false,
+    spawnLeft: start.id === SPAWN.id && agent.state !== 'done' ? -1 : 0,
+  });
 
   useEffect(() => {
     if (last.current.id === spot.id) return;
@@ -62,41 +239,42 @@ export function AgentFigure({ agent, name, color, spot, start, selected, onSelec
   useFrame(({ clock }, delta) => {
     const g = group.current;
     if (!g) return;
+    const m = motion.current;
+    const still = reducedMotion();
     // Reduced motion: agents still move between rooms (that is information), the ambient loops stop.
-    const t = reducedMotion() ? 0 : clock.elapsedTime;
+    const t = still ? 0 : clock.elapsedTime;
     const dt = Math.min(delta, 0.05);
-    let walking = false;
-    if (path.current.length > 0) {
+
+    // The spawn clip plays in place (or the character is still loading): no walking yet.
+    // Under reduced motion there is no spawn clip, so the walk never waits for the model.
+    if (still && m.spawnLeft < 0) m.spawnLeft = 0;
+    if (m.spawnLeft > 0) m.spawnLeft = Math.max(0, m.spawnLeft - delta);
+    const spawning = m.spawnLeft !== 0;
+
+    m.moving = false;
+    if (!spawning && path.current.length > 0) {
       // A reroute keeps the current speed: the agent changes course without stopping.
       // Accepted limit: if the new destination is within the braking distance, the speed
       // drops to the braking curve in one frame, and a route that doubles back turns at speed.
-      speed.current = nextSpeed(speed.current, remainingDistance(pos, path.current), dt);
-      const heading = advance(pos, path.current, speed.current * dt);
-      if (heading !== null) g.rotation.y = heading;
-      walking = path.current.length > 0;
-    } else {
-      speed.current = 0;
+      m.speed = nextSpeed(m.speed, remainingDistance(pos, path.current), dt);
+      const heading = advance(pos, path.current, m.speed * dt);
+      if (heading !== null) g.rotation.y = turnToward(g.rotation.y, heading, turnFraction(WALK_TURN_RATE, dt, still));
+      m.moving = path.current.length > 0;
+    } else if (!spawning) {
+      m.speed = 0;
       // `last` catches up with `spot` in an effect: until then the agent has not set off yet.
       if (onArrive && agent.state === 'done' && last.current.id === spot.id && !arrived.current) {
         arrived.current = true;
         onArrive(agent.id);
       }
-      // Shortest arc, so an agent never spins a full turn to face its desk.
-      const diff = Math.atan2(Math.sin(spot.facing - g.rotation.y), Math.cos(spot.facing - g.rotation.y));
-      g.rotation.y += diff * 0.1;
+      g.rotation.y = turnToward(g.rotation.y, spot.facing, turnFraction(REST_TURN_RATE, dt, still));
     }
+    m.kneeling = path.current.length === 0 && !!spot.kneel;
     g.position.copy(pos);
-    if (body.current) {
-      const bob = walking ? Math.abs(Math.sin(t * 12)) * 0.08 : agent.state === 'working' ? Math.sin(t * 8) * 0.03 : 0;
-      // The first of the altar queue kneels: the whole figure sinks a little.
-      body.current.position.y = 0.65 + bob;
-      g.position.y = path.current.length === 0 && spot.kneel ? -0.3 : 0;
-      // The state ring stays on the floor.
-      if (ring.current) ring.current.position.y = 0.04 - g.position.y / g.scale.y;
-    }
+
     if (bubble.current) {
       bubble.current.rotation.y = t * 2;
-      bubble.current.position.y = 2.05 + Math.sin(t * 4) * 0.08;
+      bubble.current.position.y = BUBBLE_Y + Math.sin(t * 4) * 0.08;
     }
     ring.current?.scale.setScalar(selected ? 1.25 + Math.sin(t * 5) * 0.08 : 1);
   });
@@ -104,6 +282,12 @@ export function AgentFigure({ agent, name, color, spot, start, selected, onSelec
   const scale = agent.kind === 'sub' ? 0.85 : 1;
   const waiting = agent.state === 'waiting';
   const urgent = waiting && agent.waitReason !== 'prompt';
+  const capsule = (
+    <mesh position={[0, 0.65, 0]} castShadow>
+      <capsuleGeometry args={[0.32, 0.6, 4, 12]} />
+      <meshLambertMaterial color={color} />
+    </mesh>
+  );
 
   return (
     <group
@@ -131,31 +315,38 @@ export function AgentFigure({ agent, name, color, spot, start, selected, onSelec
         })
       }
     >
-      <mesh ref={body} position={[0, 0.65, 0]} castShadow>
-        <capsuleGeometry args={[0.32, 0.6, 4, 12]} />
-        <meshLambertMaterial color={color} />
-      </mesh>
-      <mesh position={[0, 1.38, 0]} castShadow>
-        <sphereGeometry args={[0.26, 16, 12]} />
-        <meshLambertMaterial color="#F5C4B3" />
-      </mesh>
-      <mesh position={[0, 1.42, 0.22]}>
-        <boxGeometry args={[0.28, 0.07, 0.08]} />
-        <meshLambertMaterial color="#2C2C2A" />
+      <CharacterBoundary fallback={capsule} onError={() => (motion.current.spawnLeft = 0)}>
+        <Suspense fallback={null}>
+          <Character model={characterFor(agent.kind, agent.id)} state={agent.state} motion={motion} />
+        </Suspense>
+      </CharacterBoundary>
+      {/* Session colour on the floor, inside the state ring: links the figure to its card. */}
+      <mesh position={[0, 0.03, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <circleGeometry args={[0.42, 32]} />
+        <meshBasicMaterial color={color} transparent opacity={0.85} />
       </mesh>
       <mesh ref={ring} position={[0, 0.06, 0]} rotation={[Math.PI / 2, 0, 0]}>
         <torusGeometry args={[0.5, 0.06, 8, 32]} />
         <meshBasicMaterial color={STATE_COLORS[agent.state]} />
       </mesh>
       {waiting && (
-        <mesh ref={bubble} position={[0, 2.05, 0]}>
+        <mesh ref={bubble} position={[0, BUBBLE_Y, 0]}>
           <octahedronGeometry args={[urgent ? 0.24 : 0.16]} />
           <meshBasicMaterial color={urgent ? '#E24B4A' : STATE_COLORS.waiting} />
         </mesh>
       )}
-      <Html position={[0, 2.55, 0]} center className={`agent-tag${selected ? ' agent-tag--selected' : ''}`} zIndexRange={[10, 0]}>
-        {name}
-      </Html>
+      {connected && (
+        <Html
+          position={[0, TAG_Y, 0]}
+          center
+          className={`agent-tag${selected ? ' agent-tag--selected' : ''}`}
+          style={{ '--session-color': color } as CSSProperties}
+          zIndexRange={[10, 0]}
+        >
+          {/* Same name as in the side list, which is the accessible one: not announced twice. */}
+          <span aria-hidden="true">{name}</span>
+        </Html>
+      )}
     </group>
   );
 }

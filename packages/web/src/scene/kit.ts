@@ -8,7 +8,17 @@ import manifest from './kit-manifest.json';
 export type Pack = keyof typeof manifest;
 
 function kitUrl(pack: Pack, name: string): string {
-  return `${import.meta.env.BASE_URL}kaykit/${pack}/${name}.gltf`;
+  const spec = manifest[pack];
+  const format = 'format' in spec ? spec.format : 'gltf';
+  return `${import.meta.env.BASE_URL}kaykit/${pack}/${name}.${format}`;
+}
+
+/**
+ * Loads a kit model. Draco stays off: KayKit files do not use it, and drei would otherwise
+ * be ready to fetch its decoder from a third-party CDN if a file ever declared it.
+ */
+export function useKitGLTF(pack: Pack, name: string) {
+  return useGLTF(kitUrl(pack, name), false);
 }
 
 /** Every model of the manifest, for preloading. */
@@ -37,7 +47,7 @@ function shareMaterial(pack: Pack, m: Material): Material {
 
 /** Loads a model (suspends while loading) and flattens it into parts. */
 export function useKitParts(pack: Pack, name: string): KitPart[] {
-  const { scene } = useGLTF(kitUrl(pack, name));
+  const { scene } = useKitGLTF(pack, name);
   return useMemo(() => {
     scene.updateMatrixWorld(true);
     const parts: KitPart[] = [];
@@ -54,5 +64,5 @@ export function useKitParts(pack: Pack, name: string): KitPart[] {
 }
 
 export function preloadKit(): void {
-  for (const { pack, name } of allKitModels()) useGLTF.preload(kitUrl(pack, name));
+  for (const { pack, name } of allKitModels()) useGLTF.preload(kitUrl(pack, name), false);
 }

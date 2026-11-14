@@ -332,6 +332,8 @@ select,
   color: #2c2c2a;
   background: rgba(255, 255, 255, 0.9);
   padding: 1px 6px;
+  /* The session colour, as on the floor disc and the session card. */
+  border: 2px solid var(--session-color, transparent);
   border-radius: 6px;
   white-space: nowrap;
   max-width: 180px;
@@ -343,6 +345,18 @@ select,
 
 .agent-tag--selected {
   outline: 2px solid #185fa5;
+  /* Selection must not rely on colour alone: the session border can be the same blue. */
+  outline-offset: 2px;
+  font-weight: 600;
+}
+
+@media (forced-colors: active) {
+  .agent-tag {
+    border-color: CanvasText;
+  }
+  .agent-tag--selected {
+    outline: 3px solid Highlight;
+  }
 }
 
 .session-list,

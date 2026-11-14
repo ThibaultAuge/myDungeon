@@ -33,3 +33,13 @@ Code-only cleanup after the KayKit map rewrite. Assets (`kit-manifest.json`,
   `Cyl`, `Ball` (used only inside props.tsx). Symbols unchanged.
 
 Rollback: re-add the `export` keywords / the re-export line; `tsc --noEmit` was clean after the change.
+
+## 2026-11-14 — branch feat/agent-characters
+
+Cleanup after the KayKit adventurer characters replaced the capsule figure.
+
+- `packages/web/src/scene/kit.ts`: dropped `export` from `kitUrl` again (the characters change
+  had re-exported it, but it is only called inside kit.ts, by `useKitGLTF` and `preloadKit`;
+  `AgentFigure.tsx` loads models through `useKitGLTF`). Function unchanged.
+
+Rollback: re-add `export` before `function kitUrl(`; `tsc --noEmit` was clean after the change.
