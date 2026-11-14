@@ -67,8 +67,12 @@ couloirs : les agents circulent par là pour aller d'une pièce à l'autre.
 │ Poste de    │ SALLE DES       │ Accessibi- │ ┌──────────────┐ │         │
 │ garde       │ ÉPREUVES        │ lité / SEO │ │ Réduit du    │ │         │
 │ (sécurité)  │ (contrôles)     │            │ │ concierge    │ │         │
-└─────────────┴─────────────────┴────────────┘ └──────────────┘ └─────────┘
+└─────────────┴─────────────────┴────────────┘║└──────────────┘ └─────────┘
 ```
+
+Le `║` sur le bord sud marque la porte du château, entre l'Accessibilité / SEO et le
+Réduit du concierge, au bout sud du couloir qui les sépare. Le pont-levis baissé franchit les douves
+et mène au chemin qui s'enfonce dans la forêt de nuit.
 
 - **L'Autel** est au centre de la composition, sous l'Atelier. La file d'attente déborde
   dans le couloir qui l'entoure.

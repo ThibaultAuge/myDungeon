@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef } from 'react';
-import { Euler, Matrix4, Quaternion, Vector3, type InstancedMesh } from 'three';
+import { Euler, Matrix4, Quaternion, Vector3, type InstancedMesh, type Material } from 'three';
 import { KIT_SCALE, type KitItem } from './dungeon.ts';
 import { useKitParts, type KitPart, type Pack } from './kit.ts';
 
@@ -19,7 +19,19 @@ export function itemMatrix(item: KitItem, out: Matrix4): Matrix4 {
   return out.compose(tmp.p.set(item.x, item.y, item.z), tmp.q, tmp.s.set(sx, sy, sz));
 }
 
-function InstancedPart({ part, items, shadow }: { part: KitPart; items: KitItem[]; shadow: boolean }) {
+function InstancedPart({
+  part,
+  items,
+  shadow,
+  receive,
+  material,
+}: {
+  part: KitPart;
+  items: KitItem[];
+  shadow: boolean;
+  receive: boolean;
+  material?: Material;
+}) {
   const ref = useRef<InstancedMesh>(null);
   useLayoutEffect(() => {
     const mesh = ref.current;
@@ -34,9 +46,9 @@ function InstancedPart({ part, items, shadow }: { part: KitPart; items: KitItem[
       // A new count needs a new instanced mesh.
       key={items.length}
       ref={ref}
-      args={[part.geometry, part.material, items.length]}
+      args={[part.geometry, material ?? part.material, items.length]}
       castShadow={shadow}
-      receiveShadow
+      receiveShadow={receive}
     />
   );
 }
@@ -47,19 +59,25 @@ export function KitInstances({
   name,
   items,
   shadow = true,
+  receiveShadow = true,
+  material,
 }: {
   pack: Pack;
   name: string;
   items: KitItem[];
   /** Flat or tiny pieces (floor tiles, books) cast no shadow: one draw call less each. */
   shadow?: boolean;
+  /** Takes the shadows of other objects (off for the night forest, dimmed to a third anyway). */
+  receiveShadow?: boolean;
+  /** Replaces the pack's shared material (the night-shaded forest). */
+  material?: Material;
 }) {
   const parts = useKitParts(pack, name);
   if (items.length === 0) return null;
   return (
     <>
       {parts.map((part, i) => (
-        <InstancedPart key={i} part={part} items={items} shadow={shadow} />
+        <InstancedPart key={i} part={part} items={items} shadow={shadow} receive={receiveShadow} material={material} />
       ))}
     </>
   );

@@ -255,7 +255,7 @@ describe('decorPlacement', () => {
     ['barrels', 'dungeon', 'barrel_small', true, 'no s (1)'],
     ['crates', 'dungeon', 'crates_stacked', true, 's 0.7'],
     ['fuel', 'resources', 'Parts_Pile_Small', true, 's 0.6, the boundary'],
-    ['weeds', 'nature', 'Rock_1_A_Color1', false, 's 0.5'],
+    ['weeds', 'forest', 'Rock_1_A_Color1', false, 's 0.5'],
     ['coins', 'dungeon', 'coin_stack_large', false, 's 0.45'],
     ['rug', 'furniture', 'rug_rectangle_stripes_A', false, 's 1.25 but shadow: false'],
   ] as [PropKind, string, string, boolean, string][])('%s %s/%s casts a shadow: %s (%s)', (kind, pack, name, shadow) => {

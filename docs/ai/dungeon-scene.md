@@ -1,5 +1,5 @@
 ---
-description: Use when changing the 3D dungeon map — rooms, floors, walls, cutaway, props, lighting, KayKit models or their import — clickable workstations (posts, hover glow, post card and list), pointer/cursor handling of 3D targets, agent figures (walking motion, character models, role looks and held props, animations, destination badge), room or post icons, or when previewing the web scene.
+description: Use when changing the 3D dungeon map — rooms, floors, walls, castle gate, cutaway, props, lighting, KayKit models or their import — clickable workstations (posts, hover glow, post card and list), pointer/cursor handling of 3D targets, agent figures (walking motion, character models, role looks and held props, animations, destination badge), room or post icons, or when previewing the web scene.
 ---
 
 # 3D dungeon scene (KayKit assets)
@@ -9,16 +9,39 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cuta
   Weapons Bits 1.0, free tiers), grouped in three packs: `dungeon`, `tools`, `weapons`.
   Agents use KayKit Adventurers 2.0 (CC0): packs `adventurers` (character bodies),
   `adventurers_anim` (shared `Rig_Medium_General`, `Rig_Medium_MovementBasic` clips) and
-  `adventurers_props` (8 held props, gltf + 4 textures).
+  `adventurers_props` (8 held props, gltf + 4 textures). Pack `forest` (trees around the
+  castle): `docs/ai/night-forest.md`.
 - KayKit is about 1.33x our scene: every model is scaled by `KIT_SCALE = 0.75`. After
   scaling: small floor tile 1.5 m, wall 3 m high per 3 m chunk, table 0.75 m.
 - Rooms (`RoomDef` in `layout.ts`) carry `floorKind` (`stone`, `stoneFancy`, `grate`, `wood`,
   `woodDark`, `dirt`) and `accent` (one of 6 KayKit banner colours). Decor `PropKind`s
   `crates`, `barrels`, `chest`, `coins`, `candle` have footprints.
-- Walls: wall line `WALL_INSET` (0.15 m) inside the room edge, thickness `WALL_T` (0.25 m).
-  Back-to-back rooms (garde / epreuves / heraut) share ONE wall on the common edge, drawn
-  by the west/north room; wide pillars bridge corners. `edgeRuns` closes corridor ends at
-  the map edge in line with room walls, never doubling a room wall.
+- Inner walls: wall line `WALL_INSET` (0.15 m) inside the room edge, thickness `WALL_T`
+  (0.25 m). Back-to-back rooms (garde / epreuves / heraut) share ONE wall on the common
+  edge, drawn by the west/north room; wide pillars bridge corners.
+- Outer walls (user request): thickness `PERIMETER_T` 0.6, outer face flush with the map
+  edge (`OUTER`), centre on `PERIMETER_LINE` (OUTER ± T/2), inner face `PERIMETER_INNER`
+  (OUTER ± T), about 0.1 m inside the room edge. `BOUND_LINE` is the `BOUNDS` line per side;
+  `perimeterSides(room)` gives a room's sides on it. Those room sides and `edgeRuns` (corridor
+  ends) lie on `PERIMETER_LINE` with `WallRun.thick = PERIMETER_T`; `edgeRuns` skips rooms'
+  stretches with the same `perimeterSides` predicate, so nothing is doubled. Any run meeting
+  an outer wall stops at its inner face. `placeRun` uses `run.thick` for wall, barrier and
+  decor depth; `wallIsFree` measures `FREE_AHEAD` from the inner face.
+- Perimeter pillars: map corners always get a T×T pillar; room corners on two outer sides are
+  skipped; a slot pillar between two edge rooms goes through the wall; other edge corners
+  stand against the inner face. Pillars as deep as the wall (gate jambs, slots) are
+  T + `PERIMETER_PILLAR_EXTRA` (0.06) deep, extending inward only, and the gate lintel is
+  T − 0.04 deep, to avoid coplanar z-fighting.
+- No room door may sit on a map-edge side (tested): door pillars assume the inset wall line.
+- Castle gate: `GATE` in `layout.ts` (south side only, x 4→7, end of the x=5 corridor).
+  `edgeRuns` leaves it open; `gate()` in `dungeon.ts` adds two `GATE_JAMB` (0.6 m) jambs, a
+  lintel at `GATE_H` 2.2 (squashed wall model) and two outward torches, all on
+  `PERIMETER_LINE.s`. Every gate piece shares the gate-middle anchor so the gate sinks as
+  one piece with the cutaway. The Concierge (cx 10.5, w 7)
+  has its door on the north (z=5.5 corridor). Not verified: gate jambs vs the nearby
+  Concierge wall seat / Héraut chest overlap.
+- Outside the castle (forest, moat, drawbridge, night shading, pan clamp):
+  `docs/ai/night-forest.md`.
 - Cutaway (user-designed rule): each tall wall piece, with the torch/banner sharing its
   anchor, sinks when its anchor projects below an upside-down parabola through the mouse
   cursor (`inForeground`, NDC, `CUT_CURVE = 0.3`). Low barrier walls always stand. The
@@ -51,8 +74,15 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cuta
   Resting tavern figures have no handlers and no target flag.
 - Store: `selectedPost` / `selectPost`, reset on route change; Canvas `onPointerMissed`
   clears both agent and post selection.
-- `ui/PostCard.tsx`: card at the top right of `.office__scene` (room eyebrow, title, role,
-  "who" line via `t.labelled`) inside a persistent `aria-live` wrapper. Escape closes
+- `ui/PostCard.tsx`: card at the top right of `.office__scene` (top 24px, width
+  `min(320px, 100% - 24px)`) inside a persistent `aria-live` wrapper. Same dark parchment
+  style as `.agent-dialog` / `.agent-info` (the `--dlg-*` tokens are declared on
+  `.post-card`, double gold border). Order: overhanging title plate `.post-card__plate`
+  (h2 with the post icon `<DestinationIcon kind={postDestination(post)}
+  className="post-card__icon">` at its left), then the room name as a gold uppercase
+  eyebrow below the plate, then role, then the "who" line via `t.labelled`. The close
+  button `.post-card__close` shares the `.agent-dialog__close, .agent-info__close` rule
+  and focus rule. Escape closes
   (ignores `defaultPrevented` / `isComposing`; moves focus to the list button only if focus
   was in the card); × focuses the post's list button (`preventScroll` on mouse).
 - `ui/PostList.tsx`: "Lieux du bureau" in the side panel, grouped by room, `aria-pressed`
@@ -113,8 +143,9 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cuta
 - Icons (user decision: one per room AND per dedicated post): 25 hand-drawn 24×24 line SVGs
   in `ICONS: Record<Destination, ReactNode>` (15 `RoomId`s + 10 `StationId`s), decorative
   (`aria-hidden`, `focusable=false`, no i18n key; the side list and `StatusAnnouncer` stay
-  the accessible source). `DestinationIcon` is used only inside `DestinationBadge`: rooms
-  have no title signs, so no room-sign icon exists.
+  the accessible source). `DestinationIcon` is used by `DestinationBadge` and by the post
+  card (icon of `postDestination(post)`, the same SVG an agent carries while walking to
+  that post). Rooms have no title signs, so no room-sign icon exists.
 - Spots (`layout.ts`): `Spot` carries `room: RoomId` and optional `station?: StationId`
   (key absent, not `undefined`). `RoomDef.stations` is `Partial<Record<StationId, Seat[]>>`,
   `STATIONS` maps agent type → `StationId`, `candidateSeats` returns
@@ -124,11 +155,14 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cuta
 ## Relevant Files
 - `packages/web/src/scene/dungeon.ts` — pure geometry, no three scene: `KIT_SCALE`,
   `KitItem`, `Placement` (`Map<model, KitItem[]>`), `roomFloor`, `corridorFloor`,
-  `foundation`, `wallRuns`, `edgeRuns`, `wallLayout`, `WALL_T`, `WALL_INSET`, `CUT_CURVE`,
+  `foundation`, `OUTER`, `PERIMETER_T`, `BOUND_LINE`, `PERIMETER_LINE`, `PERIMETER_INNER`,
+  `PERIMETER_PILLAR_EXTRA`, `perimeterSides`, `WallRun`, `wallRuns`, `edgeRuns`,
+  `sharedSides`, `wallLayout`, `GATE_JAMB`, `GATE_H`, `WALL_T`, `WALL_INSET`, `CUT_CURVE`,
   `inForeground`.
 - `packages/web/src/scene/Structure.tsx` — `Floors` (instanced) and `Walls`.
 - `packages/web/src/scene/KitInstances.tsx` — `<KitInstances>` (one InstancedMesh per model
-  part, for repeated pieces) and `<Kit>` (single model, for furniture).
+  part, for repeated pieces; optional `material` override and `receiveShadow`) and `<Kit>`
+  (single model, for furniture).
 - `packages/web/src/scene/props.tsx` — `PROPS` renderer per `PropKind` (KayKit models plus
   simple shapes in a KayKit-matched palette).
 - `packages/web/src/scene/kit.ts` — `useKitGLTF` (drei `useGLTF(url, false)`: Draco off, so
@@ -144,7 +178,8 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cuta
 - `packages/web/src/scene/AgentFigure.tsx` — walk, `Character` (takes a `Look`), `Held`,
   `CharacterBoundary`, tag, destination badge toggle.
 - `packages/web/src/scene/destinations.ts` — pure: `Destination = RoomId | StationId`,
-  `destinationOf(spot)` (station ?? room).
+  `destinationOf(spot)` (station ?? room), `postDestination(post: PostId)` (identity; it
+  compiles only because every `PostId` is a `RoomId` or a `StationId`).
 - `packages/web/src/scene/DestinationIcon.tsx` — `ICONS`, `DestinationIcon`,
   `DestinationBadge`. Badge styles in `packages/web/src/styles.css`.
 - `packages/web/src/scene/walk.ts` — pure walking motion, no three.js: `remainingDistance`,
@@ -159,7 +194,9 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cuta
   `layout.test.ts` (`layout.ts`: `ROOMS`, seats and `assignSpots`, altar `queueSpot`,
   `SPAWN`, `corridorPath`, `routeBetween`, `reroute`, post tagging, `postGroups`,
   `POST_ROOM`, spot `room`/`station`), `highlight.test.ts`, `cursor.test.ts`,
-  `destinations.test.ts` (`destinationOf`; room ids and post names never overlap).
+  `destinations.test.ts` (`destinationOf`; room ids and post names never overlap;
+  `postDestination`: every `POST_IDS` entry is a `ROOMS` id or a stations key, and the
+  room-wide icon choice below is pinned).
 
 ## Usage
 - New model: add it to `kit-manifest.json`, run `npm run kaykit:import`. Never hand-copy
@@ -179,6 +216,8 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cuta
 - Agent motion logic goes in `walk.ts`, clip choice in `clipFor` (both tested), never
   inline in `AgentFigure`'s `useFrame`, which only calls them.
 - New decor must not cover seats or a door entry (tested in `dungeon.test.ts`).
+- Anything placed against or through the outer wall uses `perimeterSides` and the
+  `PERIMETER_*` constants (never `WALL_INSET` there); new runs carry `thick`.
 - New `RoomId` or new seat post (`StationId`, not the clickable `PostId`): add an `ICONS` entry (the `Record` type fails
   typecheck otherwise) and keep its name distinct from every room id (tested). Reuse
   `DestinationIcon` for any other place icon; never add a translated label for it.
@@ -188,8 +227,11 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cuta
   sessions; changing an agent's `room` makes it walk. Without navigating to an env route
   the home page shows and no scene renders.
 - A new functional prop needs a `post`; a new function in a room needs a new `PostId` plus
-  its texts in fr / de / en (typecheck and tests enforce both). Decoration kinds stay
-  post-less.
+  its texts in fr / de / en (typecheck and tests enforce both). A new `PostId` must also be
+  a room id or a `StationId` (typecheck via `postDestination`, plus a test), so the post card
+  has an icon. Decoration kinds stay post-less.
+- Post card styling: reuse the agent-dialog parchment tokens and close-button rule; do not
+  give the card its own palette.
 - New clickable 3D object: give its hit object `TARGET_USER_DATA`, drive the cursor only
   through `setPointerHover` (never write `document.body.style.cursor` elsewhere), choose
   with `nearestTarget`, and reject drags with `CLICK_MAX_DRAG_PX`. Every clickable 3D thing
@@ -200,14 +242,18 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cuta
   the test server on 4778. `agent-office` / `agent-office-test` serve `packages/web/dist`,
   which needs `npm run build` first. Previewing from a worktree with fake hooks:
   `docs/ai/agent-lifecycle.md`. The preview launcher reads the main folder's
-  `.claude/launch.json`, so from a worktree run Vite on another port (5174 worked; the
-  WebSocket is refused there, which is fine for store-injected galleries). A worktree can
+  `.claude/launch.json`, so from a worktree run Vite on another port (the WebSocket is
+  refused there, which is fine for store-injected galleries; `/env/<anything>` renders the
+  scene without a server). Ports 5174 and 5175 may already be held by another worktree's
+  Vite: check with `netstat` that the port belongs to this worktree's process (or pick a
+  free one such as 5181), otherwise the page shown is another branch's code. A worktree can
   also serve its build on another port: `npm run build`, then
   `AGENT_OFFICE_PORT=4790 AGENT_OFFICE_TOKEN=… npm run start`. The in-app Browser pane, when
   hidden, gives the Canvas size 0 and renders no frames; use Playwright for visual
   verification. Headless Playwright renders about 1–2 fps (software GL): wait about 2 s
   before checking rAF-driven effects (focus return, highlight screenshots). Give Playwright
   file outputs absolute paths inside the worktree; relative paths resolve elsewhere.
+  `.playwright-mcp/` is gitignored because captures may show real session names; keep it so.
 - Where figures rest, wait, appear and leave (tavern, altar, roster):
   `docs/ai/agent-lifecycle.md`.
 
@@ -223,11 +269,15 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cuta
   folders.
 - Some manifest models are unused on purpose, kept for upcoming 3D work (user decision).
   Do not prune them as dead code.
-- Wall footprint matches the pre-KayKit one, so seat positions are unaffected.
+- Inner wall footprint matches the pre-KayKit one, so seat positions are unaffected.
+- Accepted limits of the thick outer walls: wall variants with relief (`wall_shelves`,
+  `wall_arched`) are stretched by the 0.6 depth scale (not yet checked visually); props near
+  outer walls may stand up to 0.175 m off the inner face, which moved outward from 0.275 m
+  to 0.1 m inside the room edge.
 - Orientation-based cutaway was tried and rejected; keep the cursor parabola.
 - Tests must not import `kit.ts` or any `.tsx` file (drei / `import.meta.env`); test
-  `dungeon.ts`, `layout.ts`, `walk.ts`, `characters.ts`, `destinations.ts` and the manifest
-  JSON.
+  `dungeon.ts`, `layout.ts`, `walk.ts`, `characters.ts`, `destinations.ts`, `forest.ts` and
+  the manifest JSON.
 - Walk speed was set so figures reach the room before short tasks finish (user request).
   The chibi legs walk naturally at 0.57 (`Walking_A`) and 1.4 u/s (`Running_A`) at
   `KIT_SCALE`, so feet slide at cruise speed by design. Accepted limits: a reroute to a
@@ -260,6 +310,19 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cuta
 - Destination badge accepted limits (not done): an altar-queue shuffle (rank n → n-1)
   shows the altar badge about 1 s and hides an urgent agent's request bubble meanwhile; the
   visibility logic has no unit test (depends on drei ref placement; verified in Playwright).
+- Post card plate layout, keep it: `.post-card__plate` is IN THE FLOW with
+  `margin-top: -16px` (not `position: absolute` like the agent plates), so a two-line title
+  (FR "Rayonnages et tables de lecture" wraps) pushes the text down. Its
+  `max-width: calc(100% - 44px)` and the room line's `padding-right: 30px` keep both clear of
+  the absolute close button; the h2 has `overflow-wrap: anywhere`. Verified in Playwright
+  for all 18 posts in FR/DE/EN at 1300 and 375 px wide.
+- Post card icon, accepted design: room-wide posts keep the room icon. `observatoire` shows
+  the moon although an agent at the telescope seat carries the `lunette` badge, and
+  `scriptorium` shows the quill although agents at the `ia` / `humains` seats carry those
+  badges (pinned in `destinations.test.ts`).
+- Post card open items (accessibility audit, not done): opening a card from the keyboard
+  list does not move focus into it; the card has no max-height / scroll for very short
+  scenes or 400% zoom.
 - Open items: about 700 draw calls per frame because props are not instanced (planned fix:
   drei `<Instances>` for shapes); the scene-wide Suspense hide/show also causes about 15
   "synchronously unmount a root" warnings per load.

@@ -51,9 +51,9 @@ export const DECOR_RECIPES: Partial<Record<PropKind, readonly DecorPiece[]>> = {
     { pack: 'mixed1', name: 'flax_flower_A', x: 0.65, z: 0.45, s: 0.8 },
   ],
   weeds: [
-    { pack: 'nature', name: 'Grass_2_B_Color1', x: 0, z: 0, s: 0.8, shadow: false },
-    { pack: 'nature', name: 'Grass_1_A_Color1', x: 0.3, z: 0.2, rot: 1.1, s: 0.9, shadow: false },
-    { pack: 'nature', name: 'Rock_1_A_Color1', x: -0.3, z: 0.15, s: 0.5 },
+    { pack: 'forest', name: 'Grass_2_B_Color1', x: 0, z: 0, s: 0.8, shadow: false },
+    { pack: 'forest', name: 'Grass_1_A_Color1', x: 0.3, z: 0.2, rot: 1.1, s: 0.9, shadow: false },
+    { pack: 'forest', name: 'Rock_1_A_Color1', x: -0.3, z: 0.15, s: 0.5 },
   ],
   bookPile: [
     { pack: 'furniture', name: 'book_set', x: -0.1, z: 0, y: rest(0, -0.25, 0.8), rot: 0.3, s: 0.8 },

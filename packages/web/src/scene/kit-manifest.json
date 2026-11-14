@@ -275,18 +275,6 @@
       "Textiles_Stack_Small"
     ]
   },
-  "nature": {
-    "source": "forest_nature/KayKit_Forest_Nature_Pack_1.0_FREE/Assets/gltf",
-    "license": "forest_nature/KayKit_Forest_Nature_Pack_1.0_FREE/License.txt",
-    "textures": [
-      "forest_texture.png"
-    ],
-    "models": [
-      "Grass_2_B_Color1",
-      "Grass_1_A_Color1",
-      "Rock_1_A_Color1"
-    ]
-  },
   "mixed1": {
     "source": "mixed_bag/KayKit_Mixed_Bag_1_FREE/Assets/gltf",
     "license": "mixed_bag/KayKit_Mixed_Bag_1_FREE/License.txt",
@@ -335,6 +323,34 @@
     ],
     "models": [
       "Skeleton_Shield_Large_A"
+    ]
+  },
+  "forest": {
+    "source": "forest/KayKit_Forest_Nature_Pack_1.0_FREE/Assets/gltf",
+    "license": "forest/KayKit_Forest_Nature_Pack_1.0_FREE/License.txt",
+    "textures": [
+      "forest_texture.png"
+    ],
+    "models": [
+      "Tree_4_A_Color1",
+      "Tree_4_B_Color1",
+      "Tree_1_A_Color1",
+      "Tree_1_B_Color1",
+      "Tree_3_A_Color1",
+      "Tree_3_B_Color1",
+      "Tree_2_A_Color1",
+      "Tree_2_B_Color1",
+      "Tree_Bare_1_A_Color1",
+      "Tree_Bare_2_A_Color1",
+      "Bush_1_E_Color1",
+      "Bush_2_F_Color1",
+      "Bush_3_C_Color1",
+      "Bush_4_F_Color1",
+      "Rock_1_H_Color1",
+      "Rock_3_G_Color1",
+      "Grass_2_B_Color1",
+      "Grass_1_A_Color1",
+      "Rock_1_A_Color1"
     ]
   }
 }

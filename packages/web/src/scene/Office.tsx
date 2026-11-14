@@ -9,6 +9,8 @@ import { useT } from '../i18n/useT.ts';
 import { useOffice } from '../store.ts';
 import { useNow } from '../useNow.ts';
 import { AgentFigure, agentPositions } from './AgentFigure.tsx';
+import { Forest } from './Forest.tsx';
+import { NIGHT_SKY } from './forest.ts';
 import { assignSpots, BOUNDS, SPAWN, type SeatMemory, type SeatRequest, type Spot } from './layout.ts';
 import { OfficeRooms } from './Room.tsx';
 import { inheritSeats, NEUTRAL_COLOR, restId, restingAgent, restingTypes, startOrigins } from './tavern.ts';
@@ -102,12 +104,19 @@ function useStarts(
   return starts;
 }
 
+/** How far the camera target may be panned past the castle walls: the forest has an edge. */
+const PAN_MARGIN = 20;
+
 function CameraFollow({ selected }: { selected: string | null }) {
   const controls = useThree((s) => s.controls) as OrbitControlsImpl | null;
   useFrame(() => {
+    if (!controls) return;
     const pos = selected ? agentPositions.get(selected) : undefined;
     // OrbitControls already updates itself every frame.
-    if (controls && pos) controls.target.lerp(pos, 0.06);
+    if (pos) controls.target.lerp(pos, 0.06);
+    const t = controls.target;
+    t.x = Math.min(Math.max(t.x, BOUNDS.x0 - PAN_MARGIN), BOUNDS.x1 + PAN_MARGIN);
+    t.z = Math.min(Math.max(t.z, BOUNDS.z0 - PAN_MARGIN), BOUNDS.z1 + PAN_MARGIN);
   });
   return null;
 }
@@ -175,9 +184,11 @@ export function OfficeScene() {
         selectPost(null);
       }}
     >
+      <color attach="background" args={[NIGHT_SKY]} />
       <SoftShadows size={18} samples={10} focus={0.6} />
       <hemisphereLight args={['#fff6e8', '#8a8478', 1.6]} />
       <SunLight />
+      <Forest />
       <OfficeRooms />
       {resting.map((agent) => (
         <AgentFigure
