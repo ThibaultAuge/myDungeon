@@ -41,5 +41,19 @@
     "license": null,
     "textures": ["weapons_bits_texture.png"],
     "models": ["sword_A", "axe_A", "spear_A", "shield_A", "shield_B", "halberd", "staff_A", "bow_A_withString"]
+  },
+  "adventurers": {
+    "source": "adventurers/KayKit_Adventurers_2.0_FREE/Characters/gltf",
+    "license": "adventurers/KayKit_Adventurers_2.0_FREE/License.txt",
+    "format": "glb",
+    "textures": [],
+    "models": ["Knight", "Rogue_Hooded"]
+  },
+  "adventurers_anim": {
+    "source": "adventurers/KayKit_Adventurers_2.0_FREE/Animations/gltf/Rig_Medium",
+    "license": "adventurers/KayKit_Adventurers_2.0_FREE/License.txt",
+    "format": "glb",
+    "textures": [],
+    "models": ["Rig_Medium_General", "Rig_Medium_MovementBasic"]
   }
 }

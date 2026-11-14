@@ -230,10 +230,11 @@ dans son `.claude/agents/`, et les plugins en ajoutent.
 
 ## État de l'implémentation
 
-*Mis à jour le 2026-11-13.*
+*Mis à jour le 2026-11-14.*
 
 Fait :
 
+- les personnages animés KayKit Adventurers 2.0 (un chevalier pour l'agent principal, un voyou encapuchonné pour les sous-agents), avec marche, course, travail, attente, agenouillement à l'autel et pose calme, et une couleur de session sur le disque au sol et l'étiquette ;
 - le plan du donjon, ses 14 lieux et ses couloirs (`packages/web/src/scene/layout.ts`, rendu dans
   `Room.tsx`) ;
 - les déplacements par les portes et les couloirs, y compris quand un agent change de destination en
@@ -247,6 +248,6 @@ Fait :
 Reste à faire :
 
 - le cycle de vie complet de la taverne (un exemplaire neutre de chaque type au repos) ;
-- les silhouettes par type d'agent ;
+- les silhouettes par type d'agent (aujourd'hui, tous les sous-agents ont le même modèle) ;
 - la tenue de l'agent principal selon le mode plan (`permission_mode`, toujours à vérifier) ;
 - les badges de skills.

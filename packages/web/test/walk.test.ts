@@ -7,6 +7,7 @@ import {
   advance,
   nextSpeed,
   remainingDistance,
+  turnToward,
 } from '../src/scene/walk.ts';
 
 const TOL = 1e-9;
@@ -300,6 +301,103 @@ describe('advance', () => {
     advance(pos, path, 2);
     expect(posRef.z).toBeCloseTo(1, 9);
     expect(pathRef).toHaveLength(1);
+  });
+});
+
+/** Signed angle from a to b folded into [-π, π]. */
+const angleGap = (a: number, b: number) => Math.atan2(Math.sin(b - a), Math.cos(b - a));
+
+describe('turnToward', () => {
+  const PI = Math.PI;
+
+  /** Verifies that fraction 1 lands on the target direction */
+  it.each([
+    [0, 1],
+    [0, -2],
+    [PI / 2, -PI / 2 + 0.1],
+    [3, -3],
+  ])('snaps from %d to %d with fraction 1', (current, target) => {
+    expect(angleGap(turnToward(current, target, 1), target)).toBeCloseTo(0, 9);
+  });
+
+  /** Verifies that fraction 0 leaves the angle exactly where it was */
+  it.each([
+    [0, 1],
+    [3, -3],
+    [-PI, PI / 2],
+  ])('does not turn from %d towards %d with fraction 0', (current, target) => {
+    expect(turnToward(current, target, 0)).toBe(current);
+  });
+
+  /** Verifies that a fraction moves that share of the gap on a plain (no wrap) turn */
+  it('turns by the given share of the gap', () => {
+    expect(turnToward(0, 1, 0.5)).toBeCloseTo(0.5, 9);
+    expect(turnToward(1, 0, 0.25)).toBeCloseTo(0.75, 9);
+    expect(turnToward(-0.5, 0.5, 0.1)).toBeCloseTo(-0.4, 9);
+  });
+
+  /** Verifies that crossing +π turns the short way up, not back through 0 */
+  it('takes the short arc across +π', () => {
+    // From 3 to -3: the short way is +(2π - 6) ≈ +0.283 through π, not -6 through 0.
+    const half = turnToward(3, -3, 0.5);
+    expect(half).toBeGreaterThan(3);
+    expect(half).toBeCloseTo(3 + (2 * PI - 6) / 2, 9);
+  });
+
+  /** Verifies that crossing -π turns the short way down, not back through 0 */
+  it('takes the short arc across -π', () => {
+    const half = turnToward(-3, 3, 0.5);
+    expect(half).toBeLessThan(-3);
+    expect(half).toBeCloseTo(-3 - (2 * PI - 6) / 2, 9);
+  });
+
+  /** Verifies that a turn never sweeps more than half a turn, whatever the inputs */
+  it('never turns by more than π', () => {
+    const angles = [-3 * PI, -PI, -2, -0.1, 0, 0.1, 2, PI, 3 * PI, 7.5];
+    for (const a of angles) {
+      for (const b of angles) {
+        const step = turnToward(a, b, 1) - a;
+        expect(Math.abs(step), `${a} -> ${b}`).toBeLessThanOrEqual(PI + 1e-9);
+        expect(angleGap(a + step, b), `${a} -> ${b}`).toBeCloseTo(0, 9);
+      }
+    }
+  });
+
+  /** Verifies that a target a full turn away counts as the same direction */
+  it('does not spin for a target one full turn away', () => {
+    expect(turnToward(0.3, 0.3 + 2 * PI, 0.5)).toBeCloseTo(0.3, 9);
+    expect(turnToward(0.3, 0.3 - 4 * PI, 1)).toBeCloseTo(0.3, 9);
+  });
+
+  /** Verifies that an unwrapped current angle is not snapped back into [-π, π] */
+  it('keeps working from an unwrapped current angle', () => {
+    // 10π + 0.2 faces the same way as 0.2: turning to 0.4 adds 0.2, from where it was.
+    const current = 10 * PI + 0.2;
+    expect(turnToward(current, 0.4, 1)).toBeCloseTo(current + 0.2, 9);
+  });
+
+  /** Verifies that an angle already on the target stays put for any fraction */
+  it('stays on the target', () => {
+    for (const f of [0, 0.3, 1, 5]) expect(turnToward(1.2, 1.2, f)).toBeCloseTo(1.2, 12);
+  });
+
+  /** Verifies that a fraction above 1 is clamped to 1 (no overshoot) */
+  it.each([1.5, 2, 100, Infinity])('clamps fraction %d to 1', (fraction) => {
+    expect(turnToward(0, 1, fraction)).toBeCloseTo(1, 9);
+    expect(angleGap(turnToward(3, -3, fraction), -3)).toBeCloseTo(0, 9);
+  });
+
+  /** Verifies that a negative fraction is clamped to 0 (never turns away) */
+  it.each([-0.5, -1, -Infinity])('clamps fraction %d to 0', (fraction) => {
+    expect(turnToward(0, 1, fraction)).toBe(0);
+    expect(turnToward(3, -3, fraction)).toBe(3);
+  });
+
+  /** Verifies that an exactly opposite target is reached in half a turn either way */
+  it('turns half a turn for an exactly opposite target', () => {
+    const out = turnToward(0, PI, 1);
+    expect(Math.abs(out)).toBeCloseTo(PI, 9);
+    expect(Math.abs(turnToward(0, PI, 0.5))).toBeCloseTo(PI / 2, 9);
   });
 });
 
