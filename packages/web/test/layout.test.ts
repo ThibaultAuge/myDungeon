@@ -23,6 +23,8 @@ import {
   type SeatMemory,
   type SeatRequest,
   type Spot,
+  type StationId,
+  type Candidate,
 } from '../src/scene/layout.ts';
 
 const TOL = 1e-3;
@@ -304,12 +306,12 @@ const STATION_OF: Record<string, string> = {
 };
 
 /** The documented candidate order: own post, shared seats, then wall seats, with their ids. */
-function expectedCandidates(r: RoomDef, type: string): { id: string; seat: unknown }[] {
+function expectedCandidates(r: RoomDef, type: string): Candidate[] {
   const key = type.toLowerCase();
   const station = Object.hasOwn(STATION_OF, key) ? STATION_OF[key] : undefined;
   const own = station ? (r.stations?.[station] ?? []) : [];
   return [
-    ...own.map((seat, i) => ({ id: `${r.id}:${station}:${i}`, seat })),
+    ...own.map((seat, i) => ({ id: `${r.id}:${station}:${i}`, seat, station })),
     ...r.seats.map((seat, i) => ({ id: `${r.id}:seat:${i}`, seat })),
     ...wallSeats(r).map((seat, i) => ({ id: `${r.id}:wall:${i}`, seat })),
   ];
@@ -513,6 +515,25 @@ describe('queueSpot', () => {
     const pts = Array.from({ length: 30 }, (_, r) => queueSpot(r));
     for (let i = 1; i < pts.length; i++) expect(samePoint(pts[i], pts[i - 1])).toBe(false);
   });
+
+  /**
+   * Verifies that every queue rank, in the nave or in the corridors, heads for the altar room
+   */
+  it.each([0, 1, 3, 5, 20, 1000])('rank %i has room autel and no station', (rank) => {
+    const s = queueSpot(rank);
+    expect(s.room).toBe('autel');
+    expect(s).not.toHaveProperty('station');
+  });
+
+  /**
+   * Verifies that the corridor ranks, whose space is their own, still name the altar room
+   */
+  it('keeps room autel for a rank standing in a corridor', () => {
+    const s = queueSpot(5);
+    expect(onAnyCorridor(s)).toBe(true);
+    expect(s.space).not.toBe('autel');
+    expect(s.room).toBe('autel');
+  });
 });
 
 describe('assignSpots', () => {
@@ -715,7 +736,192 @@ describe('assignSpots', () => {
   });
 });
 
+describe('assignSpots: room and station', () => {
+  /**
+   * Verifies that a station agent on its post gets the room and the post's station
+   */
+  it('gives an oracle in the observatory the telescope station', () => {
+    const s = spotIn('observatoire', 'oracle');
+    expect(s).toMatchObject({ id: 'observatoire:lunette:0', room: 'observatoire', station: 'lunette' });
+  });
+
+  /**
+   * Verifies that a scriptorium post spot names the scriptorium room, not the library space
+   */
+  it('gives a curator in the scriptorium room scriptorium and station ia', () => {
+    const s = spotIn('scriptorium', 'curator');
+    expect(s).toMatchObject({ id: 'scriptorium:ia:0', room: 'scriptorium', station: 'ia', space: 'biblio' });
+  });
+
+  /**
+   * Verifies that a generic agent gets its room and no station key at all
+   */
+  it('gives a generic agent a room and no station', () => {
+    const s = spotIn('observatoire');
+    expect(s.room).toBe('observatoire');
+    expect(s).not.toHaveProperty('station');
+  });
+
+  /**
+   * Verifies that the station is matched case-insensitively, like the post seats
+   */
+  it('sets the station for a differently cased agent type', () => {
+    expect(spotIn('epreuves', 'DEXTER')).toMatchObject({ room: 'epreuves', station: 'labo' });
+  });
+
+  /**
+   * Verifies that once the post seats are all taken, the next same-type agent has no station
+   */
+  it('gives no station to a same-type agent on a shared seat once the post is full', () => {
+    const post = room('observatoire').stations!.lunette!.length;
+    const reqs = Array.from({ length: post + 1 }, (_, i) => req(`o${i}`, 'observatoire', { agentType: 'oracle' }));
+    const spots = assignSpots(reqs, new Map());
+    for (let i = 0; i < post; i++) {
+      expect(spots.get(`o${i}`)).toMatchObject({ id: `observatoire:lunette:${i}`, room: 'observatoire', station: 'lunette' });
+    }
+    const extra = spots.get(`o${post}`)!;
+    expect(extra).toMatchObject({ id: 'observatoire:seat:0', room: 'observatoire' });
+    expect(extra).not.toHaveProperty('station');
+  });
+
+  /**
+   * Verifies that a kept post seat keeps its station on the next call with the same memory
+   */
+  it('keeps the station of a kept post seat', () => {
+    const memory: SeatMemory = new Map();
+    const first = assignSpots([req('t', 'arithmetique', { agentType: 'turing' })], memory);
+    expect(first.get('t')).toMatchObject({ id: 'arithmetique:boulier:0', station: 'boulier' });
+    // A newcomer listed first must not change the kept seat nor its station.
+    const second = assignSpots([req('n', 'arithmetique', { agentType: 'turing' }), req('t', 'arithmetique', { agentType: 'turing' })], memory);
+    expect(second.get('t')).toMatchObject({ id: 'arithmetique:boulier:0', room: 'arithmetique', station: 'boulier' });
+    expect(second.get('n')).toMatchObject({ id: 'arithmetique:boulier:1', room: 'arithmetique', station: 'boulier' });
+  });
+
+  /**
+   * Verifies that a kept shared seat of a station agent stays without a station
+   */
+  it('keeps no station on a kept shared seat', () => {
+    const memory: SeatMemory = new Map();
+    const reqs = [req('a', 'autel', { agentType: 'claude-code-guide' }), req('b', 'autel', { agentType: 'claude-code-guide' })];
+    assignSpots(reqs, memory);
+    const again = assignSpots([...reqs].reverse(), memory);
+    expect(again.get('a')).toMatchObject({ id: 'autel:sacristain:0', station: 'sacristain', room: 'autel' });
+    expect(again.get('b')).toMatchObject({ id: 'autel:seat:0', room: 'autel' });
+    expect(again.get('b')).not.toHaveProperty('station');
+  });
+
+  /**
+   * Verifies that a station agent outside its post's room gets that room and no station
+   */
+  it.each([
+    ['atelier', 'hermione'],
+    ['biblio', 'curator'],
+    ['taverne', 'oracle'],
+  ] as const)('in %s, %s has no station', (roomId, type) => {
+    const s = spotIn(roomId, type);
+    expect(s.room).toBe(roomId);
+    expect(s).not.toHaveProperty('station');
+  });
+
+  /**
+   * Verifies that scatter seats carry the room but no station, also when kept
+   */
+  it('gives scatter seats a room and no station, on first and later calls', () => {
+    const r = room('arithmetique');
+    const capacity = candidateSeats(r, 'turing').length;
+    const reqs = Array.from({ length: capacity + 2 }, (_, i) => req(`t${String(i).padStart(3, '0')}`, 'arithmetique', { agentType: 'turing' }));
+    const memory: SeatMemory = new Map();
+    for (const spots of [assignSpots(reqs, memory), assignSpots([...reqs].reverse(), memory)]) {
+      const scatter = [...spots.values()].filter((s) => s.id.startsWith('arithmetique:scatter:'));
+      expect(scatter).toHaveLength(2);
+      for (const s of scatter) {
+        expect(s.room).toBe('arithmetique');
+        expect(s).not.toHaveProperty('station');
+      }
+    }
+  });
+
+  /**
+   * Verifies that queued agents get the altar room and no station from assignSpots
+   */
+  it('gives queued agents room autel and no station', () => {
+    const spots = assignSpots([queued('a', 1), queued('b', 2), queued('c', 3)], new Map());
+    for (const s of spots.values()) {
+      expect(s.room).toBe('autel');
+      expect(s).not.toHaveProperty('station');
+    }
+  });
+
+  /**
+   * Verifies that an unknown room falls back to the altar room in the spot's room too
+   */
+  it('names the altar as the room of an unknown room fallback', () => {
+    const spots = assignSpots([req('a', 'accueil' as RoomId)], new Map());
+    expect(spots.get('a')!.room).toBe('autel');
+  });
+
+  /**
+   * Verifies that every spot of a full room, overflow included, carries that room's id
+   */
+  it.each(ROOMS.map((r) => [r.id, r] as const))('%s spots all carry their room', (id, r) => {
+    const count = candidateSeats(r, 'general-purpose').length + 1;
+    const reqs = Array.from({ length: count }, (_, i) => req(`g${i}`, id));
+    const spots = assignSpots(reqs, new Map());
+    expect(spots.size).toBe(count);
+    for (const s of spots.values()) {
+      expect(s.room).toBe(id);
+      expect(s).not.toHaveProperty('station');
+    }
+  });
+});
+
+describe('ROOMS: stations', () => {
+  /** Every station that some agent type is sent to. */
+  const REACHABLE = new Set(Object.values(STATION_OF));
+
+  const posts = ROOMS.flatMap((r) => Object.keys(r.stations ?? {}).map((k) => [r.id, k] as const));
+
+  /**
+   * Verifies that the floor plan defines at least one post, so the checks below are not vacuous
+   */
+  it('defines dedicated posts', () => {
+    expect(posts.length).toBeGreaterThan(0);
+  });
+
+  /**
+   * Verifies that every post of every room is reached by some agent type and has seats
+   */
+  it.each(posts)('%s post %s is used by an agent type and has seats', (roomId, key) => {
+    expect(REACHABLE.has(key)).toBe(true);
+    expect(room(roomId).stations![key as StationId]!.length).toBeGreaterThan(0);
+  });
+
+  /**
+   * Verifies that the agent type of every post lands on that post with its room and station
+   */
+  it.each(posts)('%s post %s gives its agent the room and station', (roomId, key) => {
+    const type = Object.keys(STATION_OF).find((t) => STATION_OF[t] === key)!;
+    const s = spotIn(roomId, type);
+    expect(s).toMatchObject({ id: `${roomId}:${key}:0`, room: roomId, station: key });
+  });
+
+  /**
+   * Verifies that each agent type's station is defined in exactly one room
+   */
+  it.each(Object.entries(STATION_OF))('%s station %s lives in exactly one room', (_type, key) => {
+    expect(posts.filter(([, k]) => k === key)).toHaveLength(1);
+  });
+});
+
 describe('SPAWN', () => {
+  /**
+   * Verifies that the spawn spot is in the tavern room, with no station
+   */
+  it('has room taverne and no station', () => {
+    expect(SPAWN.room).toBe('taverne');
+    expect(SPAWN).not.toHaveProperty('station');
+  });
+
   /**
    * Verifies that new subagents spawn inside the tavern, entering by its door
    */

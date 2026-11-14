@@ -1,6 +1,7 @@
 import { Suspense, useEffect, useState } from 'react';
 import { Html } from '@react-three/drei';
 import { useT } from '../i18n/useT.ts';
+import { DestinationIcon } from './DestinationIcon.tsx';
 import { preloadKit } from './kit.ts';
 import { ROOMS, type Prop, type RoomDef } from './layout.ts';
 import { PROPS } from './props.tsx';
@@ -41,6 +42,8 @@ export function OfficeRooms() {
             className="room-sign"
             zIndexRange={[5, 0]}
           >
+            {/* Same pictogram as above an agent walking here. */}
+            <DestinationIcon kind={r.id} className="room-sign__icon" />
             {t.rooms[r.id]}
           </Html>
         ))}

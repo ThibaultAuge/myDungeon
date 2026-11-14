@@ -30,7 +30,24 @@ export interface Spot extends Seat {
   anchor: Point;
   /** Waypoints from the anchor to the seat, the seat excluded. */
   entry: Point[];
+  /** Room the agent is heading for (the altar for the queue, the tavern for the lockers). */
+  room: RoomId;
+  /** Dedicated post, only when the seat is one of that post's seats. */
+  station?: StationId;
 }
+
+/** Dedicated posts inside a room (the telescope, the easel…). */
+export type StationId =
+  | 'lunette'
+  | 'ia'
+  | 'humains'
+  | 'chevalet'
+  | 'sacristain'
+  | 'boulier'
+  | 'relecture'
+  | 'labo'
+  | 'estrade'
+  | 'inspection';
 
 export type Side = 'n' | 's' | 'e' | 'w';
 
@@ -110,7 +127,7 @@ export interface RoomDef {
   /** Seats open to any agent, in order of preference. Relative to the room centre. */
   seats: Seat[];
   /** Seats of a dedicated post (the easel, the telescope…), keyed by station name. */
-  stations?: Record<string, Seat[]>;
+  stations?: Partial<Record<StationId, Seat[]>>;
 }
 
 export const NORTH = Math.PI; // faces -z
@@ -500,9 +517,9 @@ function spaceOf(room: RoomDef): string {
   return room.insideOf ?? room.id;
 }
 
-function toSpot(room: RoomDef, seat: Seat, id: string): Spot {
+function toSpot(room: RoomDef, seat: Seat, id: string, station?: StationId): Spot {
   const door = doorOf(room);
-  return {
+  const spot: Spot = {
     ...seat,
     x: room.cx + seat.x,
     z: room.cz + seat.z,
@@ -510,7 +527,10 @@ function toSpot(room: RoomDef, seat: Seat, id: string): Spot {
     space: spaceOf(room),
     anchor: door.outside,
     entry: [door.inside],
+    room: room.id,
   };
+  if (station) spot.station = station;
+  return spot;
 }
 
 const WALL_SEAT_STEP = 1;
@@ -625,7 +645,7 @@ function scatterSeat(room: RoomDef, n: number): Seat {
 }
 
 // Agent types that have a dedicated post inside their room. Keys are lower case.
-const STATIONS: Record<string, string> = {
+const STATIONS: Record<string, StationId> = {
   oracle: 'lunette',
   barbapapa: 'chevalet',
   hermione: 'relecture',
@@ -638,14 +658,21 @@ const STATIONS: Record<string, string> = {
   'claude-code-guide': 'sacristain',
 };
 
+/** A seat an agent may take, with its stable id and, for a dedicated post's seat, the post. */
+export interface Candidate {
+  id: string;
+  seat: Seat;
+  station?: StationId;
+}
+
 /** Candidate lists by room, then by station ('' for none). */
-const candidatesCache = new WeakMap<RoomDef, Map<string, readonly { id: string; seat: Seat }[]>>();
+const candidatesCache = new WeakMap<RoomDef, Map<string, readonly Candidate[]>>();
 
 /**
  * Seats an agent may take in a room, in order of preference: its own post, the shared
  * seats, then the standing places along the walls. Each comes with a stable id.
  */
-export function candidateSeats(room: RoomDef, agentType: string): readonly { id: string; seat: Seat }[] {
+export function candidateSeats(room: RoomDef, agentType: string): readonly Candidate[] {
   const key = agentType.toLowerCase();
   const station = Object.hasOwn(STATIONS, key) ? STATIONS[key] : undefined;
   // Cached by station, not by type: the types come from the server, the stations are few.
@@ -663,10 +690,10 @@ export function candidateSeats(room: RoomDef, agentType: string): readonly { id:
   return list;
 }
 
-function computeCandidates(room: RoomDef, station: string | undefined): { id: string; seat: Seat }[] {
+function computeCandidates(room: RoomDef, station: StationId | undefined): Candidate[] {
   const own = station ? (room.stations?.[station] ?? []) : [];
   return [
-    ...own.map((seat, i) => ({ id: `${room.id}:${station}:${i}`, seat })),
+    ...own.map((seat, i) => ({ id: `${room.id}:${station}:${i}`, seat, station })),
     ...room.seats.map((seat, i) => ({ id: `${room.id}:seat:${i}`, seat })),
     ...wallSeats(room).map((seat, i) => ({ id: `${room.id}:wall:${i}`, seat })),
   ];
@@ -712,11 +739,11 @@ export function queueSpot(rank: number): Spot {
       const facing = rank === 0 ? NORTH : faceTo(x, z, a.x, a.z);
       const door = doorOf(ALTAR_ROOM);
       if (i === 0) {
-        return { id, x, z, facing, kneel: rank === 0, space: 'autel', anchor: door.outside, entry: [door.inside] };
+        return { id, x, z, facing, kneel: rank === 0, space: 'autel', anchor: door.outside, entry: [door.inside], room: 'autel' };
       }
       // In the corridor: its own space, reached along the corridors. In the doorway: from the door.
       const anchor = onCorridor({ x, z }) ? { x, z } : door.outside;
-      return { id, x, z, facing, space: id, anchor, entry: [] };
+      return { id, x, z, facing, space: id, anchor, entry: [], room: 'autel' };
     }
     remaining -= len;
   }
@@ -772,7 +799,7 @@ export function assignSpots(agents: SeatRequest[], memory: SeatMemory): Map<stri
       const seatId = memory.get(a.id)!.seatId;
       const found = candidates.find((c) => c.id === seatId);
       if (found) {
-        spots.set(a.id, toSpot(room, found.seat, seatId));
+        spots.set(a.id, toSpot(room, found.seat, seatId, found.station));
         continue;
       }
       if (seatId.startsWith(`${room.id}:scatter:`)) {
@@ -781,7 +808,7 @@ export function assignSpots(agents: SeatRequest[], memory: SeatMemory): Map<stri
         continue;
       }
     }
-    let pick = candidates.find((c) => !taken.has(c.id));
+    let pick: Candidate | undefined = candidates.find((c) => !taken.has(c.id));
     if (!pick) {
       let n = scatterCount.get(room.id) ?? 0;
       while (taken.has(`${room.id}:scatter:${n}`)) n++;
@@ -790,7 +817,7 @@ export function assignSpots(agents: SeatRequest[], memory: SeatMemory): Map<stri
     }
     taken.add(pick.id);
     memory.set(a.id, { room: room.id, seatId: pick.id });
-    spots.set(a.id, toSpot(room, pick.seat, pick.id));
+    spots.set(a.id, toSpot(room, pick.seat, pick.id, pick.station));
   }
   return spots;
 }
