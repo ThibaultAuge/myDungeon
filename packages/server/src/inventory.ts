@@ -48,6 +48,15 @@ export interface Inventory {
   complete?: boolean;
   /** False when the presets file could not be read: the previous environments are kept. Defaults to true. */
   presetsOk?: boolean;
+  /** Agent types defined in `agents` folders. Absent: the previous ones are kept. */
+  definedAgents?: DefinedAgents;
+}
+
+export interface DefinedAgents {
+  /** From `~/.claude/agents/`. */
+  global: string[];
+  /** From `<folder>/.claude/agents/` of each environment's folders, by environment id. */
+  byEnv: Map<string, string[]>;
 }
 
 const presetSchema = z.object({
@@ -184,6 +193,96 @@ export function matchEnvironment(folders: string[], environments: Environment[])
   return best?.id ?? null;
 }
 
+/** Agent type names we accept from a definition: what Claude Code itself accepts, short. */
+const AGENT_NAME = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$/;
+/** Definitions read per folder, and bytes read per file: only the frontmatter matters. */
+const MAX_AGENT_FILES = 64;
+const AGENT_HEAD_BYTES = 4096;
+
+/**
+ * The `name:` of a definition's frontmatter, or undefined. The closing `---` may be missing
+ * when only the head of a long definition was read: the frontmatter then runs to the end.
+ */
+export function agentNameFromDefinition(text: string): string | undefined {
+  const fm = /^﻿?---\r?\n([\s\S]*?)(?:\r?\n---|$(?![\s\S]))/.exec(text);
+  if (!fm) return undefined;
+  const line = /^name:[ \t]*["']?([^"'\r\n]*?)["']?[ \t]*$/m.exec(fm[1]);
+  return line && AGENT_NAME.test(line[1]) ? line[1] : undefined;
+}
+
+function readHead(file: string): string {
+  const fd = fs.openSync(file, 'r');
+  try {
+    const buf = Buffer.alloc(AGENT_HEAD_BYTES);
+    const n = fs.readSync(fd, buf, 0, AGENT_HEAD_BYTES, 0);
+    return buf.subarray(0, n).toString('utf8');
+  } finally {
+    fs.closeSync(fd);
+  }
+}
+
+/**
+ * Agent types of an `agents` folder, or null when the folder exists but could not be
+ * listed (busy or sleeping drive): absence then proves nothing.
+ */
+function listAgentTypes(dir: string): string[] | null {
+  let entries: fs.Dirent[];
+  try {
+    entries = fs.readdirSync(dir, { withFileTypes: true });
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException).code;
+    return code === 'ENOENT' || code === 'ENOTDIR' ? [] : null;
+  }
+  const out: string[] = [];
+  for (const e of entries.filter((d) => d.isFile() && d.name.endsWith('.md')).slice(0, MAX_AGENT_FILES)) {
+    let name: string | undefined;
+    try {
+      name = agentNameFromDefinition(readHead(path.join(dir, e.name)));
+    } catch {
+      /* unreadable file: skipped */
+    }
+    if (name && !out.some((n) => n.toLowerCase() === name.toLowerCase())) out.push(name);
+  }
+  return out;
+}
+
+/**
+ * Agent types defined in an `agents` folder: the frontmatter `name:` of each `*.md` file.
+ * Like Claude Code, a file without a name in its frontmatter defines no agent. Only regular
+ * files directly in the folder are read, and only their head.
+ */
+export function readAgentTypes(dir: string): string[] {
+  return listAgentTypes(dir) ?? [];
+}
+
+/** How long a folder's agent list is reused before the folder is read again. */
+export const AGENTS_CACHE_MS = 60_000;
+
+/** Agent lists by folder, kept between inventory reads. */
+export type AgentsCache = Map<string, { at: number; types: string[] }>;
+
+/** Reads a folder's agents at most once per `AGENTS_CACHE_MS`; a failed read keeps the last list. */
+function cachedAgentTypes(dir: string, cache: AgentsCache | undefined, now: number): string[] {
+  const hit = cache?.get(dir);
+  if (hit && now - hit.at < AGENTS_CACHE_MS) return hit.types;
+  const types = listAgentTypes(dir) ?? hit?.types ?? [];
+  cache?.set(dir, { at: now, types });
+  return types;
+}
+
+/** Agent types defined globally and in each environment's folders. */
+function readDefinedAgents(
+  claudeHome: string,
+  environments: Environment[],
+  cache: AgentsCache | undefined,
+  now: number,
+): DefinedAgents {
+  const read = (dir: string) => cachedAgentTypes(dir, cache, now);
+  const byEnv = new Map<string, string[]>();
+  for (const env of environments) byEnv.set(env.id, env.folders.flatMap((f) => read(path.join(f, '.claude', 'agents'))));
+  return { global: read(path.join(claudeHome, 'agents')), byEnv };
+}
+
 function readJson(file: string): unknown {
   try {
     return JSON.parse(fs.readFileSync(file, 'utf8'));
@@ -209,10 +308,16 @@ function readArchivedIndex(dir: string): Set<string> {
 
 /**
  * Reads the whole local inventory. Only these files are ever opened: the presets file,
- * `local_*.json`, `archived-sessions.idx` and `~/.claude/sessions/<pid>.json`. Never
+ * `local_*.json`, `archived-sessions.idx`, `~/.claude/sessions/<pid>.json`, and the first
+ * 4 KB of the `*.md` agent definitions in `~/.claude/agents/` and `<env folder>/.claude/agents/`. Never
  * `config.json` (OAuth caches) nor the `*.key` peer tokens.
  */
-export function readInventory(paths: ClaudePaths, isAlive: (pid: number) => boolean = pidAlive): Inventory {
+export function readInventory(
+  paths: ClaudePaths,
+  isAlive: (pid: number) => boolean = pidAlive,
+  agentsCache?: AgentsCache,
+  now = Date.now(),
+): Inventory {
   const presetsRaw = paths.presetsFile ? readJson(paths.presetsFile) : undefined;
   const environments = parsePresets(presetsRaw);
 
@@ -249,5 +354,13 @@ export function readInventory(paths: ClaudePaths, isAlive: (pid: number) => bool
     /* no live folder yet */
   }
 
-  return { environments, desktopSessions, live, presentIds, complete, presetsOk: presetsRaw !== undefined };
+  return {
+    environments,
+    desktopSessions,
+    live,
+    presentIds,
+    complete,
+    presetsOk: presetsRaw !== undefined,
+    definedAgents: readDefinedAgents(paths.claudeHome, environments, agentsCache, now),
+  };
 }

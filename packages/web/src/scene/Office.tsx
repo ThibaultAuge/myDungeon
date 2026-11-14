@@ -1,4 +1,4 @@
-import { useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls, SoftShadows } from '@react-three/drei';
 import { NeutralToneMapping } from 'three';
@@ -9,10 +9,14 @@ import { useT } from '../i18n/useT.ts';
 import { useOffice } from '../store.ts';
 import { useNow } from '../useNow.ts';
 import { AgentFigure, agentPositions } from './AgentFigure.tsx';
-import { assignSpots, BOUNDS, type SeatMemory, type Spot } from './layout.ts';
+import { assignSpots, BOUNDS, SPAWN, type SeatMemory, type SeatRequest, type Spot } from './layout.ts';
 import { OfficeRooms } from './Room.tsx';
+import { inheritSeats, NEUTRAL_COLOR, restId, restingAgent, restingTypes, startOrigins } from './tavern.ts';
 
-/** Finished subagents stay in the tavern this long before leaving the scene. */
+/**
+ * Finished subagents leave the scene when they reach the tavern. This cap only hides the
+ * ones that never get there (a background tab renders no frame).
+ */
 const DONE_VISIBLE_MS = 3 * 60_000;
 
 /** Middle of the dungeon, where the camera looks at first. */
@@ -23,37 +27,73 @@ interface Placed {
   session: SessionView;
 }
 
-/** Agents shown in 3D: main agents of live sessions and their recent subagents. */
+/**
+ * Agents shown in 3D: main agents of live sessions and their recent subagents. The
+ * subagents of a session that just ended still walk back to the tavern.
+ */
 export function visibleAgents(sessions: SessionView[], now: number): Placed[] {
   const out: Placed[] = [];
   for (const s of sessions) {
-    if (!s.live) continue;
-    out.push({ agent: s.main, session: s });
+    if (s.live) out.push({ agent: s.main, session: s });
     for (const sub of s.subagents) {
+      if (!s.live && sub.state !== 'done') continue;
       if (sub.state !== 'done' || now - sub.since < DONE_VISIBLE_MS) out.push({ agent: sub, session: s });
     }
   }
   return out;
 }
 
-/** Keeps each agent on the same seat while it stays in a room; queues the waiting ones at the altar. */
-function useSpots(placed: Placed[]): Map<string, Spot> {
+/**
+ * Keeps each agent on the same seat while it stays in a room; queues the waiting ones at
+ * the altar. Resting figures sit in the tavern, where the agent of their type came back.
+ */
+function useSpots(placed: Placed[], resting: AgentView[], returned: AgentView[]): Map<string, Spot> {
   const memory = useRef<SeatMemory>(new Map());
-  const key = placed.map((p) => `${p.agent.id}@${p.agent.room}/${p.agent.state}/${p.agent.since}`).join('|');
+  // Resting figures first: they keep their seats when a main agent comes to rest.
+  const requests: SeatRequest[] = [...resting, ...placed.map((p) => p.agent)].map((agent) => ({
+    id: agent.id,
+    room: agent.room,
+    agentType: agent.agentType,
+    queued: agent.state === 'waiting' && agent.room === 'autel',
+    since: agent.since,
+  }));
+  const key = requests.map((r) => `${r.id}@${r.room}/${r.queued}/${r.since}`).join('|');
   return useMemo(
-    () =>
-      assignSpots(
-        placed.map(({ agent }) => ({
-          id: agent.id,
-          room: agent.room,
-          agentType: agent.agentType,
-          queued: agent.state === 'waiting' && agent.room === 'autel',
-          since: agent.since,
-        })),
+    () => {
+      inheritSeats(
         memory.current,
-      ),
+        resting.map((a) => a.agentType),
+        returned,
+      );
+      return assignSpots(requests, memory.current);
+    },
     [key], // eslint-disable-line react-hooks/exhaustive-deps
   );
+}
+
+/**
+ * Where each figure appearing now starts walking from: the seat of the resting figure of
+ * its type, the lockers, or its own spot. `AgentFigure` reads it on mount only.
+ */
+function useStarts(shown: AgentView[], resting: AgentView[], spots: Map<string, Spot>): Map<string, Spot> {
+  const mounted = useRef(new Set<string>());
+  const previous = useRef<{ resting: Set<string>; spots: Map<string, Spot> }>({ resting: new Set(), spots: new Map() });
+  // The first agents shown (page load, environment change) are already in place: nobody walks in.
+  const loaded = useRef(false);
+  const newcomers = shown.filter((a) => !mounted.current.has(a.id));
+  const origins = startOrigins(newcomers, previous.current.resting);
+  const starts = new Map<string, Spot>();
+  for (const a of loaded.current ? newcomers : []) {
+    const origin = origins.get(a.id);
+    if (origin === 'rest') starts.set(a.id, previous.current.spots.get(restId(a.agentType)) ?? SPAWN);
+    else if (origin === 'lockers') starts.set(a.id, SPAWN);
+  }
+  useEffect(() => {
+    mounted.current = new Set(shown.map((a) => a.id));
+    loaded.current = shown.length > 0 || resting.length > 0;
+    previous.current = { resting: new Set(resting.map((a) => a.agentType.toLowerCase())), spots };
+  });
+  return starts;
 }
 
 function CameraFollow({ selected }: { selected: string | null }) {
@@ -93,12 +133,26 @@ function SunLight() {
 
 export function OfficeScene() {
   const sessions = useOffice((s) => s.sessions);
+  const roster = useOffice((s) => s.roster);
   const selected = useOffice((s) => s.selectedAgentId);
   const select = useOffice((s) => s.select);
   const now = useNow();
   const { t } = useT();
-  const placed = visibleAgents(sessions, now);
-  const spots = useSpots(placed);
+  // Finished subagents that reached the tavern: they have left the scene.
+  const [arrived, setArrived] = useState<ReadonlySet<string>>(() => new Set());
+  const onArrive = useCallback((id: string) => setArrived((prev) => (prev.has(id) ? prev : new Set(prev).add(id))), []);
+  useEffect(() => {
+    // Keep only the ones the server still reports as finished: a resumed agent walks back again when it ends.
+    const ids = new Set(sessions.flatMap((s) => s.subagents.filter((a) => a.state === 'done').map((a) => a.id)));
+    setArrived((prev) => ([...prev].every((id) => ids.has(id)) ? prev : new Set([...prev].filter((id) => ids.has(id)))));
+  }, [sessions]);
+
+  const placed = visibleAgents(sessions, now).filter((p) => !(p.agent.state === 'done' && arrived.has(p.agent.id)));
+  const shown = placed.map((p) => p.agent);
+  const resting = restingTypes(roster, shown).map(restingAgent);
+  const returned = sessions.flatMap((s) => s.subagents.filter((a) => arrived.has(a.id)));
+  const spots = useSpots(placed, resting, returned);
+  const starts = useStarts(shown, resting, spots);
 
   return (
     <Canvas
@@ -112,15 +166,28 @@ export function OfficeScene() {
       <hemisphereLight args={['#fff6e8', '#8a8478', 1.6]} />
       <SunLight />
       <OfficeRooms />
+      {resting.map((agent) => (
+        <AgentFigure
+          key={agent.id}
+          agent={agent}
+          name={agent.agentType}
+          color={NEUTRAL_COLOR}
+          spot={spots.get(agent.id)!}
+          start={spots.get(agent.id)!}
+          selected={false}
+        />
+      ))}
       {placed.map(({ agent, session }) => (
         <AgentFigure
           key={agent.id}
           agent={agent}
           name={agentName(agent, session, t)}
-          color={sessionColor(session.main.id)}
+          color={agent.state === 'done' ? NEUTRAL_COLOR : sessionColor(session.main.id)}
           spot={spots.get(agent.id)!}
+          start={starts.get(agent.id) ?? spots.get(agent.id)!}
           selected={selected === agent.id}
           onSelect={select}
+          onArrive={agent.kind === 'sub' ? onArrive : undefined}
         />
       ))}
       <OrbitControls makeDefault target={CENTER} enableDamping maxPolarAngle={1.35} minDistance={8} maxDistance={80} />

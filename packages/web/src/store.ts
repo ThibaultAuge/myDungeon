@@ -36,6 +36,8 @@ interface OfficeStore {
   connected: boolean;
   environments: EnvironmentView[];
   sessions: SessionView[];
+  /** Agent types resting in the tavern of the shown environment. */
+  roster: string[];
   /** Server clock of the last snapshot, to compute elapsed times without client clock drift. */
   serverOffset: number;
   events: HookEventSummary[];
@@ -51,13 +53,14 @@ export const useOffice = create<OfficeStore>((set) => ({
   connected: false,
   environments: [],
   sessions: [],
+  roster: [],
   serverOffset: 0,
   events: [],
   selectedAgentId: null,
   lang: startLang,
   navigate(r) {
     history.pushState(null, '', routePath(r));
-    set({ route: r, sessions: [], selectedAgentId: null });
+    set({ route: r, sessions: [], roster: [], selectedAgentId: null });
     connect();
   },
   select(agentId) {
@@ -71,7 +74,7 @@ export const useOffice = create<OfficeStore>((set) => ({
 }));
 
 window.addEventListener('popstate', () => {
-  useOffice.setState({ route: parseRoute(location.pathname), sessions: [], selectedAgentId: null });
+  useOffice.setState({ route: parseRoute(location.pathname), sessions: [], roster: [], selectedAgentId: null });
   connect();
 });
 
@@ -89,6 +92,7 @@ function onMessage(msg: ServerMessage): void {
     useOffice.setState({
       sessions: msg.sessions,
       environments: msg.environments,
+      roster: msg.roster ?? [],
       serverOffset: msg.at - Date.now(),
       selectedAgentId: stillThere ? selected : null,
     });

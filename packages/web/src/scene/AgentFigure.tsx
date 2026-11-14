@@ -5,7 +5,7 @@ import { Vector3, type Group, type Mesh } from 'three';
 import type { AgentView } from '@agent-office/shared';
 import { STATE_COLORS } from '../format.ts';
 import { reducedMotion } from '../motion.ts';
-import { reroute, routeBetween, SPAWN, type Point, type Spot } from './layout.ts';
+import { reroute, routeBetween, type Point, type Spot } from './layout.ts';
 import { advance, nextSpeed, remainingDistance } from './walk.ts';
 
 /** Live positions of the figures, read by the camera to follow the selected agent. */
@@ -16,21 +16,25 @@ interface Props {
   name: string;
   color: string;
   spot: Spot;
+  /** Where the figure appears, read on mount only: the lockers, a resting seat, or its own spot. */
+  start: Spot;
   selected: boolean;
-  onSelect(id: string): void;
+  /** Absent for the resting figures, which cannot be selected. */
+  onSelect?(id: string): void;
+  /** Called once when a finished agent reaches its spot in the tavern. */
+  onArrive?(id: string): void;
 }
 
-export function AgentFigure({ agent, name, color, spot, selected, onSelect }: Props) {
+export function AgentFigure({ agent, name, color, spot, start, selected, onSelect, onArrive }: Props) {
   const group = useRef<Group>(null);
   const body = useRef<Mesh>(null);
   const ring = useRef<Mesh>(null);
   const bubble = useRef<Mesh>(null);
-  // Subagents come out of the tavern lockers and walk to their post; main agents start in place.
-  const start = agent.kind === 'sub' ? SPAWN : spot;
   const pos = useMemo(() => new Vector3(start.x, 0, start.z), []); // eslint-disable-line react-hooks/exhaustive-deps
-  const path = useRef<Point[]>(agent.kind === 'sub' ? routeBetween(SPAWN, spot) : []);
+  const path = useRef<Point[]>(start.id === spot.id ? [] : routeBetween(start, spot));
   const last = useRef<Spot>(spot);
   const speed = useRef(0);
+  const arrived = useRef(false);
 
   useEffect(() => {
     if (last.current.id === spot.id) return;
@@ -45,6 +49,15 @@ export function AgentFigure({ agent, name, color, spot, selected, onSelect }: Pr
       agentPositions.delete(agent.id);
     };
   }, [agent.id, pos]);
+
+  // A figure that leaves the scene while hovered gets no pointer-out: give the cursor back.
+  const hovered = useRef(false);
+  useEffect(
+    () => () => {
+      if (hovered.current) document.body.style.cursor = '';
+    },
+    [],
+  );
 
   useFrame(({ clock }, delta) => {
     const g = group.current;
@@ -63,6 +76,11 @@ export function AgentFigure({ agent, name, color, spot, selected, onSelect }: Pr
       walking = path.current.length > 0;
     } else {
       speed.current = 0;
+      // `last` catches up with `spot` in an effect: until then the agent has not set off yet.
+      if (onArrive && agent.state === 'done' && last.current.id === spot.id && !arrived.current) {
+        arrived.current = true;
+        onArrive(agent.id);
+      }
       // Shortest arc, so an agent never spins a full turn to face its desk.
       const diff = Math.atan2(Math.sin(spot.facing - g.rotation.y), Math.cos(spot.facing - g.rotation.y));
       g.rotation.y += diff * 0.1;
@@ -91,16 +109,31 @@ export function AgentFigure({ agent, name, color, spot, selected, onSelect }: Pr
     <group
       ref={group}
       scale={scale}
-      onClick={(e) => {
-        e.stopPropagation();
-        onSelect(agent.id);
-      }}
-      onPointerOver={() => (document.body.style.cursor = 'pointer')}
-      onPointerOut={() => (document.body.style.cursor = '')}
+      onClick={
+        onSelect &&
+        ((e) => {
+          e.stopPropagation();
+          onSelect(agent.id);
+        })
+      }
+      onPointerOver={
+        onSelect &&
+        (() => {
+          hovered.current = true;
+          document.body.style.cursor = 'pointer';
+        })
+      }
+      onPointerOut={
+        onSelect &&
+        (() => {
+          hovered.current = false;
+          document.body.style.cursor = '';
+        })
+      }
     >
       <mesh ref={body} position={[0, 0.65, 0]} castShadow>
         <capsuleGeometry args={[0.32, 0.6, 4, 12]} />
-        <meshLambertMaterial color={color} transparent={agent.state === 'done'} opacity={agent.state === 'done' ? 0.55 : 1} />
+        <meshLambertMaterial color={color} />
       </mesh>
       <mesh position={[0, 1.38, 0]} castShadow>
         <sphereGeometry args={[0.26, 16, 12]} />

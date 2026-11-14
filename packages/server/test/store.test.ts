@@ -35,7 +35,7 @@ describe('OfficeStore', () => {
    */
   it('sends an immediate snapshot on subscribe', () => {
     const { msgs } = collect(ENV_ALPHA.id);
-    expect(msgs).toEqual([{ type: 'snapshot', envId: ENV_ALPHA.id, sessions: [], environments: [], at: 1000 }]);
+    expect(msgs).toEqual([{ type: 'snapshot', envId: ENV_ALPHA.id, sessions: [], environments: [], roster: [], at: 1000 }]);
   });
 
   /**
@@ -184,5 +184,34 @@ describe('OfficeStore', () => {
     expect(snap.at).toBe(5000);
     expect(snap.sessions[0]).toMatchObject({ live: true, main: { state: 'working' } });
     expect(snap.environments.find((e) => e.id === ENV_ALPHA.id)?.activeSessions).toBe(1);
+  });
+
+  /**
+   * Verifies that the snapshot roster merges global, per-env and seen types for its environment
+   */
+  it('snapshot carries the roster of its environment', () => {
+    store.ingestInventory(
+      inventory({ definedAgents: { global: ['dexter'], byEnv: new Map([[ENV_ALPHA.id, ['neo']], ['env-beta', ['oracle']]]) } }),
+    );
+    store.ingestHook(hook('SubagentStart', { agent_id: 'ag-1', agent_type: 'Explore' }));
+    const roster = (envId: string) => (store.snapshot(envId) as Extract<ServerMessage, { type: 'snapshot' }>).roster;
+    expect(roster(ENV_ALPHA.id)).toEqual(['dexter', 'Explore', 'neo']);
+    expect(roster('env-beta')).toEqual(['dexter', 'oracle']);
+    expect(roster(NO_ENV)).toEqual(['dexter']);
+  });
+
+  /**
+   * Verifies that the batched broadcast after a new subagent type includes the updated roster
+   */
+  it('broadcasts the updated roster after a new subagent type', () => {
+    const { msgs } = collect(ENV_ALPHA.id);
+    store.ingestInventory(inventory());
+    vi.advanceTimersByTime(100);
+    msgs.length = 0;
+    store.ingestHook(hook('SubagentStart', { agent_id: 'ag-1', agent_type: 'hermione' }));
+    vi.advanceTimersByTime(100);
+    const snaps = snapshots(msgs) as Extract<ServerMessage, { type: 'snapshot' }>[];
+    expect(snaps).toHaveLength(1);
+    expect(snaps[0].roster).toEqual(['hermione']);
   });
 });
