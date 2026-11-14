@@ -11,7 +11,7 @@ export const en: Messages = {
   },
   home: {
     title: 'Choose a company',
-    intro: 'Each environment of the Claude app is an office, with its sessions and agents.',
+    intro: 'Each environment of the Claude app is a dungeon, with its sessions and agents.',
     activeSessions: (n: number) => plural('en', n, `${n} active session`, `${n} active sessions`),
     quiet: 'All quiet',
     empty: 'No environment found. Is the server running?',
@@ -33,8 +33,8 @@ export const en: Messages = {
     done: 'Done',
   },
   office: {
-    heading: (name: string) => `${name} office`,
-    canvas: '3D view of the office. Agents are also listed under “Active sessions”, and places under “Office places”.',
+    heading: (name: string) => `${name} dungeon`,
+    canvas: '3D view of the dungeon. Agents are also listed under “Active sessions”, and places under “Dungeon places”.',
     side: 'Agents and places',
   },
   state: {
@@ -251,7 +251,7 @@ export const en: Messages = {
     },
   },
   postList: {
-    title: 'Office places',
+    title: 'Dungeon places',
   },
   postCard: {
     who: 'Who works here',

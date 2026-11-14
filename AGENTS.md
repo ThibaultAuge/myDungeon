@@ -1,6 +1,6 @@
 # Agent Office
 
-3D office (React + react-three-fiber client, Fastify server) that shows Claude Code agents live.
+3D dungeon (React + react-three-fiber client, Fastify server) that shows Claude Code agents live.
 npm workspaces: `packages/server`, `packages/web`, `packages/shared`.
 
 ## Commands

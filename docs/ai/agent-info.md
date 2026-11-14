@@ -11,7 +11,7 @@ description: Use when changing the selected-agent details card (AgentInfo), sess
   Sections: state line; Session (name for subagents, origin desktop/terminal + running/ended,
   worktree yes/no + name, folder, branch "(from <source>)", model via `modelLabel`, effort
   and permission mode via `rawLabel` with raw fallback, started (desktop only: a cli
-  session's `createdAt` is when the office first saw it), activity = turns + active
+  session's `createdAt` is when the server first saw it), activity = turns + active
   subagents, Claude Code version, web servers as `http://localhost:<port>` links built
   client-side by `serverUrl`, new tab, plus process name); Agent (agent details, last
   message). Its slap button (keyboard route of the slap gag): `docs/ai/dungeon-scene.md`.

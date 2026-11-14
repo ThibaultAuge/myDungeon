@@ -17,7 +17,7 @@ export const fr = {
   },
   home: {
     title: 'Choisis une entreprise',
-    intro: 'Chaque environnement de l’app Claude est un bureau, avec ses sessions et ses agents.',
+    intro: 'Chaque environnement de l’app Claude est un donjon, avec ses sessions et ses agents.',
     activeSessions: (n: number) => plural('fr', n, `${n} session en cours`, `${n} sessions en cours`),
     quiet: 'Au calme',
     empty: 'Aucun environnement trouvé. Le serveur tourne-t-il ?',
@@ -39,8 +39,8 @@ export const fr = {
     done: 'Terminé',
   },
   office: {
-    heading: (name: string) => `Bureau ${name}`,
-    canvas: 'Vue 3D du bureau. Les agents sont aussi listés dans « Sessions en cours », et les lieux dans « Lieux du bureau ».',
+    heading: (name: string) => `Donjon ${name}`,
+    canvas: 'Vue 3D du donjon. Les agents sont aussi listés dans « Sessions en cours », et les lieux dans « Lieux du donjon ».',
     side: 'Agents et lieux',
   },
   state: {
@@ -259,7 +259,7 @@ export const fr = {
     },
   } satisfies Record<PostId, { title: string; role: string; who: string }>,
   postList: {
-    title: 'Lieux du bureau',
+    title: 'Lieux du donjon',
   },
   postCard: {
     who: 'Qui y travaille',

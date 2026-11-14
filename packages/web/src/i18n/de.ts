@@ -11,7 +11,7 @@ export const de: Messages = {
   },
   home: {
     title: 'Wähle ein Unternehmen',
-    intro: 'Jede Umgebung der Claude-App ist ein Büro, mit seinen Sitzungen und Agenten.',
+    intro: 'Jede Umgebung der Claude-App ist ein Verlies, mit seinen Sitzungen und Agenten.',
     activeSessions: (n: number) => plural('de', n, `${n} laufende Sitzung`, `${n} laufende Sitzungen`),
     quiet: 'Alles ruhig',
     empty: 'Keine Umgebung gefunden. Läuft der Server?',
@@ -33,8 +33,8 @@ export const de: Messages = {
     done: 'Fertig',
   },
   office: {
-    heading: (name: string) => `Büro ${name}`,
-    canvas: '3D-Ansicht des Büros. Die Agenten stehen auch unter „Laufende Sitzungen“, die Orte unter „Orte des Büros“.',
+    heading: (name: string) => `Verlies ${name}`,
+    canvas: '3D-Ansicht des Verlieses. Die Agenten stehen auch unter „Laufende Sitzungen“, die Orte unter „Orte des Verlieses“.',
     side: 'Agenten und Orte',
   },
   state: {
@@ -251,7 +251,7 @@ export const de: Messages = {
     },
   },
   postList: {
-    title: 'Orte des Büros',
+    title: 'Orte des Verlieses',
   },
   postCard: {
     who: 'Wer hier arbeitet',
