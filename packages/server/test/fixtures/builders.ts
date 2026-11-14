@@ -34,6 +34,7 @@ export function desk(overrides: Partial<DesktopSession> = {}): DesktopSession {
     archived: false,
     createdAt: 100,
     lastActivityAt: 200,
+    info: {},
     ...overrides,
   };
 }

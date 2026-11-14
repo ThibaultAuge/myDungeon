@@ -2204,3 +2204,162 @@ describe('tavern follow-ups: seen types of an absorbed cli session', () => {
     expect(rosterView(state, 'env-beta')).toEqual(['my-plugin:reviewer']);
   });
 });
+
+describe('agent info: session info, live pids and servers', () => {
+  const WT_CWD = 'C:/work/alpha/.claude/worktrees/wt-2';
+  /** Late enough that a session with no hook is not protected by HOOK_AUTHORITY_MS. */
+  const LATER = 10 * HOOK_AUTHORITY_MS;
+
+  /**
+   * Verifies that a session created by a hook starts with an empty context and no servers
+   */
+  it('starts a hook-created session with empty info and no servers', () => {
+    const state = stateWithEnvs();
+    const s = applyHook(state, hook('SessionStart'), 1000);
+    expect(s.info).toStrictEqual({});
+    expect(s.servers).toEqual([]);
+  });
+
+  /**
+   * Verifies that a desktop session without live process takes its context from the record as is
+   */
+  it('copies the desktop context of a session that is not running', () => {
+    const state = createState();
+    const info = { branch: 'claude/wt-1', sourceBranch: 'main', model: 'claude-opus-5-5', completedTurns: 3 };
+    applyInventory(state, inventory({ desktopSessions: [desk({ info })] }), 1);
+    expect(state.sessions.get(LOCAL_A)?.info).toStrictEqual(info);
+    expect(state.sessions.get(LOCAL_A)?.servers).toEqual([]);
+  });
+
+  /**
+   * Verifies that the Claude Code version of the hosting live process is added to the desktop context
+   */
+  it('adds the cli version of the host live process without mutating the record', () => {
+    const state = createState();
+    const info = { branch: 'main' };
+    applyInventory(state, inventory({ desktopSessions: [desk({ info })], live: [proc({ version: '2.3.1' })] }), 1);
+    expect(state.sessions.get(LOCAL_A)?.info).toStrictEqual({ branch: 'main', cliVersion: '2.3.1' });
+    expect(info).toStrictEqual({ branch: 'main' });
+  });
+
+  /**
+   * Verifies that a live process matched by cli session id (no host id) also gives version and pid
+   */
+  it('matches the live process through the cli session ids', () => {
+    const state = createState();
+    applyInventory(
+      state,
+      inventory({ desktopSessions: [desk()], live: [proc({ hostSessionId: undefined, pid: 5151, version: '2.4.0' })] }),
+      1,
+    );
+    expect(state.sessions.get(LOCAL_A)?.info).toStrictEqual({ cliVersion: '2.4.0' });
+    expect(state.livePids.get(LOCAL_A)).toBe(5151);
+  });
+
+  /**
+   * Verifies that a live process without version adds no cliVersion key
+   */
+  it('adds no cliVersion when the process has none', () => {
+    const state = createState();
+    applyInventory(state, inventory({ desktopSessions: [desk({ info: { effort: 'high' } })], live: [proc()] }), 1);
+    expect(state.sessions.get(LOCAL_A)?.info).toStrictEqual({ effort: 'high' });
+  });
+
+  /**
+   * Verifies that the desktop context follows the record on each inventory and loses the version once ended
+   */
+  it('refreshes the desktop context on each inventory', () => {
+    const state = createState();
+    applyInventory(state, inventory({ desktopSessions: [desk({ info: { completedTurns: 3 } })], live: [proc({ version: '2.3.1' })] }), 1);
+    applyInventory(state, inventory({ desktopSessions: [desk({ info: { completedTurns: 4 } })] }), LATER);
+    expect(state.sessions.get(LOCAL_A)?.info).toStrictEqual({ completedTurns: 4 });
+  });
+
+  /**
+   * Verifies that a terminal session in a git worktree is named after its folder, with its version
+   */
+  it('gives a terminal worktree session its folder name and version', () => {
+    const state = stateWithEnvs();
+    applyInventory(state, inventory({ live: [proc({ hostSessionId: undefined, cwd: WT_CWD, worktree: true, version: '2.3.1' })] }), 1);
+    const s = state.sessions.get(CLI_KEY)!;
+    expect(s.info).toStrictEqual({ worktree: { name: 'wt-2' }, cliVersion: '2.3.1' });
+    expect(state.livePids.get(CLI_KEY)).toBe(4242);
+  });
+
+  /**
+   * Verifies that a terminal session outside a worktree and without version has an empty context
+   */
+  it('gives a plain terminal session an empty context', () => {
+    const state = stateWithEnvs();
+    applyInventory(state, inventory({ live: [proc({ hostSessionId: undefined, cwd: WT_CWD, worktree: false })] }), 1);
+    expect(state.sessions.get(CLI_KEY)?.info).toStrictEqual({});
+  });
+
+  /**
+   * Verifies that a terminal session's context is replaced, not merged, on the next inventory
+   */
+  it('replaces the terminal context on each inventory', () => {
+    const state = stateWithEnvs();
+    applyInventory(state, inventory({ live: [proc({ hostSessionId: undefined, cwd: WT_CWD, worktree: true, version: '2.3.1' })] }), 1);
+    applyInventory(state, inventory({ live: [proc({ hostSessionId: undefined, cwd: WT_CWD, worktree: false, version: '2.4.0' })] }), 2);
+    expect(state.sessions.get(CLI_KEY)?.info).toStrictEqual({ cliVersion: '2.4.0' });
+  });
+
+  /**
+   * Verifies that only running sessions have a pid, refreshed and cleared on every inventory
+   */
+  it('refills livePids on every inventory', () => {
+    const state = createState();
+    applyInventory(
+      state,
+      inventory({ desktopSessions: [desk(), desk({ localId: LOCAL_B, cliSessionIds: [CLI_B] })], live: [proc()] }),
+      1,
+    );
+    expect([...state.livePids]).toEqual([[LOCAL_A, 4242]]);
+
+    // The process restarted under a new pid.
+    applyInventory(state, inventory({ desktopSessions: [desk()], live: [proc({ pid: 4343 })] }), 2);
+    expect(state.livePids.get(LOCAL_A)).toBe(4343);
+
+    applyInventory(state, inventory({ desktopSessions: [desk()] }), LATER);
+    expect(state.livePids.size).toBe(0);
+  });
+
+  /**
+   * Verifies that SessionEnd empties the servers of the session
+   */
+  it('empties the servers on SessionEnd', () => {
+    const state = stateWithEnvs();
+    const s = applyHook(state, hook('SessionStart'), 1000);
+    s.servers = [{ port: 5173, process: 'node' }];
+    applyHook(state, hook('SessionEnd'), 2000);
+    expect(s.live).toBe(false);
+    expect(s.servers).toEqual([]);
+  });
+
+  /**
+   * Verifies that a desktop session whose process disappeared loses its servers
+   */
+  it('empties the servers when a desktop session process ends', () => {
+    const state = createState();
+    applyInventory(state, inventory({ desktopSessions: [desk()], live: [proc()] }), 1);
+    const s = state.sessions.get(LOCAL_A)!;
+    s.servers = [{ port: 3000 }];
+    applyInventory(state, inventory({ desktopSessions: [desk()] }), LATER);
+    expect(s.live).toBe(false);
+    expect(s.servers).toEqual([]);
+  });
+
+  /**
+   * Verifies that a terminal session whose process disappeared loses its servers
+   */
+  it('empties the servers when a terminal session process ends', () => {
+    const state = stateWithEnvs();
+    applyInventory(state, inventory({ live: [proc({ hostSessionId: undefined })] }), 1);
+    const s = state.sessions.get(CLI_KEY)!;
+    s.servers = [{ port: 8080, process: 'python' }];
+    applyInventory(state, inventory(), LATER);
+    expect(s.live).toBe(false);
+    expect(s.servers).toEqual([]);
+  });
+});

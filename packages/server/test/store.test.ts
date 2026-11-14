@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ServerMessage } from '@agent-office/shared';
 import { OfficeStore } from '../src/store.ts';
 import { DONE_SUBAGENT_TTL_MS } from '../src/reducer.ts';
-import { CLI_A, ENV_ALPHA, desk, hook, inventory, proc } from './fixtures/builders.ts';
+import { CLI_A, CLI_B, ENV_ALPHA, LOCAL_A, LOCAL_B, desk, hook, inventory, proc } from './fixtures/builders.ts';
 
 const NO_ENV = 'hors-environnement';
 
@@ -213,5 +213,157 @@ describe('OfficeStore', () => {
     const snaps = snapshots(msgs) as Extract<ServerMessage, { type: 'snapshot' }>[];
     expect(snaps).toHaveLength(1);
     expect(snaps[0].roster).toEqual(['hermione']);
+  });
+});
+
+describe('OfficeStore: web servers', () => {
+  const CLI_C = 'cccccccc-0000-4000-8000-000000000003';
+  const BETA_DESK = { localId: LOCAL_B, cliSessionIds: [CLI_B], cwd: 'C:\\work\\beta', matchFolders: ['C:\\work\\beta'] };
+  let store: OfficeStore;
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    store = new OfficeStore(() => 1000);
+  });
+
+  afterEach(() => {
+    store.close();
+    vi.useRealTimers();
+  });
+
+  type Snapshot = Extract<ServerMessage, { type: 'snapshot' }>;
+
+  /** Alpha running (pid 4242), Beta ended; pending broadcasts flushed and the subscriber's messages cleared. */
+  function setup() {
+    store.ingestInventory(inventory({ desktopSessions: [desk(), desk(BETA_DESK)], live: [proc()] }));
+    const msgs: ServerMessage[] = [];
+    store.subscribe({ envId: ENV_ALPHA.id, send: (m) => msgs.push(m) });
+    vi.advanceTimersByTime(100);
+    msgs.length = 0;
+    const snaps = () => msgs.filter((m): m is Snapshot => m.type === 'snapshot');
+    return { msgs, snaps };
+  }
+
+  /**
+   * Verifies that only live sessions are scan targets, with their Claude pid and declared ports
+   */
+  it('portTargets lists live sessions with pid and launch ports', () => {
+    store.ingestInventory(inventory({ desktopSessions: [desk(), desk(BETA_DESK)], live: [proc()] }));
+    // A terminal session known only from a hook: live, no folder, no pid.
+    store.ingestHook(hook('SessionStart', { session_id: CLI_C, cwd: undefined }));
+    const asked: string[] = [];
+    const targets = store.portTargets((cwd) => {
+      asked.push(cwd);
+      return [5173];
+    });
+    expect(targets).toEqual([
+      { sessionId: LOCAL_A, cwd: 'C:\\work\\alpha', pid: 4242, launchPorts: [5173] },
+      { sessionId: `cli:${CLI_C}`, cwd: '', pid: undefined, launchPorts: [] },
+    ]);
+    expect(asked).toEqual(['C:\\work\\alpha']);
+  });
+
+  /**
+   * Verifies that without a live session there is no target and launch.json is never read
+   */
+  it('portTargets is empty without live session', () => {
+    store.ingestInventory(inventory({ desktopSessions: [desk(BETA_DESK)] }));
+    const asked: string[] = [];
+    expect(store.portTargets((cwd) => (asked.push(cwd), []))).toEqual([]);
+    expect(asked).toEqual([]);
+  });
+
+  /**
+   * Verifies that new servers are stored on the live session and broadcast in the next snapshot
+   */
+  it('ingestServers stores the servers and broadcasts them', () => {
+    const { snaps } = setup();
+    store.ingestServers(new Map([[LOCAL_A, [{ port: 5173, process: 'node' }]]]));
+    expect(store.state.sessions.get(LOCAL_A)?.servers).toEqual([{ port: 5173, process: 'node' }]);
+    vi.advanceTimersByTime(100);
+    expect(snaps()).toHaveLength(1);
+    expect(snaps()[0].sessions.find((s) => s.id === LOCAL_A)?.servers).toEqual([{ port: 5173, process: 'node' }]);
+  });
+
+  /**
+   * Verifies that an identical result (new objects, same content) triggers no broadcast
+   */
+  it('ingestServers does not broadcast an unchanged result', () => {
+    const { snaps } = setup();
+    store.ingestServers(new Map([[LOCAL_A, [{ port: 5173, process: 'node' }]]]));
+    vi.advanceTimersByTime(100);
+    expect(snaps()).toHaveLength(1);
+    store.ingestServers(new Map([[LOCAL_A, [{ port: 5173, process: 'node' }]]]));
+    vi.advanceTimersByTime(500);
+    expect(snaps()).toHaveLength(1);
+  });
+
+  /**
+   * Verifies that an empty result changes nothing and broadcasts nothing when no session had servers
+   */
+  it('ingestServers stays silent for an empty result on sessions without servers', () => {
+    const { snaps } = setup();
+    store.ingestServers(new Map());
+    vi.advanceTimersByTime(500);
+    expect(snaps()).toEqual([]);
+  });
+
+  /**
+   * Verifies that a server that stopped is removed and the removal broadcast
+   */
+  it('ingestServers removes servers missing from the result', () => {
+    const { snaps } = setup();
+    // Snapshots share the live session objects (a real client gets them serialised): read each one when it is sent.
+    const seen: unknown[] = [];
+    const last = () => seen.push(structuredClone(snaps().at(-1)?.sessions.find((s) => s.id === LOCAL_A)?.servers));
+    store.ingestServers(new Map([[LOCAL_A, [{ port: 5173 }, { port: 8080 }]]]));
+    vi.advanceTimersByTime(100);
+    last();
+    store.ingestServers(new Map([[LOCAL_A, [{ port: 8080 }]]]));
+    vi.advanceTimersByTime(100);
+    last();
+    store.ingestServers(new Map());
+    vi.advanceTimersByTime(100);
+    last();
+    expect(snaps()).toHaveLength(3);
+    expect(seen).toEqual([
+      [{ port: 5173 }, { port: 8080 }],
+      [{ port: 8080 }],
+      [],
+    ]);
+  });
+
+  /**
+   * Verifies that servers given for a session that is not running are ignored
+   */
+  it('ingestServers never gives servers to a session that is not live', () => {
+    const { snaps } = setup();
+    store.ingestServers(new Map([[LOCAL_B, [{ port: 3000 }]]]));
+    expect(store.state.sessions.get(LOCAL_B)?.servers).toEqual([]);
+    vi.advanceTimersByTime(500);
+    expect(snaps()).toEqual([]);
+  });
+
+  /**
+   * Verifies that stale servers left on an ended session are cleared and the change broadcast
+   */
+  it('ingestServers clears stale servers of an ended session', () => {
+    const { snaps } = setup();
+    store.state.sessions.get(LOCAL_B)!.servers = [{ port: 3000 }];
+    store.ingestServers(new Map([[LOCAL_B, [{ port: 3000 }]]]));
+    expect(store.state.sessions.get(LOCAL_B)?.servers).toEqual([]);
+    vi.advanceTimersByTime(100);
+    expect(snaps()).toHaveLength(1);
+  });
+
+  /**
+   * Verifies that servers attributed to an unknown session id are ignored
+   */
+  it('ingestServers ignores unknown session ids', () => {
+    const { snaps } = setup();
+    store.ingestServers(new Map([['local_unknown', [{ port: 3000 }]]]));
+    expect([...store.state.sessions.keys()]).not.toContain('local_unknown');
+    vi.advanceTimersByTime(500);
+    expect(snaps()).toEqual([]);
   });
 });

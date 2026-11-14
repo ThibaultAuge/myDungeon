@@ -3,8 +3,12 @@ import { describe, expect, it } from 'vitest';
 import {
   agentName,
   ago,
+  branchLabel,
   elapsed,
   envName,
+  modelLabel,
+  rawLabel,
+  serverUrl,
   sessionTitle,
   stateLabel,
   STATE_COLORS,
@@ -42,6 +46,8 @@ function session(overrides: Partial<SessionView> = {}): SessionView {
     cwd: 'C:\\work\\alpha',
     live: true,
     archived: false,
+    info: {},
+    servers: [],
     createdAt: 0,
     lastActivityAt: 0,
     main,
@@ -312,5 +318,160 @@ describe('agentName', () => {
    */
   it('uses the agent type for a subagent', () => {
     expect(agentName(agent({ kind: 'sub', agentType: 'Explore' }), session({ title: null }), MESSAGES.fr)).toBe('Explore');
+  });
+});
+
+describe('serverUrl', () => {
+  /**
+   * Verifies that a valid port gives a localhost link
+   */
+  it.each([
+    [5173, 'http://localhost:5173'],
+    [1, 'http://localhost:1'],
+    [65535, 'http://localhost:65535'],
+  ])('maps port %d to %s', (port, expected) => {
+    expect(serverUrl(port)).toBe(expected);
+  });
+
+  /**
+   * Verifies that zero, negative, fractional, out-of-range or non-finite ports give no link
+   */
+  it.each([[0], [-1], [65536], [3000.5], [Number.NaN], [Number.POSITIVE_INFINITY]])('gives no link for port %d', (port) => {
+    expect(serverUrl(port)).toBeUndefined();
+  });
+});
+
+describe('modelLabel', () => {
+  /**
+   * Verifies that a dated model id drops its date
+   */
+  it('drops the date of a dated model id', () => {
+    expect(modelLabel('claude-haiku-4-5-20251001')).toBe('Haiku 4.5');
+  });
+
+  /**
+   * Verifies that a Claude model id becomes its family and version, any suffix kept
+   */
+  it.each([
+    ['claude-opus-5-5', 'Opus 5.5'],
+    ['claude-sonnet-4-6', 'Sonnet 4.6'],
+    ['claude-haiku-5-0', 'Haiku 5.0'],
+    ['claude-sonnet-5-5[1m]', 'Sonnet 5.5 [1m]'],
+  ])('maps %s to %s', (model, expected) => {
+    expect(modelLabel(model)).toBe(expected);
+  });
+
+  /**
+   * Verifies that ids not following the claude-family-major-minor form are shown as they are
+   */
+  it.each([['fake-model'], ['claude-opus'], ['claude-opus-5'], ['Claude-Opus-5-5'], ['opus'], ['claude--5-5'], ['']])(
+    'keeps %j raw',
+    (model) => {
+      expect(modelLabel(model)).toBe(model);
+    },
+  );
+});
+
+describe('rawLabel', () => {
+  /**
+   * Verifies that known effort levels and permission modes are translated
+   */
+  it.each([
+    ['fr', 'high', 'efforts', 'élevé'],
+    ['de', 'xhigh', 'efforts', 'sehr hoch'],
+    ['en', 'medium', 'efforts', 'medium'],
+    ['fr', 'plan', 'permissionModes', 'Mode plan'],
+    ['de', 'bypassPermissions', 'permissionModes', 'Ohne Prüfung'],
+    ['en', 'default', 'permissionModes', 'Ask every time'],
+  ] as [Lang, string, 'efforts' | 'permissionModes', string][])('%s %s (%s) → %s', (lang, raw, table, expected) => {
+    expect(rawLabel(raw, MESSAGES[lang].info[table])).toBe(expected);
+  });
+
+  /**
+   * Verifies that a value unknown to this version falls back to the raw value
+   */
+  it('falls back to the raw value for an unknown key', () => {
+    expect(rawLabel('ultra', MESSAGES.fr.info.efforts)).toBe('ultra');
+    expect(rawLabel('dontAsk', MESSAGES.de.info.permissionModes)).toBe('dontAsk');
+  });
+
+  /**
+   * Verifies that inherited Object properties are never used as labels
+   */
+  it.each([['toString'], ['__proto__'], ['constructor'], ['hasOwnProperty'], ['valueOf']])('falls back to raw for %s', (raw) => {
+    expect(rawLabel(raw, MESSAGES.en.info.efforts)).toBe(raw);
+    expect(rawLabel(raw, MESSAGES.fr.info.permissionModes)).toBe(raw);
+  });
+});
+
+describe('branchLabel', () => {
+  /**
+   * Verifies that no branch gives no label, even with a source branch
+   */
+  it('returns undefined without a branch', () => {
+    expect(branchLabel({}, MESSAGES.en)).toBeUndefined();
+    expect(branchLabel({ sourceBranch: 'main' }, MESSAGES.en)).toBeUndefined();
+    expect(branchLabel({ branch: '' }, MESSAGES.en)).toBeUndefined();
+  });
+
+  /**
+   * Verifies that a branch alone, or equal to its source, is shown bare
+   */
+  it('shows the branch alone when there is no distinct source', () => {
+    expect(branchLabel({ branch: 'main' }, MESSAGES.fr)).toBe('main');
+    expect(branchLabel({ branch: 'main', sourceBranch: 'main' }, MESSAGES.fr)).toBe('main');
+    expect(branchLabel({ branch: 'claude/wt-1', sourceBranch: '' }, MESSAGES.fr)).toBe('claude/wt-1');
+  });
+
+  /**
+   * Verifies that a branch cut from another one names its source in each language
+   */
+  it.each([
+    ['fr', 'claude/wt-1 (depuis main)'],
+    ['de', 'claude/wt-1 (von main)'],
+    ['en', 'claude/wt-1 (from main)'],
+  ] as [Lang, string][])('names the source branch in %s', (lang, expected) => {
+    expect(branchLabel({ branch: 'claude/wt-1', sourceBranch: 'main' }, MESSAGES[lang])).toBe(expected);
+  });
+});
+
+describe('info plurals', () => {
+  /**
+   * Verifies that completed turns use each language's singular and plural forms
+   */
+  it.each([
+    ['fr', 0, '0 tour'],
+    ['fr', 1, '1 tour'],
+    ['fr', 2, '2 tours'],
+    ['de', 0, '0 Runden'],
+    ['de', 1, '1 Runde'],
+    ['de', 2, '2 Runden'],
+    ['en', 0, '0 turns'],
+    ['en', 1, '1 turn'],
+    ['en', 2, '2 turns'],
+  ] as [Lang, number, string][])('%s turns(%d) → %s', (lang, n, expected) => {
+    expect(MESSAGES[lang].info.turns(n)).toBe(expected);
+  });
+
+  /**
+   * Verifies that active subagent counts use each language's singular and plural forms
+   */
+  it.each([
+    ['fr', 1, '1 sous-agent actif'],
+    ['fr', 3, '3 sous-agents actifs'],
+    ['de', 1, '1 aktiver Subagent'],
+    ['de', 3, '3 aktive Subagents'],
+    ['en', 1, '1 active subagent'],
+    ['en', 3, '3 active subagents'],
+  ] as [Lang, number, string][])('%s activeSubagents(%d) → %s', (lang, n, expected) => {
+    expect(MESSAGES[lang].info.activeSubagents(n)).toBe(expected);
+  });
+
+  /**
+   * Verifies that every language translates the same effort levels and permission modes
+   */
+  it.each(['de', 'en'] as const)('%s labels the same efforts and permission modes as French', (lang) => {
+    expect(Object.keys(MESSAGES[lang].info.efforts).sort()).toEqual(Object.keys(MESSAGES.fr.info.efforts).sort());
+    expect(Object.keys(MESSAGES[lang].info.permissionModes).sort()).toEqual(Object.keys(MESSAGES.fr.info.permissionModes).sort());
   });
 });
