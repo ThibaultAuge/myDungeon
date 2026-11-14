@@ -83,7 +83,7 @@ couloirs : les agents circulent par là pour aller d'une pièce à l'autre.
 
 | Lieu | Ancien nom | Postes | Activité | Qui y travaille |
 |---|---|---|---|---|
-| **Autel des requêtes** (centre) | Accueil | Pupitre-autel, allée pour la file d'attente | Implorer l'humain : permission, question, prompt suivant | Tout agent en attente |
+| **Autel des requêtes** (centre) | Accueil | Pupitre-autel, allée pour la file d'attente | Implorer l'humain : permission, question, erreur | Tout agent qui a besoin de l'humain |
 | **Salle des cartes** | Salle de planification | Grande table couverte de cartes, globe | Explorer le besoin, concevoir, écrire le plan | Agent principal en exploration, Plan |
 | **Atelier** | Atelier | Établis, outils, coin de l'enlumineur avec chevalet | Écrire et modifier le code, découper des maquettes | Agent principal en réalisation, general-purpose, fork, Barbapapa |
 | **Bibliothèque** | Bibliothèque | Rayonnages de grimoires, tables de lecture | Lire et chercher dans le code local | Explore, agent principal quand il lit |
@@ -97,14 +97,16 @@ couloirs : les agents circulent par là pour aller d'une pièce à l'autre.
 | **Coin détente** | Coin brainstorming | Banquettes, jeu de dés, mur d'affiches | Idées décalées | Butt Stallion |
 | **Scriptorium** (dans la Bibliothèque) | Salle de rédaction | Pupitres de copistes | Documentation | Curator (pour les IA), Otis (pour les humains) |
 | **Réduit du concierge** | Local d'entretien | Balais, seaux, chariot | Base de Hancock, qui fait des tournées dans l'Atelier | Hancock |
-| **Taverne** | Salle de repos | Grandes tables, cheminée, tonneaux, casiers | Agents disponibles, sans tâche | Un exemplaire de chaque type d'agent |
+| **Taverne** | Salle de repos | Grandes tables, cheminée, tonneaux, casiers | Agents disponibles, sans tâche | Un exemplaire de chaque type d'agent, et l'agent principal en attente de ton prochain prompt |
 
 ### L'autel et la file d'attente
 
-Les agents qui attendent l'humain viennent devant l'autel. Plutôt que de s'agglutiner,
-ils **se mettent en file**, les uns derrière les autres dans l'allée :
+Les agents qui ont besoin de l'humain (permission, question, erreur) viennent devant l'autel.
+Un agent qui attend seulement ton prochain prompt reste à la taverne. Plutôt que de
+s'agglutiner, les agents de l'autel **se mettent en file**, les uns derrière les autres
+dans l'allée :
 
-- le **premier** de la file est à genoux devant l'autel, avec la bulle ambre de sa
+- le **premier** de la file est à genoux devant l'autel, avec la bulle rouge de sa
   demande ;
 - les **suivants** attendent debout derrière lui, par ordre d'arrivée (le plus ancien en
   tête) ;
@@ -138,26 +140,39 @@ Deux agents ne se tiennent jamais au même endroit.
 
 ### La taverne et le cycle de vie d'un agent
 
-La taverne remplace la « pause café » du plan initial. Elle montre l'équipe disponible
-même quand rien ne tourne.
+La taverne montre l'équipe disponible, même quand rien ne tourne.
 
-1. **Au repos.** Elle contient **un seul exemplaire de chaque type** d'agent spécialisé :
-   une Hermione, un Dexter, un Turing… Ils ont une couleur neutre, puisqu'ils ne
-   travaillent pour aucune session.
-2. **Appel.** Quand une session lance une Hermione, celle de la taverne se lève, prend la
-   couleur de la session et va à son poste.
+1. **Au repos.** Elle contient **un seul exemplaire de chaque type** d'agent connu de
+   l'environnement affiché : une Hermione, un Dexter, un Turing… Ils ont une couleur
+   neutre, puisqu'ils ne travaillent pour aucune session. Un exemplaire au repos ne se
+   sélectionne pas.
+2. **Appel.** Quand une session lance un sous-agent de ce type, l'exemplaire de la
+   taverne se lève, prend la couleur de la session et va à son poste.
 3. **Appels simultanés.** Si deux ou trois Hermione sont lancées en même temps (même
-   session ou sessions différentes), les exemplaires manquants sont créés : ils sortent
-   des casiers et partent chacun vers une place libre de la Salle des épreuves.
-4. **Fin de tâche.** Chaque Hermione qui a fini revient à la taverne et reprend la
-   couleur neutre. Les exemplaires en trop disparaissent en arrivant (retour au casier) :
-   on redescend toujours à une seule Hermione au repos.
+   session ou sessions différentes), les exemplaires manquants sortent des casiers et
+   partent chacun vers une place libre de la Salle des épreuves.
+4. **Fin de tâche.** Le sous-agent qui a fini reprend la couleur neutre et retourne à la
+   taverne. Il disparaît en arrivant. Le type reprend alors une seule figure au repos, sur
+   la place occupée par le dernier agent revenu. Quand une session se termine, ses
+   sous-agents retournent aussi à la taverne.
+5. **Chargement de la page.** Les agents déjà au travail apparaissent directement à leur
+   poste. Personne ne sort des casiers.
 
-À décider : quels types sont présents au repos. Proposition : les agents globaux de
-`~/.claude/agents/`, plus ceux du `.claude/agents/` de l'environnement affiché. Les
-agents intégrés (Explore, general-purpose…) n'y apparaissent qu'à leur premier appel,
-sinon la taverne serait encombrée. L'agent principal n'y va jamais : il représente la
-session elle-même. Quand elle attend ton prochain prompt, il fait la queue à l'autel.
+**Liste des types au repos.** Elle regroupe :
+
+- les agents définis dans `~/.claude/agents/` et dans le `.claude/agents/` des dossiers de
+  l'environnement affiché. Un fichier ne compte que si son en-tête contient un champ
+  `name:`, comme dans Claude Code ;
+- les types vus au travail dans cet environnement. Les agents intégrés (Explore,
+  general-purpose…) y entrent à leur premier appel, et y restent jusqu'au redémarrage du
+  serveur.
+
+Les dossiers sont relus au plus une fois par minute.
+
+**L'agent principal fait exception.** Il représente la session elle-même. Quand elle
+attend ton prochain prompt, il se repose à la taverne, dans la couleur de sa session, avec
+une bulle ambre. Il ne fait la queue à l'autel que pour une permission, une question ou une
+erreur.
 
 ## Les personnages
 
@@ -170,6 +185,8 @@ coordonne les autres. Il a deux tenues selon la phase de travail :
 |---|---|---|---|
 | **Exploration et planification** | Dora l'exploratrice | Éclaireuse cartographe : sac à dos, carte dépliée, longue-vue | Salle des cartes, Bibliothèque |
 | **Réalisation et coordination** | Bob le bricoleur | Maître d'œuvre de chantier : tablier de cuir, marteau, plan roulé sous le bras | Atelier, Salle des machines |
+
+Quand il attend ton prochain prompt, il se repose à la taverne (voir plus bas).
 
 À vérifier : les événements de hook portent un champ `permission_mode` (`plan` en mode
 plan). Il devrait suffire pour choisir la tenue, mais ce n'est pas encore testé.
@@ -230,7 +247,7 @@ dans son `.claude/agents/`, et les plugins en ajoutent.
 
 ## État de l'implémentation
 
-*Mis à jour le 2026-11-13.*
+*Mis à jour le 2026-11-14.*
 
 Fait :
 
@@ -241,12 +258,13 @@ Fait :
 - le tableau outil → pièce et les postes attitrés des agents spécialisés
   (`packages/server/src/reducer.ts`) ;
 - les places par pièce, les postes attitrés, le débordement le long des murs ;
-- la file d'attente à l'autel ;
-- la taverne comme point d'apparition et de retour des sous-agents.
+- la file d'attente à l'autel, réservée aux permissions, questions et erreurs ;
+- le cycle de vie de la taverne : un exemplaire neutre de chaque type au repos, appel, appels
+  simultanés depuis les casiers, retour et disparition, et l'agent principal au repos pendant
+  l'attente d'un prompt.
 
 Reste à faire :
 
-- le cycle de vie complet de la taverne (un exemplaire neutre de chaque type au repos) ;
 - les silhouettes par type d'agent ;
 - la tenue de l'agent principal selon le mode plan (`permission_mode`, toujours à vérifier) ;
 - les badges de skills.

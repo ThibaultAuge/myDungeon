@@ -60,7 +60,10 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cuta
 - New decor must not cover seats or a door entry (tested in `dungeon.test.ts`).
 - Preview: `.claude/launch.json` entry `agent-office-web` runs Vite dev on 5173, proxying to
   the test server on 4778. `agent-office` / `agent-office-test` serve `packages/web/dist`,
-  which needs `npm run build` first.
+  which needs `npm run build` first. Previewing from a worktree with fake hooks:
+  `docs/ai/agent-lifecycle.md`.
+- Where figures rest, wait, appear and leave (tavern, altar, roster):
+  `docs/ai/agent-lifecycle.md`.
 
 ## Notes
 - The import script rejects unsafe names, `..` paths, symlinks, glTF extensions (Draco /
