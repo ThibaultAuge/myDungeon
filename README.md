@@ -21,7 +21,7 @@ Un petit bureau en 3D où chaque agent Claude Code du poste local est un personn
   - Ambre : il attend ton prochain message. La bulle devient rouge quand il attend ta permission ou ta réponse, ou qu'il est bloqué par une erreur.
   - Gris : il a terminé. Il reste immobile, en pose calme.
 - **Les sous-agents** apparaissent comme des collègues de la même couleur que leur session. Ils surgissent du sol à leur arrivée.
-- **Des personnages animés** (pack KayKit Adventurers 2.0) : un chevalier pour l'agent principal, un voyou encapuchonné pour les sous-agents.
+- **Des personnages animés** (pack KayKit Adventurers 2.0) : un chevalier pour l'agent principal, et pour chaque type de sous-agent une tenue de son rôle (barbare, mage, rôdeur, voleur, voleur encapuchonné) avec un objet en main. Tous les agents d'un même type se ressemblent, y compris au repos à la taverne. La liste complète est dans [docs/lieux-et-personnages.md](docs/lieux-et-personnages.md).
   - Ils marchent ou courent entre les pièces, et font une animation de travail quand ils travaillent.
   - En attente, ils regardent autour d'eux, la bulle d'attente restant affichée. Le premier de la file s'agenouille devant l'autel.
   - Chaque personnage a un disque au sol de la couleur de sa session, et le bord de son étiquette porte cette même couleur. L'étiquette du personnage sélectionné a un contour bleu et du texte en gras.
@@ -165,7 +165,6 @@ npm run typecheck
 
 ## Limites et suite
 
-- Tous les sous-agents portent le même modèle (Rogue_Hooded). Les silhouettes propres à chaque type d'agent (Hermione, Dexter…) restent à faire.
 - La scène fait environ 700 appels de dessin par image, ombres comprises : les meubles ne sont pas encore regroupés en instances. Des assets Unreal ne seraient utilisables que si leur licence Fab autorise un usage hors Unreal Engine.
 - Répondre aux agents depuis la 3D (permission, question) fera l'objet d'une phase distincte, qui demandera une authentification forte du serveur. Envoyer un prompt libre à une session déjà ouverte n'a pas encore de solution officielle.
 - Le plan complet se trouve dans [plans/plan-agent-office-2026-11-13.md](plans/plan-agent-office-2026-11-13.md).

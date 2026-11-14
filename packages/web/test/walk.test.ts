@@ -5,6 +5,7 @@ import {
   CRUISE_SPEED,
   MIN_SPEED,
   advance,
+  approach,
   nextSpeed,
   remainingDistance,
   turnToward,
@@ -301,6 +302,132 @@ describe('advance', () => {
     advance(pos, path, 2);
     expect(posRef.z).toBeCloseTo(1, 9);
     expect(pathRef).toHaveLength(1);
+  });
+});
+
+describe('approach', () => {
+  /** Verifies that a value below its target rises by exactly the step */
+  it('moves up by the step when below the target', () => {
+    expect(approach(0, 1, 0.25)).toBe(0.25);
+    expect(approach(0.2, 1, 0.3)).toBeCloseTo(0.5, 12);
+    expect(approach(-10, 10, 4)).toBe(-6);
+  });
+
+  /** Verifies that a value above its target falls by exactly the step */
+  it('moves down by the step when above the target', () => {
+    expect(approach(1, 0, 0.25)).toBe(0.75);
+    expect(approach(0.8, 0, 0.3)).toBeCloseTo(0.5, 12);
+    expect(approach(10, -10, 4)).toBe(6);
+  });
+
+  /** Verifies that a step larger than the gap stops on the target from below */
+  it.each([
+    [0.9, 1, 0.5],
+    [0, 1, 1.5],
+    [0, 1, 100],
+    [0.4, 1, Infinity],
+    [-3, 2.5, 7],
+  ])('clamps on the target from below (%d -> %d, step %d)', (value, target, step) => {
+    expect(approach(value, target, step)).toBe(target);
+  });
+
+  /** Verifies that a step larger than the gap stops on the target from above */
+  it.each([
+    [0.1, 0, 0.5],
+    [1, 0, 1.5],
+    [1, 0, 100],
+    [0.6, 0, Infinity],
+    [9, -2.5, 20],
+  ])('clamps on the target from above (%d -> %d, step %d)', (value, target, step) => {
+    expect(approach(value, target, step)).toBe(target);
+  });
+
+  /** Verifies that a step exactly equal to the gap lands on the target */
+  it('lands on the target when the step equals the gap', () => {
+    expect(approach(0, 1, 1)).toBe(1);
+    expect(approach(1, 0, 1)).toBe(0);
+  });
+
+  /**
+   * Verifies that a value already on its target stays put whatever the step
+   * (regression: 1 === 1 used to subtract the step and drop the weight to 0)
+   */
+  it.each([
+    [1, 0.01],
+    [1, 1],
+    [1, 5],
+    [1, 100],
+    [1, Infinity],
+    [0, 0.01],
+    [0, 5],
+    [0, 100],
+    [0, Infinity],
+    [0.37, 5],
+    [-4.2, 100],
+    [123.5, Infinity],
+  ])('keeps value %d on its target with step %d', (value, step) => {
+    expect(approach(value, value, step)).toBe(value);
+  });
+
+  /** Verifies that a step of 0 leaves the value unchanged on either side of the target */
+  it('does not move with a step of 0', () => {
+    expect(approach(0.3, 1, 0)).toBe(0.3);
+    expect(approach(0.7, 0, 0)).toBe(0.7);
+    expect(approach(1, 1, 0)).toBe(1);
+  });
+
+  /** Verifies that a large step converges in one call then holds (no 1 -> 0 -> 1 flicker) */
+  it.each([1, 0])('converges once and stays on target %d over many large-step frames', (target) => {
+    const start = 1 - target;
+    const values: number[] = [];
+    let v = start;
+    for (let i = 0; i < 10; i++) {
+      v = approach(v, target, 5);
+      values.push(v);
+    }
+    expect(values).toEqual(Array(10).fill(target));
+  });
+
+  /** Verifies that an arbitrary target is reached within ceil(gap/step) calls and then held */
+  it('reaches an arbitrary target in ceil(gap / step) calls and holds it', () => {
+    const target = 3.75;
+    const step = 1;
+    let v = -1;
+    let calls = 0;
+    while (v !== target && calls < 100) {
+      const next = approach(v, target, step);
+      // Each call moves towards the target and never past it.
+      expect(next).toBeGreaterThan(v);
+      expect(next).toBeLessThanOrEqual(target);
+      v = next;
+      calls++;
+    }
+    expect(calls).toBe(Math.ceil((target - -1) / step));
+    for (let i = 0; i < 5; i++) {
+      v = approach(v, target, step);
+      expect(v).toBe(target);
+    }
+  });
+
+  /** Verifies that the result never lies past the target, for any step size */
+  it('never overshoots the target', () => {
+    const steps = [0, 0.01, 0.5, 1, 2, 5, 100, Infinity];
+    const values = [-2, 0, 0.3, 1, 1.7, 50];
+    for (const target of [0, 1, 0.5, -1.25]) {
+      for (const value of values) {
+        for (const step of steps) {
+          const out = approach(value, target, step);
+          const label = `${value} -> ${target}, step ${step}`;
+          if (value <= target) {
+            expect(out, label).toBeGreaterThanOrEqual(value);
+            expect(out, label).toBeLessThanOrEqual(target);
+          } else {
+            expect(out, label).toBeLessThanOrEqual(value);
+            expect(out, label).toBeGreaterThanOrEqual(target);
+          }
+        }
+      }
+    }
   });
 });
 
