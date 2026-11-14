@@ -30,7 +30,24 @@ export interface Spot extends Seat {
   anchor: Point;
   /** Waypoints from the anchor to the seat, the seat excluded. */
   entry: Point[];
+  /** Room the agent is heading for (the altar for the queue, the tavern for the lockers). */
+  room: RoomId;
+  /** Dedicated post, only when the seat is one of that post's seats. */
+  station?: StationId;
 }
+
+/** Dedicated posts inside a room (the telescope, the easel…). */
+export type StationId =
+  | 'lunette'
+  | 'ia'
+  | 'humains'
+  | 'chevalet'
+  | 'sacristain'
+  | 'boulier'
+  | 'relecture'
+  | 'labo'
+  | 'estrade'
+  | 'inspection';
 
 export type Side = 'n' | 's' | 'e' | 'w';
 
@@ -82,6 +99,34 @@ export type PropKind =
   | 'coins'
   | 'candle';
 
+/**
+ * A workstation: the furniture of one function of a room. Hovering it lights all its pieces,
+ * clicking it opens its card. A room with two functions (the library and its scriptorium,
+ * the workshop and its easel…) has two posts.
+ */
+export const POST_IDS = [
+  'autel',
+  'cartes',
+  'atelier',
+  'chevalet',
+  'biblio',
+  'scriptorium',
+  'observatoire',
+  'pigeonnier',
+  'machines',
+  'arithmetique',
+  'garde',
+  'relecture',
+  'labo',
+  'estrade',
+  'inspection',
+  'detente',
+  'concierge',
+  'taverne',
+] as const;
+
+export type PostId = (typeof POST_IDS)[number];
+
 export interface Prop {
   kind: PropKind;
   /** Position relative to the room centre. */
@@ -89,6 +134,8 @@ export interface Prop {
   z: number;
   /** Y rotation. */
   rot?: number;
+  /** The workstation this piece belongs to; decoration has none. */
+  post?: PostId;
 }
 
 export interface RoomDef {
@@ -110,7 +157,7 @@ export interface RoomDef {
   /** Seats open to any agent, in order of preference. Relative to the room centre. */
   seats: Seat[];
   /** Seats of a dedicated post (the easel, the telescope…), keyed by station name. */
-  stations?: Record<string, Seat[]>;
+  stations?: Partial<Record<StationId, Seat[]>>;
 }
 
 export const NORTH = Math.PI; // faces -z
@@ -151,8 +198,8 @@ export const ROOMS: RoomDef[] = [
     door: { side: 's', at: 0 },
     props: [
       { kind: 'candle', x: 3.4, z: 1.4 },
-      { kind: 'telescope', x: 2.4, z: -0.7 },
-      { kind: 'starTable', x: -2, z: -0.9 },
+      { kind: 'telescope', x: 2.4, z: -0.7, post: 'observatoire' },
+      { kind: 'starTable', x: -2, z: -0.9, post: 'observatoire' },
     ],
     stations: { lunette: around(2.4, -0.7, 1.1, [S, W + 0.4, E - 0.4]) },
     seats: [...row(0.1, [-2.8, -2, -1.2], N), ...around(2.4, -0.7, 1.1, [W - 0.2])],
@@ -168,8 +215,8 @@ export const ROOMS: RoomDef[] = [
     door: { side: 's', at: 0 },
     props: [
       { kind: 'barrels', x: -2.8, z: 1.3 },
-      { kind: 'aviary', x: -2.4, z: -1.1 },
-      { kind: 'lectern', x: 2.2, z: -0.7, rot: 0 },
+      { kind: 'aviary', x: -2.4, z: -1.1, post: 'pigeonnier' },
+      { kind: 'lectern', x: 2.2, z: -0.7, rot: 0, post: 'pigeonnier' },
     ],
     seats: [...row(-0.1, [-3, -1.8], N), ...around(2.2, -0.7, 0.9, [S, W])],
   },
@@ -184,8 +231,8 @@ export const ROOMS: RoomDef[] = [
     door: { side: 'e', at: 0 },
     props: [
       { kind: 'chest', x: -3.1, z: -3.8 },
-      { kind: 'mapTable', x: -0.6, z: -0.6 },
-      { kind: 'globe', x: 2.6, z: -3.3 },
+      { kind: 'mapTable', x: -0.6, z: -0.6, post: 'cartes' },
+      { kind: 'globe', x: 2.6, z: -3.3, post: 'cartes' },
       { kind: 'rug', x: -0.6, z: -0.6 },
     ],
     seats: [
@@ -207,12 +254,12 @@ export const ROOMS: RoomDef[] = [
     accent: 'green',
     door: { side: 'e', at: 0 },
     props: [
-      { kind: 'bookcase', x: -2.6, z: -4.1 },
-      { kind: 'bookcase', x: 0, z: -4.1 },
-      { kind: 'bookcase', x: 2.6, z: -4.1 },
-      { kind: 'bookcase', x: -3.7, z: -1.6, rot: E },
-      { kind: 'readingTable', x: 1.4, z: -0.9 },
-      { kind: 'readingTable', x: 1.4, z: 2.6 },
+      { kind: 'bookcase', x: -2.6, z: -4.1, post: 'biblio' },
+      { kind: 'bookcase', x: 0, z: -4.1, post: 'biblio' },
+      { kind: 'bookcase', x: 2.6, z: -4.1, post: 'biblio' },
+      { kind: 'bookcase', x: -3.7, z: -1.6, rot: E, post: 'biblio' },
+      { kind: 'readingTable', x: 1.4, z: -0.9, post: 'biblio' },
+      { kind: 'readingTable', x: 1.4, z: 2.6, post: 'biblio' },
     ],
     seats: [
       ...row(-3.2, [-2.6, 0, 2.6], N),
@@ -236,8 +283,8 @@ export const ROOMS: RoomDef[] = [
     insideOf: 'biblio',
     props: [
       { kind: 'rug', x: 0, z: 0 },
-      { kind: 'lectern', x: -0.9, z: 0, rot: N },
-      { kind: 'lectern', x: 0.9, z: 0, rot: N },
+      { kind: 'lectern', x: -0.9, z: 0, rot: N, post: 'scriptorium' },
+      { kind: 'lectern', x: 0.9, z: 0, rot: N, post: 'scriptorium' },
     ],
     stations: {
       ia: [{ x: -0.9, z: 0.8, facing: N }, { x: -0.9, z: -0.8, facing: S }],
@@ -256,12 +303,12 @@ export const ROOMS: RoomDef[] = [
     door: { side: 's', at: 0 },
     props: [
       { kind: 'crates', x: 3.2, z: 3.4 },
-      { kind: 'bench', x: -2, z: -2.4 },
-      { kind: 'bench', x: 2, z: -2.4 },
-      { kind: 'bench', x: -2, z: 0.6 },
-      { kind: 'bench', x: 2, z: 0.6 },
-      { kind: 'toolRack', x: 0, z: -4 },
-      { kind: 'easel', x: -3.1, z: 3.3, rot: N },
+      { kind: 'bench', x: -2, z: -2.4, post: 'atelier' },
+      { kind: 'bench', x: 2, z: -2.4, post: 'atelier' },
+      { kind: 'bench', x: -2, z: 0.6, post: 'atelier' },
+      { kind: 'bench', x: 2, z: 0.6, post: 'atelier' },
+      { kind: 'toolRack', x: 0, z: -4, post: 'atelier' },
+      { kind: 'easel', x: -3.1, z: 3.3, rot: N, post: 'chevalet' },
     ],
     stations: { chevalet: [{ x: -3.1, z: 2.4, facing: S }, { x: -2.2, z: 2.6, facing: faceTo(-2.2, 2.6, -3.1, 3.3) }] },
     seats: [
@@ -281,13 +328,13 @@ export const ROOMS: RoomDef[] = [
     accent: 'red',
     door: { side: 's', at: 0 },
     props: [
-      { kind: 'altar', x: 0, z: -1.65 },
-      { kind: 'candles', x: -1.1, z: -1.8 },
-      { kind: 'candles', x: 1.1, z: -1.8 },
-      { kind: 'pew', x: -2.5, z: -0.1 },
-      { kind: 'pew', x: 2.5, z: -0.1 },
-      { kind: 'pew', x: -2.5, z: 1.2 },
-      { kind: 'pew', x: 2.5, z: 1.2 },
+      { kind: 'altar', x: 0, z: -1.65, post: 'autel' },
+      { kind: 'candles', x: -1.1, z: -1.8, post: 'autel' },
+      { kind: 'candles', x: 1.1, z: -1.8, post: 'autel' },
+      { kind: 'pew', x: -2.5, z: -0.1, post: 'autel' },
+      { kind: 'pew', x: 2.5, z: -0.1, post: 'autel' },
+      { kind: 'pew', x: -2.5, z: 1.2, post: 'autel' },
+      { kind: 'pew', x: 2.5, z: 1.2, post: 'autel' },
     ],
     stations: { sacristain: [{ x: 1.9, z: -1.4, facing: faceTo(1.9, -1.4, 0, -1.65) }] },
     seats: [
@@ -307,9 +354,9 @@ export const ROOMS: RoomDef[] = [
     door: { side: 's', at: 0 },
     props: [
       { kind: 'crates', x: 3.2, z: 1.4 },
-      { kind: 'boiler', x: -2.7, z: -1 },
-      { kind: 'engine', x: 0.2, z: -1.3 },
-      { kind: 'engine', x: 2.7, z: -1.3 },
+      { kind: 'boiler', x: -2.7, z: -1, post: 'machines' },
+      { kind: 'engine', x: 0.2, z: -1.3, post: 'machines' },
+      { kind: 'engine', x: 2.7, z: -1.3, post: 'machines' },
     ],
     seats: row(0.2, [-2.7, -1.8, 0.2, 1.1, 2.7, 3.4], N),
   },
@@ -324,8 +371,8 @@ export const ROOMS: RoomDef[] = [
     door: { side: 's', at: 0 },
     props: [
       { kind: 'coins', x: 3.3, z: 1.6 },
-      { kind: 'abacus', x: -1.8, z: -1.4 },
-      { kind: 'slate', x: 1.9, z: -2 },
+      { kind: 'abacus', x: -1.8, z: -1.4, post: 'arithmetique' },
+      { kind: 'slate', x: 1.9, z: -2, post: 'arithmetique' },
     ],
     stations: { boulier: row(-0.4, [-1.8, -0.8], N) },
     seats: [...row(-0.9, [1.4, 2.6], N), ...row(-0.4, [-2.8], N)],
@@ -340,9 +387,9 @@ export const ROOMS: RoomDef[] = [
     accent: 'red',
     door: { side: 's', at: 0 },
     props: [
-      { kind: 'couch', x: -2.3, z: -1.5 },
-      { kind: 'diceTable', x: 1.6, z: -0.2 },
-      { kind: 'posters', x: 1.6, z: -2.15 },
+      { kind: 'couch', x: -2.3, z: -1.5, post: 'detente' },
+      { kind: 'diceTable', x: 1.6, z: -0.2, post: 'detente' },
+      { kind: 'posters', x: 1.6, z: -2.15, post: 'detente' },
     ],
     seats: [...row(-0.9, [-3, -1.6], S), ...around(1.6, -0.2, 1, [W, E, N])],
   },
@@ -356,9 +403,9 @@ export const ROOMS: RoomDef[] = [
     accent: 'brown',
     door: { side: 'w', at: 0 },
     props: [
-      { kind: 'brooms', x: 2.8, z: -1.3 },
-      { kind: 'cart', x: 0.8, z: 0.6 },
-      { kind: 'barrel', x: 3.2, z: 1 },
+      { kind: 'brooms', x: 2.8, z: -1.3, post: 'concierge' },
+      { kind: 'cart', x: 0.8, z: 0.6, post: 'concierge' },
+      { kind: 'barrel', x: 3.2, z: 1, post: 'concierge' },
     ],
     seats: [
       { x: 2, z: -0.7, facing: faceTo(2, -0.7, 2.8, -1.3) },
@@ -377,11 +424,11 @@ export const ROOMS: RoomDef[] = [
     door: { side: 'n', at: 0 },
     props: [
       { kind: 'crates', x: -3.5, z: 2.2 },
-      { kind: 'portcullis', x: -4.4, z: 0.4, rot: E },
-      { kind: 'weaponRack', x: 1.8, z: 2.7 },
-      { kind: 'lantern', x: -3.4, z: -2.2 },
-      { kind: 'lantern', x: 3.4, z: -2.2 },
-      { kind: 'guardTable', x: 0, z: 0.4 },
+      { kind: 'portcullis', x: -4.4, z: 0.4, rot: E, post: 'garde' },
+      { kind: 'weaponRack', x: 1.8, z: 2.7, post: 'garde' },
+      { kind: 'lantern', x: -3.4, z: -2.2, post: 'garde' },
+      { kind: 'lantern', x: 3.4, z: -2.2, post: 'garde' },
+      { kind: 'guardTable', x: 0, z: 0.4, post: 'garde' },
     ],
     seats: [
       ...around(0, 0.4, 1.1, [N, S, W, E]),
@@ -400,8 +447,8 @@ export const ROOMS: RoomDef[] = [
     door: { side: 'n', at: 0 },
     props: [
       { kind: 'barrels', x: -4.6, z: -2.2 },
-      { kind: 'readingTable', x: -2.6, z: 0.6 },
-      { kind: 'alchemyBench', x: 2.8, z: 2.4 },
+      { kind: 'readingTable', x: -2.6, z: 0.6, post: 'relecture' },
+      { kind: 'alchemyBench', x: 2.8, z: 2.4, post: 'labo' },
     ],
     stations: {
       relecture: [...row(-0.2, [-3.1, -2.1], S), ...row(1.4, [-3.1, -2.1], N)],
@@ -420,8 +467,8 @@ export const ROOMS: RoomDef[] = [
     door: { side: 'n', at: -2.4 },
     props: [
       { kind: 'chest', x: 3.3, z: 2.35 },
-      { kind: 'stage', x: -1.6, z: 1.6 },
-      { kind: 'inspectionDesk', x: 2.2, z: 0.6 },
+      { kind: 'stage', x: -1.6, z: 1.6, post: 'estrade' },
+      { kind: 'inspectionDesk', x: 2.2, z: 0.6, post: 'inspection' },
     ],
     stations: {
       estrade: [{ x: -1.6, z: 1.6, facing: N }, { x: -2.6, z: 1.6, facing: N }, { x: -0.6, z: 1.6, facing: N }],
@@ -440,14 +487,14 @@ export const ROOMS: RoomDef[] = [
     door: { side: 'w', at: 0 },
     props: [
       { kind: 'crates', x: -2.7, z: -10.6 },
-      { kind: 'fireplace', x: 0, z: -11 },
-      { kind: 'longTable', x: 0.6, z: -6.5 },
-      { kind: 'longTable', x: 0.6, z: -1 },
-      { kind: 'longTable', x: 0.6, z: 4.5 },
-      { kind: 'barrel', x: 2.8, z: -9 },
-      { kind: 'barrel', x: 2.8, z: -8.1 },
-      { kind: 'barrel', x: -2.8, z: -9.4 },
-      { kind: 'lockers', x: 3.1, z: 9 },
+      { kind: 'fireplace', x: 0, z: -11, post: 'taverne' },
+      { kind: 'longTable', x: 0.6, z: -6.5, post: 'taverne' },
+      { kind: 'longTable', x: 0.6, z: -1, post: 'taverne' },
+      { kind: 'longTable', x: 0.6, z: 4.5, post: 'taverne' },
+      { kind: 'barrel', x: 2.8, z: -9, post: 'taverne' },
+      { kind: 'barrel', x: 2.8, z: -8.1, post: 'taverne' },
+      { kind: 'barrel', x: -2.8, z: -9.4, post: 'taverne' },
+      { kind: 'lockers', x: 3.1, z: 9, post: 'taverne' },
     ],
     seats: [-6.5, -1, 4.5].flatMap((tz) => [
       ...[-1.2, 0, 1.2].map((dz) => ({ x: -0.4, z: tz + dz, facing: E })),
@@ -457,6 +504,20 @@ export const ROOMS: RoomDef[] = [
 ];
 
 export const ROOM_BY_ID = new Map(ROOMS.map((r) => [r.id, r]));
+
+/** The furniture of a room split into workstations, in order of first piece, and the decoration left over. */
+export function postGroups(room: RoomDef): { posts: { post: PostId; props: Prop[] }[]; decor: Prop[] } {
+  const posts = new Map<PostId, Prop[]>();
+  const decor: Prop[] = [];
+  for (const p of room.props) {
+    if (!p.post) decor.push(p);
+    else posts.set(p.post, [...(posts.get(p.post) ?? []), p]);
+  }
+  return { posts: [...posts].map(([post, props]) => ({ post, props })), decor };
+}
+
+/** The room each workstation stands in. */
+export const POST_ROOM = new Map<PostId, RoomId>(ROOMS.flatMap((r) => postGroups(r).posts.map((g) => [g.post, r.id])));
 
 /** Outer bounds of the dungeon, corridors included. */
 export const BOUNDS = { x0: -24, x1: 23, z0: -13, z1: 10 };
@@ -500,9 +561,9 @@ function spaceOf(room: RoomDef): string {
   return room.insideOf ?? room.id;
 }
 
-function toSpot(room: RoomDef, seat: Seat, id: string): Spot {
+function toSpot(room: RoomDef, seat: Seat, id: string, station?: StationId): Spot {
   const door = doorOf(room);
-  return {
+  const spot: Spot = {
     ...seat,
     x: room.cx + seat.x,
     z: room.cz + seat.z,
@@ -510,7 +571,10 @@ function toSpot(room: RoomDef, seat: Seat, id: string): Spot {
     space: spaceOf(room),
     anchor: door.outside,
     entry: [door.inside],
+    room: room.id,
   };
+  if (station) spot.station = station;
+  return spot;
 }
 
 const WALL_SEAT_STEP = 1;
@@ -625,7 +689,7 @@ function scatterSeat(room: RoomDef, n: number): Seat {
 }
 
 // Agent types that have a dedicated post inside their room. Keys are lower case.
-const STATIONS: Record<string, string> = {
+const STATIONS: Record<string, StationId> = {
   oracle: 'lunette',
   barbapapa: 'chevalet',
   hermione: 'relecture',
@@ -638,14 +702,21 @@ const STATIONS: Record<string, string> = {
   'claude-code-guide': 'sacristain',
 };
 
+/** A seat an agent may take, with its stable id and, for a dedicated post's seat, the post. */
+export interface Candidate {
+  id: string;
+  seat: Seat;
+  station?: StationId;
+}
+
 /** Candidate lists by room, then by station ('' for none). */
-const candidatesCache = new WeakMap<RoomDef, Map<string, readonly { id: string; seat: Seat }[]>>();
+const candidatesCache = new WeakMap<RoomDef, Map<string, readonly Candidate[]>>();
 
 /**
  * Seats an agent may take in a room, in order of preference: its own post, the shared
  * seats, then the standing places along the walls. Each comes with a stable id.
  */
-export function candidateSeats(room: RoomDef, agentType: string): readonly { id: string; seat: Seat }[] {
+export function candidateSeats(room: RoomDef, agentType: string): readonly Candidate[] {
   const key = agentType.toLowerCase();
   const station = Object.hasOwn(STATIONS, key) ? STATIONS[key] : undefined;
   // Cached by station, not by type: the types come from the server, the stations are few.
@@ -663,10 +734,10 @@ export function candidateSeats(room: RoomDef, agentType: string): readonly { id:
   return list;
 }
 
-function computeCandidates(room: RoomDef, station: string | undefined): { id: string; seat: Seat }[] {
+function computeCandidates(room: RoomDef, station: StationId | undefined): Candidate[] {
   const own = station ? (room.stations?.[station] ?? []) : [];
   return [
-    ...own.map((seat, i) => ({ id: `${room.id}:${station}:${i}`, seat })),
+    ...own.map((seat, i) => ({ id: `${room.id}:${station}:${i}`, seat, station })),
     ...room.seats.map((seat, i) => ({ id: `${room.id}:seat:${i}`, seat })),
     ...wallSeats(room).map((seat, i) => ({ id: `${room.id}:wall:${i}`, seat })),
   ];
@@ -712,11 +783,11 @@ export function queueSpot(rank: number): Spot {
       const facing = rank === 0 ? NORTH : faceTo(x, z, a.x, a.z);
       const door = doorOf(ALTAR_ROOM);
       if (i === 0) {
-        return { id, x, z, facing, kneel: rank === 0, space: 'autel', anchor: door.outside, entry: [door.inside] };
+        return { id, x, z, facing, kneel: rank === 0, space: 'autel', anchor: door.outside, entry: [door.inside], room: 'autel' };
       }
       // In the corridor: its own space, reached along the corridors. In the doorway: from the door.
       const anchor = onCorridor({ x, z }) ? { x, z } : door.outside;
-      return { id, x, z, facing, space: id, anchor, entry: [] };
+      return { id, x, z, facing, space: id, anchor, entry: [], room: 'autel' };
     }
     remaining -= len;
   }
@@ -772,7 +843,7 @@ export function assignSpots(agents: SeatRequest[], memory: SeatMemory): Map<stri
       const seatId = memory.get(a.id)!.seatId;
       const found = candidates.find((c) => c.id === seatId);
       if (found) {
-        spots.set(a.id, toSpot(room, found.seat, seatId));
+        spots.set(a.id, toSpot(room, found.seat, seatId, found.station));
         continue;
       }
       if (seatId.startsWith(`${room.id}:scatter:`)) {
@@ -781,7 +852,7 @@ export function assignSpots(agents: SeatRequest[], memory: SeatMemory): Map<stri
         continue;
       }
     }
-    let pick = candidates.find((c) => !taken.has(c.id));
+    let pick: Candidate | undefined = candidates.find((c) => !taken.has(c.id));
     if (!pick) {
       let n = scatterCount.get(room.id) ?? 0;
       while (taken.has(`${room.id}:scatter:${n}`)) n++;
@@ -790,7 +861,7 @@ export function assignSpots(agents: SeatRequest[], memory: SeatMemory): Map<stri
     }
     taken.add(pick.id);
     memory.set(a.id, { room: room.id, seatId: pick.id });
-    spots.set(a.id, toSpot(room, pick.seat, pick.id));
+    spots.set(a.id, toSpot(room, pick.seat, pick.id, pick.station));
   }
   return spots;
 }

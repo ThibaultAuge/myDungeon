@@ -3,7 +3,6 @@ import fs from 'node:fs';
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from 'fastify';
 import fastifyStatic from '@fastify/static';
 import fastifyWebsocket from '@fastify/websocket';
-import { AuthGate, clearedCookie, readCookie, SESSION_COOKIE, sessionCookie } from './auth.ts';
 import { hookEventSchema } from './reducer.ts';
 import type { OfficeStore } from './store.ts';
 import { findTranscript, readTranscriptPage, transcriptEtag } from './transcript.ts';
@@ -18,8 +17,6 @@ export interface AppOptions {
   token: string | null;
   webDist?: string;
   logger?: boolean;
-  /** Browser sign-in. Absent: the conversation routes always answer 401. */
-  auth?: AuthGate;
   /** `~/.claude/projects`, where transcripts live. */
   projectsDir?: string;
 }
@@ -85,30 +82,11 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
     return {};
   });
 
-  // Browser sign-in: the one-time link printed by the server lands here.
-  app.get<{ Querystring: { code?: string } }>('/login', async (req, reply) => {
-    const id = opts.auth?.redeem(req.query.code) ?? null;
-    if (!id) return reply.redirect('/?login=failed', 303);
-    reply.header('Set-Cookie', sessionCookie(id));
-    return reply.redirect('/', 303);
-  });
-
-  app.post('/logout', async (req, reply) => {
-    opts.auth?.revoke(readCookie(req.headers.cookie, SESSION_COOKIE));
-    reply.header('Set-Cookie', clearedCookie());
-    return reply.code(204).send();
-  });
-
-  const requireSession = async (req: FastifyRequest, reply: FastifyReply) => {
-    if (!opts.auth?.check(readCookie(req.headers.cookie, SESSION_COOKIE))) {
-      return reply.code(401).send({ error: 'connexion requise' });
-    }
-  };
-
   // An agent's conversation, read from its transcript. Paths come from the office state only.
+  // No sign-in: whoever can load the page reads it. Exposure stays limited to this machine by
+  // the loopback bind and the Host/Origin guard above.
   app.get<{ Querystring: { session?: string; agent?: string; before?: string } }>(
     '/api/transcript',
-    { onRequest: requireSession },
     async (req, reply) => {
       reply.header('Cache-Control', 'no-store');
       const { session: sessionId, agent: agentId, before: beforeRaw } = req.query;

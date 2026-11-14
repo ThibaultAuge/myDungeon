@@ -315,21 +315,102 @@ select,
   gap: 6px;
 }
 
-.room-sign {
+/* Card of the clicked workstation, top right of the scene. */
+.post-card-region {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  max-width: min(300px, calc(100% - 24px));
+}
+
+/* The agent card holds the top right: the workstation card moves to the top left. */
+.office__scene:has(.agent-info) .post-card-region {
+  right: auto;
+  left: 12px;
+}
+
+.post-card {
+  padding: 10px 12px 12px 14px;
+  background: var(--surface);
+  border: 1px solid var(--accent);
+  border-radius: 12px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.12);
+}
+
+.post-card__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.post-card h2 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.post-card__room {
+  margin: 0 0 2px;
+  font-size: 12px;
+  color: var(--text-2);
+}
+
+.post-card__role {
+  margin: 8px 0 0;
+  font-size: 14px;
+}
+
+.post-card__who {
+  margin: 6px 0 0;
   font-size: 13px;
-  font-weight: 500;
-  color: #444441;
-  background: rgba(255, 255, 255, 0.85);
-  padding: 2px 8px;
-  border-radius: 6px;
-  white-space: nowrap;
-  pointer-events: none;
-  user-select: none;
+  color: var(--text-2);
+}
+
+@media (forced-colors: active) {
+  .post-card {
+    border-color: CanvasText;
+  }
 }
 
 .agent-tag-anchor {
   position: relative;
   pointer-events: none;
+}
+
+/* Where a walking agent is heading, above its name tag. Shown only while the figure walks
+   (AgentFigure sets data-travelling), in place of the altar request bubble. */
+.destination-badge {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 3px);
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  color: #2c2c2a;
+  background: #fffdf6;
+  /* The session colour, as on the tag, the floor disc and the session card. */
+  border: 2px solid var(--session-color, #2c2c2a);
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.45));
+  visibility: hidden;
+}
+
+.destination-badge__icon {
+  width: 18px;
+  height: 18px;
+}
+
+.agent-tag-anchor[data-travelling] .destination-badge {
+  visibility: visible;
+  animation: request-bob 1.6s ease-in-out infinite;
+}
+
+.agent-tag-anchor[data-travelling] .request-bubble {
+  visibility: hidden;
 }
 
 .agent-tag {
@@ -390,12 +471,18 @@ select,
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .request-bubble {
+  .request-bubble,
+  .agent-tag-anchor[data-travelling] .destination-badge {
     animation: none;
   }
 }
 
 @media (forced-colors: active) {
+  .destination-badge {
+    color: CanvasText;
+    background: Canvas;
+    border-color: CanvasText;
+  }
   .request-bubble__shape {
     fill: Canvas;
     stroke: CanvasText;
@@ -417,6 +504,20 @@ select,
   list-style: none;
   margin: 0;
   padding: 0;
+}
+
+.post-list,
+.post-list ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.post-list__room {
+  margin: 8px 0 2px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-2);
 }
 
 .session-card {

@@ -16,6 +16,10 @@ Un petit bureau en 3D où chaque agent Claude Code du poste local est un personn
   - Chaque pièce a ses places. Un agent garde la sienne tant qu'il reste dans la pièce ; quand elle est pleine, les suivants se tiennent le long des murs.
 - **Une carte en vrais modèles 3D** : dalles de pierre, de bois ou de terre selon la pièce, murs avec fenêtres, arches, torches et bannières aux couleurs de la pièce, meubles et objets de décoration, ombres douces.
   - **Déplace la souris pour découvrir les salles.** Les murs situés devant le curseur s'enfoncent dans le sol, et il ne reste qu'un muret qui marque le contour des pièces. Ceux situés derrière restent debout.
+  - **Les postes de travail.** Le mobilier de chaque pièce forme des postes. Survole un poste : ses meubles s'éclairent légèrement et le curseur devient une main. Clique dessus pour ouvrir une carte en haut à droite de la 3D, avec le nom de la pièce, le titre du poste, sa fonction en quelques mots et les agents qui y travaillent. Le poste dont la carte est ouverte reste éclairé. Ferme la carte avec ×, avec Échap ou en cliquant dans le vide. Un clic après un glissement de caméra ne fait rien.
+    - Les pièces à plusieurs fonctions ont un poste par fonction : la Bibliothèque (rayonnages et tables) et son Scriptorium (pupitres des copistes), l'Atelier (établis) et le chevalet de l'enlumineur, la Salle des épreuves (table de relecture et laboratoire d'alchimie), la Salle Accessibilité / SEO (estrade du héraut et pupitre d'inspection).
+    - Le décor (caisses, tonneaux, coffres, pièces, bougies, tapis) ne réagit pas au survol.
+    - Si un agent se tient devant un meuble, le plus proche sous le pointeur l'emporte : l'agent ou le poste.
 - **Trois états.**
   - Vert : il travaille.
   - Ambre : il attend ton prochain message. Un petit losange ambre s'affiche au-dessus de son étiquette.
@@ -31,7 +35,7 @@ Un petit bureau en 3D où chaque agent Claude Code du poste local est un personn
   - son état et depuis quand, sa tâche ou sa dernière requête, son outil, la session qui l'a lancé (« lancée depuis »), et son dernier message ;
   - le contexte de sa session : origine (app Claude ou terminal, en cours ou terminée), worktree (oui ou non) et son nom, dossier, branche et branche d'origine, modèle, effort, mode de permission, heure de début (sessions de l'app), nombre de tours, sous-agents actifs, version de Claude Code ;
   - les serveurs web que la session a lancés, sous forme de liens `http://localhost:<port>` qui s'ouvrent dans un nouvel onglet. Ils sont détectés toutes les 10 s : un port en écoute ouvert par un processus lancé par la session, ou un port déclaré dans `.claude/launch.json` du dossier de la session et servi depuis ce dossier. Un port ouvert par un outil ou un serveur MCP lancé par Claude apparaît aussi. Seules les adresses locales sont détectées.
-  - Le × de la fiche désélectionne l'agent : la fiche et la boîte de dialogue se ferment. La colonne latérale ne contient que la liste des sessions et l'historique. La liste latérale reste l'équivalent complet de la vue 3D au clavier et au lecteur d'écran.
+  - Le × de la fiche désélectionne l'agent : la fiche et la boîte de dialogue se ferment. La liste latérale, nommée « Agents et lieux », est l'équivalent complet de la vue 3D au clavier et au lecteur d'écran. Sa liste « Lieux du bureau », groupée par pièce, ouvre la même carte que le clic sur un poste ; fermer la carte rend le focus au bouton choisi.
 - **L'historique** liste les sessions terminées.
 - **`/debug`** montre le flux brut des événements reçus.
 
@@ -124,36 +128,16 @@ Pour un sous-agent, la boîte affiche sa propre conversation. La consigne qu'il 
 
 Le texte des conversations s'affiche comme du texte brut. Il n'est jamais interprété comme du HTML.
 
-### Connexion
+### Accès aux conversations
 
-Les conversations sont protégées. La 3D et la liste des sessions restent visibles sans connexion.
+Aucune connexion n'est requise. La page charge la conversation de l'agent ouvert directement depuis le serveur local (`GET /api/transcript`).
 
-1. Au démarrage, la console du serveur affiche un lien de connexion à usage unique, valable 10 minutes :
+Ce choix convient à un outil mono-utilisateur, lancé à la main sur ton propre poste. L'accès reste limité à la machine :
 
-   ```
-   http://127.0.0.1:<port>/login?code=…
-   ```
+- le serveur n'écoute que sur `127.0.0.1` ;
+- il refuse tout en-tête `Host` ou `Origin` inconnu, ce qui bloque le DNS rebinding et les requêtes venues d'autres sites.
 
-   Le port est celui de Vite (5173) quand le client n'est pas compilé, et celui du serveur (4777 par défaut) sinon.
-2. Ouvre ce lien dans ton navigateur. Il pose un cookie de session : `HttpOnly`, `SameSite=Strict`, valable 12 h. Chaque utilisation prolonge la durée de 12 h.
-3. Un lien expiré renvoie vers la page de connexion avec un message. La console affiche alors un nouveau lien.
-4. Après une connexion réussie, la console affiche aussi un nouveau lien. Utilise-le pour te connecter depuis un autre navigateur.
-5. Un redémarrage du serveur déconnecte tous les navigateurs.
-
-Le cookie est posé pour `127.0.0.1`, pas pour `localhost`. Utilise donc `http://127.0.0.1:<port>` partout.
-
-```mermaid
-sequenceDiagram
-    participant Nav as Navigateur
-    participant Srv as Serveur
-    Note over Srv: Affiche le lien /login?code=… dans la console
-    Nav->>Srv: GET /login?code=…
-    Srv-->>Nav: Cookie de session (12 h glissantes)
-    Note over Srv: Affiche un nouveau lien pour un autre navigateur
-    Nav->>Srv: GET /api/transcript (cookie)
-    Srv-->>Nav: Messages de la conversation, bornés
-```
-*Figure: Connexion par lien à usage unique, puis lecture d'une conversation.*
+Exposer le serveur au-delà de la machine serait un projet distinct, avec son propre contrôle d'accès. Ne change pas l'adresse d'écoute sans cette protection.
 
 ## Ce que l'installation des hooks modifie
 
@@ -189,10 +173,10 @@ Ces formats sont internes à Claude et peuvent changer d'une version à l'autre.
 - Le serveur écoute sur `127.0.0.1` uniquement. Il refuse un en-tête `Host` ou `Origin` inconnu, ce qui protège contre le DNS rebinding et les pages web malveillantes.
 - `POST /hooks` exige le jeton, vérifié avant même la lecture de la requête.
 - Les pages ne peuvent pas être intégrées dans une iframe (`X-Frame-Options: DENY`, `frame-ancestors 'none'`).
-- **Conversations.** `GET /login` consomme le lien à usage unique et pose le cookie de session. `POST /logout` le supprime (aucun bouton de l'interface ne l'appelle encore). `GET /api/transcript` exige ce cookie.
+- **Conversations.** `GET /api/transcript` renvoie la conversation de l'agent ouvert, sans authentification (voir la section « Dialogue avec un agent »).
 - **Chemin du transcript.** Il est déduit de l'état du serveur, jamais d'une valeur envoyée par le navigateur ou par un hook.
 - **Lecture bornée.** Le serveur ne lit qu'une partie bornée de la conversation. Le texte est affiché comme du texte, jamais interprété en HTML.
-- **Limite connue.** Les routes de l'inventaire (`/api/*`, hors `/api/transcript`) et le WebSocket ne demandent pas d'authentification. Tout programme local peut donc lire les titres, dossiers, prompts et commandes (tronqués). Une authentification par session est prévue avant toute fonction qui permettrait d'agir sur les agents.
+- **Limite connue.** Les routes `/api/*` (inventaire et `/api/transcript`) et le WebSocket ne demandent pas d'authentification. Tout programme local peut donc lire les titres, dossiers, prompts et commandes (tronqués), ainsi que la conversation de l'agent ouvert. Toute action future sur les agents aura sa propre protection.
 - **Sur un poste partagé**, restreins les droits du dossier du projet. Un lecteur secondaire comme `F:\` donne souvent le contrôle total aux « Utilisateurs authentifiés ». Dans une invite de commandes administrateur :
 
 ```bash
@@ -223,5 +207,5 @@ npm run typecheck
 ## Limites et suite
 
 - La scène fait environ 700 appels de dessin par image, ombres comprises : les meubles ne sont pas encore regroupés en instances. Des assets Unreal ne seraient utilisables que si leur licence Fab autorise un usage hors Unreal Engine.
-- La boîte de dialogue est en lecture seule. Répondre aux agents depuis la 3D (permission, question) fera l'objet d'une phase distincte. La connexion par lien posée ici (cookie de session) servira à cette phase. Envoyer un prompt libre à une session déjà ouverte n'a pas encore de solution officielle.
+- La boîte de dialogue est en lecture seule. Répondre aux agents depuis la 3D (permission, question) fera l'objet d'une phase distincte, avec sa propre protection d'accès. Envoyer un prompt libre à une session déjà ouverte n'a pas encore de solution officielle.
 - Le plan complet se trouve dans [plans/plan-agent-office-2026-11-13.md](plans/plan-agent-office-2026-11-13.md).

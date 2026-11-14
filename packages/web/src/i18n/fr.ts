@@ -1,4 +1,5 @@
 import type { RoomId } from '@agent-office/shared';
+import type { PostId } from '../scene/layout.ts';
 import { plural } from './plural.ts';
 
 /**
@@ -39,8 +40,8 @@ export const fr = {
   },
   office: {
     heading: (name: string) => `Bureau ${name}`,
-    canvas: 'Vue 3D du bureau. La même information est disponible dans la liste des sessions.',
-    side: 'Sessions et historique',
+    canvas: 'Vue 3D du bureau. Les agents sont aussi listés dans « Sessions en cours », et les lieux dans « Lieux du bureau ».',
+    side: 'Agents et lieux',
   },
   state: {
     working: 'Travaille',
@@ -115,8 +116,6 @@ export const fr = {
     start: 'Début de la conversation',
     empty: 'Pas encore de conversation pour cet agent.',
     error: 'Impossible de lire la conversation pour l’instant. Nouvelle tentative en cours…',
-    signIn: 'Pour lire les conversations, ouvre le lien de connexion affiché dans la console du serveur.',
-    loginFailed: 'Ce lien de connexion est invalide ou expiré. Ouvre le dernier lien affiché dans la console du serveur.',
     truncated: 'Message raccourci.',
   },
   sessionList: {
@@ -160,6 +159,106 @@ export const fr = {
     concierge: 'Réduit du concierge',
     taverne: 'Taverne',
   } satisfies Record<RoomId, string>,
+  /** Workstation cards: title, function in a few words, who works there. */
+  posts: {
+    autel: {
+      title: 'Autel des requêtes',
+      role: 'Demander à l’humain une permission, une réponse ou de l’aide après une erreur',
+      who: 'Tout agent qui a besoin de toi, et claude-code-guide',
+    },
+    cartes: {
+      title: 'Table des cartes',
+      role: 'Explorer le besoin, concevoir et écrire le plan',
+      who: 'L’agent principal quand il planifie, Plan',
+    },
+    atelier: {
+      title: 'Établis',
+      role: 'Écrire et modifier le code',
+      who: 'L’agent principal, general-purpose, fork, et Hancock en tournée',
+    },
+    chevalet: {
+      title: 'Chevalet de l’enlumineur',
+      role: 'Découper des maquettes en templates HTML/CSS',
+      who: 'Barbapapa',
+    },
+    biblio: {
+      title: 'Rayonnages et tables de lecture',
+      role: 'Lire et chercher dans le code local',
+      who: 'Explore, et l’agent principal quand il lit',
+    },
+    scriptorium: {
+      title: 'Pupitres des copistes',
+      role: 'Rédiger la documentation, pour les IA et pour les humains',
+      who: 'Curator (IA), Otis (humains)',
+    },
+    observatoire: {
+      title: 'Grande lunette',
+      role: 'Chercher sur le web et dans la documentation officielle',
+      who: 'Oracle, et l’agent principal quand il cherche en ligne',
+    },
+    pigeonnier: {
+      title: 'Volière',
+      role: 'Tester des API externes : un pigeon part, un pigeon revient',
+      who: 'Samuel Morse',
+    },
+    machines: {
+      title: 'Machines à vapeur',
+      role: 'Lancer des commandes, compiler, exécuter les tests, git',
+      who: 'L’agent principal et les agents génériques',
+    },
+    arithmetique: {
+      title: 'Boulier et ardoise',
+      role: 'Calculs et statistiques, exécutés en Python',
+      who: 'Turing',
+    },
+    garde: {
+      title: 'Table de garde',
+      role: 'Audit de sécurité',
+      who: 'Neo',
+    },
+    relecture: {
+      title: 'Table de relecture',
+      role: 'Revue de code',
+      who: 'Hermione',
+    },
+    labo: {
+      title: 'Laboratoire d’alchimie',
+      role: 'Écrire les tests',
+      who: 'Dexter',
+    },
+    estrade: {
+      title: 'Estrade du héraut',
+      role: 'Audit SEO (référencement)',
+      who: 'Gatsby',
+    },
+    inspection: {
+      title: 'Pupitre d’inspection',
+      role: 'Audit d’accessibilité',
+      who: 'Timmy',
+    },
+    detente: {
+      title: 'Banquette et jeu de dés',
+      role: 'Idées décalées, brainstorming',
+      who: 'Butt Stallion',
+    },
+    concierge: {
+      title: 'Balais et chariot',
+      role: 'Nettoyer le code mort',
+      who: 'Hancock',
+    },
+    taverne: {
+      title: 'Tables de la taverne',
+      role: 'Repos : l’équipe disponible, sans tâche',
+      who: 'Un exemplaire de chaque type d’agent, et l’agent principal qui attend ton prochain message',
+    },
+  } satisfies Record<PostId, { title: string; role: string; who: string }>,
+  postList: {
+    title: 'Lieux du bureau',
+  },
+  postCard: {
+    who: 'Qui y travaille',
+    close: 'Fermer la fiche',
+  },
   time: {
     seconds: (n: number) => `${n} s`,
     minutes: (n: number) => `${n} min`,
