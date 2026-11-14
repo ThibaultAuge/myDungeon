@@ -194,7 +194,7 @@ export function matchEnvironment(folders: string[], environments: Environment[])
 }
 
 /** Agent type names we accept from a definition: what Claude Code itself accepts, short. */
-const AGENT_NAME = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$/;
+export const AGENT_NAME = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$/;
 /** Definitions read per folder, and bytes read per file: only the frontmatter matters. */
 const MAX_AGENT_FILES = 64;
 const AGENT_HEAD_BYTES = 4096;
@@ -206,8 +206,14 @@ const AGENT_HEAD_BYTES = 4096;
 export function agentNameFromDefinition(text: string): string | undefined {
   const fm = /^﻿?---\r?\n([\s\S]*?)(?:\r?\n---|$(?![\s\S]))/.exec(text);
   if (!fm) return undefined;
-  const line = /^name:[ \t]*["']?([^"'\r\n]*?)["']?[ \t]*$/m.exec(fm[1]);
-  return line && AGENT_NAME.test(line[1]) ? line[1] : undefined;
+  // Plain string handling, no regex over the value: a file from a cloned repo must not be
+  // able to make the matcher backtrack for seconds on the event loop.
+  const line = fm[1].split(/\r?\n/).find((l) => l.startsWith('name:'));
+  if (line === undefined) return undefined;
+  let value = line.slice('name:'.length).trim();
+  const q = value[0];
+  if ((q === '"' || q === "'") && value.length >= 2 && value.endsWith(q)) value = value.slice(1, -1).trim();
+  return AGENT_NAME.test(value) ? value : undefined;
 }
 
 function readHead(file: string): string {

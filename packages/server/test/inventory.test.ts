@@ -390,6 +390,15 @@ describe('readInventory', () => {
 
 describe('agentNameFromDefinition', () => {
   /**
+   * Verifies that a crafted 4 KB name line cannot stall the event loop (former regex backtracked for ~30 s)
+   */
+  it('parses a pathological name line in linear time', () => {
+    const start = performance.now();
+    expect(agentNameFromDefinition('---\nname:' + ' \t'.repeat(2040) + '"x"y')).toBeUndefined();
+    expect(performance.now() - start).toBeLessThan(200);
+  });
+
+  /**
    * Verifies that the name of a plain LF frontmatter is returned
    */
   it('reads the name from an LF frontmatter', () => {
