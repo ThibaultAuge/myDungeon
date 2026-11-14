@@ -15,7 +15,7 @@ export type SkeletonModel = 'Skeleton_Minion';
 
 /** A model held in a hand: an Adventurers prop, an RPG Tools item, or a skeleton's weapon. */
 export interface PropRef {
-  pack: 'adventurers_props' | 'tools' | 'skeletons_props';
+  pack: 'adventurers_props' | 'tools' | 'skeleton_props';
   model: string;
 }
 
@@ -57,7 +57,7 @@ export const LOOKS: Readonly<Record<string, Look>> = {
   'statusline-setup': { body: 'Rogue', right: tool('wrench_A') },
 };
 
-const weapon = (model: string): PropRef => Object.freeze({ pack: 'skeletons_props', model });
+const weapon = (model: string): PropRef => Object.freeze({ pack: 'skeleton_props', model });
 
 /**
  * The three skeletons: all the bare Minion, the only body that reads as a skeleton from

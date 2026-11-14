@@ -19,9 +19,12 @@ npm workspaces: `packages/server`, `packages/web`, `packages/shared`.
 
 - `docs/ai/i18n.md` — Use when adding or changing any text shown in the web interface, a language, a RoomId or PostId, or server data that the client displays.
 - `docs/ai/dungeon-scene.md` — Use when changing the 3D dungeon map — rooms, floors, walls, castle gate, cutaway, props, lighting, KayKit models or their import — clickable workstations (posts, hover glow, post card and list), pointer/cursor handling of 3D targets, agent figures (walking motion, character models, role looks and held props, animations, destination badge), room or post icons, or when previewing the web scene.
+- `docs/ai/room-identity.md` — Use when changing a room's visual identity — per-room wall variants, wall hangs, room lights, decor kinds and decor recipes (decor.ts), the skeleton dummy — or the static mesh merging of posts (merge.ts) and the scene's draw-call count.
 - `docs/ai/night-forest.md` — Use when changing the night environment around the castle — forest floor, trees, moat, drawbridge, dirt path, horizon, night shading or sky colour — or the camera pan limits.
 - `docs/ai/agent-lifecycle.md` — Use when changing where agents rest or wait (tavern, altar queue), how agent figures appear, leave or return (subagent tavern cycle, main agents walking in from the forest, the skeleton ambush when a session ends, stopped sessions), the agent roster (snapshot.roster, agent definitions, seen types), or when testing the scene with fake hooks.
 - `docs/ai/dialogue.md` — Use when changing the agent conversation box (AgentDialog), how transcripts are found, parsed or paged (transcript.ts, /api/transcript, useTranscript), or adding any route that reads or changes conversations.
 - `docs/ai/agent-info.md` — Use when changing the selected-agent details card (AgentInfo), session details sent to the client (SessionView.info, worktree, branch, model, effort, permission mode, CLI version), or the detection of a session's local web servers (ports.ts, SessionView.servers).
 
-Human docs (French): `README.md` and `docs/`.
+Human docs (French): `README.md` (pitch, install, tests, doc index); in `docs/`:
+`utilisation.md`, `fonctionnement.md` (data flow, hooks, env vars), `securite.md`,
+`modeles-3d.md`, `lieux.md`, `personnages.md`, `conception.md`.

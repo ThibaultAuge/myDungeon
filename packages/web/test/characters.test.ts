@@ -149,10 +149,10 @@ describe('SKELETON_LOOKS', () => {
     }
   });
 
-  /** Verifies that every skeleton holds a weapon from the skeletons_props pack */
-  it('arms every skeleton from skeletons_props', () => {
+  /** Verifies that every skeleton holds a weapon from the skeleton_props pack */
+  it('arms every skeleton from skeleton_props', () => {
     for (const l of SKELETON_LOOKS) {
-      expect(l.right?.pack).toBe('skeletons_props');
+      expect(l.right?.pack).toBe('skeleton_props');
       expect(l.right?.model.length).toBeGreaterThan(0);
     }
   });

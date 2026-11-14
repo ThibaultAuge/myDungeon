@@ -5,7 +5,7 @@ description: Use when changing where agents rest or wait (tavern, altar queue), 
 # Agent life cycle: tavern, altar, forest entry, ambush, roster
 
 ## Current State
-- Design (user-defined, French): `docs/lieux-et-personnages.md`, section "La taverne et le
+- Design (user-defined, French): `docs/lieux.md`, section "La taverne et le
   cycle de vie d'un agent". The code below implements it.
 - Tavern: one neutral figure (`NEUTRAL_COLOR`) per roster type with no agent of that type
   on stage. Resting figures have id `rest:<type>` and are not selectable. They wear their

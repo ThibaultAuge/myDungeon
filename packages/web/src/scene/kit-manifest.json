@@ -2,59 +2,205 @@
   "dungeon": {
     "source": "dungeon/KayKit_Dungeon_Pack_1.1_FREE/Assets/gltf",
     "license": "dungeon/KayKit_Dungeon_Pack_1.1_FREE/License.txt",
-    "textures": ["dungeon_texture.png"],
+    "textures": [
+      "dungeon_texture.png"
+    ],
     "models": [
-      "floor_tile_small", "floor_tile_small_broken_A", "floor_tile_small_broken_B", "floor_tile_small_weeds_A",
-      "floor_tile_small_weeds_B", "floor_tile_small_decorated", "floor_tile_large", "floor_tile_large_rocks",
-      "floor_tile_grate", "floor_tile_big_grate", "floor_wood_small", "floor_wood_small_dark",
-      "floor_dirt_small_A", "floor_dirt_small_B", "floor_dirt_small_C", "floor_dirt_small_D", "floor_dirt_small_weeds",
-      "floor_foundation_front", "floor_foundation_corner",
-      "wall", "wall_window_open", "wall_arched", "wall_shelves", "wall_cracked", "wall_endcap", "wall_gated",
-      "pillar", "barrier", "column",
-      "table_long", "table_long_decorated_A", "table_medium", "table_medium_tablecloth", "table_small",
-      "table_small_decorated_A", "stool", "chair", "shelves", "shelf_large", "shelf_small_candles",
-      "barrel_small", "barrel_large", "barrel_small_stack", "keg", "box_small", "box_large", "box_stacked",
-      "crates_stacked", "trunk_large_A", "trunk_large_B", "trunk_large_C", "chest", "chest_gold",
-      "candle_triple", "candle_lit", "candle_thin_lit", "torch_mounted",
-      "bottle_A_green", "bottle_B_brown", "bottle_C_green", "bottle_A_labeled_brown",
-      "plate_food_A", "plate_food_B", "plate_stack", "coin_stack_small", "coin_stack_large", "keyring", "sword_shield",
-      "banner_blue", "banner_brown", "banner_green", "banner_red", "banner_white", "banner_yellow",
-      "banner_patternA_blue", "banner_patternA_brown", "banner_patternA_green", "banner_patternA_red", "banner_patternA_white", "banner_patternA_yellow",
-      "banner_patternB_blue", "banner_patternB_brown", "banner_patternB_green", "banner_patternB_red", "banner_patternB_white", "banner_patternB_yellow",
-      "banner_patternC_blue", "banner_patternC_brown", "banner_patternC_green", "banner_patternC_red", "banner_patternC_white", "banner_patternC_yellow",
-      "banner_triple_blue", "banner_triple_brown", "banner_triple_green", "banner_triple_red", "banner_triple_white", "banner_triple_yellow",
-      "banner_shield_blue", "banner_shield_brown", "banner_shield_green", "banner_shield_red", "banner_shield_white", "banner_shield_yellow"
+      "floor_tile_small",
+      "floor_tile_small_broken_A",
+      "floor_tile_small_broken_B",
+      "floor_tile_small_weeds_A",
+      "floor_tile_small_weeds_B",
+      "floor_tile_small_decorated",
+      "floor_tile_large",
+      "floor_tile_large_rocks",
+      "floor_tile_grate",
+      "floor_tile_big_grate",
+      "floor_wood_small",
+      "floor_wood_small_dark",
+      "floor_dirt_small_A",
+      "floor_dirt_small_B",
+      "floor_dirt_small_C",
+      "floor_dirt_small_D",
+      "floor_dirt_small_weeds",
+      "floor_foundation_front",
+      "floor_foundation_corner",
+      "wall",
+      "wall_window_open",
+      "wall_arched",
+      "wall_shelves",
+      "wall_cracked",
+      "wall_endcap",
+      "wall_gated",
+      "pillar",
+      "barrier",
+      "column",
+      "table_long",
+      "table_long_decorated_A",
+      "table_medium",
+      "table_medium_tablecloth",
+      "table_small",
+      "table_small_decorated_A",
+      "stool",
+      "chair",
+      "shelves",
+      "shelf_large",
+      "shelf_small_candles",
+      "barrel_small",
+      "barrel_large",
+      "barrel_small_stack",
+      "keg",
+      "box_small",
+      "box_large",
+      "box_stacked",
+      "crates_stacked",
+      "trunk_large_A",
+      "trunk_large_B",
+      "trunk_large_C",
+      "chest",
+      "chest_gold",
+      "candle_triple",
+      "candle_lit",
+      "candle_thin_lit",
+      "torch_mounted",
+      "bottle_A_green",
+      "bottle_B_brown",
+      "bottle_C_green",
+      "bottle_A_labeled_brown",
+      "plate_food_A",
+      "plate_food_B",
+      "plate_stack",
+      "coin_stack_small",
+      "coin_stack_large",
+      "keyring",
+      "sword_shield",
+      "banner_blue",
+      "banner_brown",
+      "banner_green",
+      "banner_red",
+      "banner_white",
+      "banner_yellow",
+      "banner_patternA_blue",
+      "banner_patternA_brown",
+      "banner_patternA_green",
+      "banner_patternA_red",
+      "banner_patternA_white",
+      "banner_patternA_yellow",
+      "banner_patternB_blue",
+      "banner_patternB_brown",
+      "banner_patternB_green",
+      "banner_patternB_red",
+      "banner_patternB_white",
+      "banner_patternB_yellow",
+      "banner_patternC_blue",
+      "banner_patternC_brown",
+      "banner_patternC_green",
+      "banner_patternC_red",
+      "banner_patternC_white",
+      "banner_patternC_yellow",
+      "banner_triple_blue",
+      "banner_triple_brown",
+      "banner_triple_green",
+      "banner_triple_red",
+      "banner_triple_white",
+      "banner_triple_yellow",
+      "banner_shield_blue",
+      "banner_shield_brown",
+      "banner_shield_green",
+      "banner_shield_red",
+      "banner_shield_white",
+      "banner_shield_yellow",
+      "wall_archedwindow_open",
+      "wall_scaffold",
+      "keyring_hanging",
+      "candle_melted",
+      "trunk_medium_A"
     ]
   },
   "tools": {
     "source": "rpg-tools/KayKit_RPGToolsBits_1.0_FREE/Assets/gltf",
     "license": null,
-    "textures": ["tools_bits_texture.png", "tools_bits_map.png", "tools_bits_map_empty.png", "tools_bits_blueprint.png"],
+    "textures": [
+      "tools_bits_texture.png",
+      "tools_bits_map.png",
+      "tools_bits_map_empty.png",
+      "tools_bits_blueprint.png"
+    ],
     "models": [
-      "map", "map_empty", "drafting_compass", "compass_base", "hammer", "saw", "wrench_A", "handplane", "pickaxe",
-      "shovel", "axe", "blueprint", "journal_closed", "journal_open", "magnifying_glass", "lantern", "bucket_metal",
-      "anvil", "mallet", "tongs"
+      "map",
+      "map_empty",
+      "drafting_compass",
+      "compass_base",
+      "hammer",
+      "saw",
+      "wrench_A",
+      "handplane",
+      "pickaxe",
+      "shovel",
+      "axe",
+      "blueprint",
+      "journal_closed",
+      "journal_open",
+      "magnifying_glass",
+      "lantern",
+      "bucket_metal",
+      "anvil",
+      "mallet",
+      "tongs",
+      "map_rolled",
+      "blueprint_stacked",
+      "grindstone"
     ]
   },
   "weapons": {
     "source": "weapons/KayKit_FantasyWeaponsBits_1.0_FREE/Assets/gltf",
     "license": null,
-    "textures": ["weapons_bits_texture.png"],
-    "models": ["sword_A", "axe_A", "spear_A", "shield_A", "shield_B", "halberd", "staff_A", "bow_A_withString"]
+    "textures": [
+      "weapons_bits_texture.png"
+    ],
+    "models": [
+      "sword_A",
+      "axe_A",
+      "spear_A",
+      "shield_A",
+      "shield_B",
+      "halberd",
+      "staff_A",
+      "bow_A_withString"
+    ]
   },
   "adventurers": {
     "source": "adventurers/KayKit_Adventurers_2.0_FREE/Characters/gltf",
     "license": "adventurers/KayKit_Adventurers_2.0_FREE/License.txt",
     "format": "glb",
     "textures": [],
-    "models": ["Knight", "Barbarian", "Mage", "Ranger", "Rogue", "Rogue_Hooded"]
+    "models": [
+      "Knight",
+      "Barbarian",
+      "Mage",
+      "Ranger",
+      "Rogue",
+      "Rogue_Hooded"
+    ]
   },
   "adventurers_props": {
     "source": "adventurers/KayKit_Adventurers_2.0_FREE/Assets/gltf",
     "license": "adventurers/KayKit_Adventurers_2.0_FREE/License.txt",
-    "textures": ["knight_texture.png", "barbarian_texture.png", "mage_texture.png", "rogue_texture.png"],
+    "textures": [
+      "knight_texture.png",
+      "barbarian_texture.png",
+      "mage_texture.png",
+      "rogue_texture.png"
+    ],
     "models": [
-      "spellbook_open", "spellbook_closed", "smokebomb", "shield_spikes", "shield_badge_color", "staff", "mug_full", "dagger"
+      "spellbook_open",
+      "spellbook_closed",
+      "smokebomb",
+      "shield_spikes",
+      "shield_badge_color",
+      "staff",
+      "mug_full",
+      "dagger"
     ]
   },
   "adventurers_anim": {
@@ -62,12 +208,131 @@
     "license": "adventurers/KayKit_Adventurers_2.0_FREE/License.txt",
     "format": "glb",
     "textures": [],
-    "models": ["Rig_Medium_General", "Rig_Medium_MovementBasic"]
+    "models": [
+      "Rig_Medium_General",
+      "Rig_Medium_MovementBasic"
+    ]
+  },
+  "furniture": {
+    "source": "gh-furniture/repo/addons/kaykit_furniture_bits/Assets/gltf",
+    "license": "gh-furniture/repo/LICENSE.txt",
+    "textures": [
+      "furniturebits_texture.png"
+    ],
+    "models": [
+      "couch_pillows",
+      "rug_rectangle_stripes_A",
+      "rug_oval_A",
+      "book_set",
+      "pictureframe_large_A",
+      "pictureframe_medium",
+      "pictureframe_small_A"
+    ]
+  },
+  "halloween": {
+    "source": "gh-halloween/repo/addons/kaykit_halloween_bits/Assets/gltf",
+    "license": "gh-halloween/repo/LICENSE.txt",
+    "textures": [
+      "halloweenbits_texture.png"
+    ],
+    "models": [
+      "shrine_candles",
+      "ribcage",
+      "bone_A"
+    ]
+  },
+  "restaurant": {
+    "source": "gh-restaurant/repo/addons/kaykit_restaurant_bits/Assets/gltf",
+    "license": "gh-restaurant/repo/LICENSE.txt",
+    "textures": [
+      "restaurantbits_texture.png"
+    ],
+    "models": [
+      "food_stew",
+      "food_dinner",
+      "crate_carrots",
+      "crate_potatoes",
+      "jar_A_medium",
+      "jar_C_large",
+      "jar_B_small"
+    ]
+  },
+  "resources": {
+    "source": "resourcebits/KayKit_ResourceBits_1.0_FREE/Assets/gltf",
+    "license": "resourcebits/KayKit_ResourceBits_1.0_FREE/License.txt",
+    "textures": [
+      "resource_bits_texture.png"
+    ],
+    "models": [
+      "Gold_Bars_Stack_Medium",
+      "Silver_Bars_Stack_Small",
+      "Gold_Nuggets",
+      "Wood_Planks_Stack_Medium",
+      "Wood_Log_Stack",
+      "Fuel_A_Barrels",
+      "Parts_Pile_Small",
+      "Parts_Cog",
+      "Textiles_Stack_Small"
+    ]
+  },
+  "mixed1": {
+    "source": "mixed_bag/KayKit_Mixed_Bag_1_FREE/Assets/gltf",
+    "license": "mixed_bag/KayKit_Mixed_Bag_1_FREE/License.txt",
+    "textures": [
+      "kaykit_texture_A.png"
+    ],
+    "models": [
+      "woodstove",
+      "chain_hanging_A",
+      "chain_shackle",
+      "chicken_plushie_A",
+      "chicken_plushie_B",
+      "guitar_A",
+      "puzzlecube_complete",
+      "flax_flower_A"
+    ]
+  },
+  "mixed2": {
+    "source": "mixed_bag/KayKit_Mixed_Bag_2_FREE/Assets/gltf",
+    "license": "mixed_bag/KayKit_Mixed_Bag_2_FREE/License.txt",
+    "textures": [
+      "kaykit_texture_A.png"
+    ],
+    "models": [
+      "cobweb_C",
+      "beartrap_A",
+      "book_mimic",
+      "gamer_chair_A",
+      "handheld_console"
+    ]
+  },
+  "skeletons": {
+    "source": "skeletons/KayKit_Skeletons_1.1_FREE/characters/gltf",
+    "license": "skeletons/KayKit_Skeletons_1.1_FREE/License.txt",
+    "format": "glb",
+    "textures": [],
+    "models": [
+      "Skeleton_Minion"
+    ]
+  },
+  "skeleton_props": {
+    "source": "skeletons/KayKit_Skeletons_1.1_FREE/assets/gltf",
+    "license": "skeletons/KayKit_Skeletons_1.1_FREE/License.txt",
+    "textures": [
+      "skeleton_texture.png"
+    ],
+    "models": [
+      "Skeleton_Shield_Large_A",
+      "Skeleton_Blade",
+      "Skeleton_Axe"
+    ]
   },
   "forest": {
     "source": "forest/KayKit_Forest_Nature_Pack_1.0_FREE/Assets/gltf",
     "license": "forest/KayKit_Forest_Nature_Pack_1.0_FREE/License.txt",
-    "textures": ["forest_texture.png"],
+    "textures": [
+      "forest_texture.png"
+    ],
     "models": [
       "Tree_4_A_Color1",
       "Tree_4_B_Color1",
@@ -84,20 +349,10 @@
       "Bush_3_C_Color1",
       "Bush_4_F_Color1",
       "Rock_1_H_Color1",
-      "Rock_3_G_Color1"
+      "Rock_3_G_Color1",
+      "Grass_2_B_Color1",
+      "Grass_1_A_Color1",
+      "Rock_1_A_Color1"
     ]
-  },
-  "skeletons": {
-    "source": "skeletons/KayKit_Skeletons_1.1_FREE/characters/gltf",
-    "license": "skeletons/KayKit_Skeletons_1.1_FREE/License.txt",
-    "format": "glb",
-    "textures": [],
-    "models": ["Skeleton_Minion"]
-  },
-  "skeletons_props": {
-    "source": "skeletons/KayKit_Skeletons_1.1_FREE/assets/gltf",
-    "license": "skeletons/KayKit_Skeletons_1.1_FREE/License.txt",
-    "textures": ["skeleton_texture.png"],
-    "models": ["Skeleton_Blade", "Skeleton_Axe"]
   }
 }
