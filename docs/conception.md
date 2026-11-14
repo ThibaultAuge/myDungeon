@@ -28,7 +28,7 @@ Un **donjon de fantasy coloré et joyeux**, pas sombre : proportions trapues, co
 - la file d'attente à l'autel, réservée aux permissions, questions et erreurs ;
 - le cycle de vie de la taverne : un exemplaire neutre de chaque type au repos, appel, appels simultanés depuis les casiers, retour et disparition, et l'agent principal au repos pendant l'attente d'un prompt ;
 - la bulle de requête à l'autel (« … », « ? », « ! ») et le losange ambre de l'attente d'un prompt ;
-- les icônes d'état (marteau, sablier, main ouverte levée, « Zzz ») dans la liste latérale et la fiche d'agent ;
+- les icônes d'état (marteau, sablier, bulle rouge « … », « Zzz ») dans la liste latérale et la fiche d'agent ;
 - le pictogramme de destination au-dessus d'un agent qui marche ;
 - la boîte de dialogue en lecture seule, ouverte par un clic sur un personnage ou sur sa ligne, lisible sans connexion depuis la page servie en local ;
 - la fiche d'agent avec le contexte de la session et les serveurs web détectés ;

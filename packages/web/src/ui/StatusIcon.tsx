@@ -13,21 +13,16 @@ const SHAPES: Record<StatusKind, ReactNode> = {
       <path d="M3 2.2h8.6a1.4 1.4 0 0 1 1.4 1.4v1.8a1.4 1.4 0 0 1-1.4 1.4H5.2L3 5.6z" />
     </g>
   ),
-  // Hourglass: waiting for the next message. Not a speech bubble, which the scene keeps for
-  // urgent requests (RequestBubble).
+  // Hourglass: waiting for the next message. Not a speech bubble, which is kept for urgent requests.
   prompt: (
     <path d="M2.5 1h11v2h-1.2v1.4c0 1.7-1.1 2.9-2.6 3.6 1.5.7 2.6 1.9 2.6 3.6V13h1.2v2h-11v-2h1.2v-1.4c0-1.7 1.1-2.9 2.6-3.6C4.8 7.3 3.7 6.1 3.7 4.4V3H2.5z" />
   ),
-  // Raised open hand: stop, the agent needs you.
+  // Speech bubble with "…" cut out: the agent needs you. Same shape as the scene's RequestBubble.
   urgent: (
-    <>
-      <rect x="4.3" y="3.2" width="2" height="8" rx="1" />
-      <rect x="6.5" y="1.2" width="2" height="9" rx="1" />
-      <rect x="8.7" y="1.8" width="2" height="9" rx="1" />
-      <rect x="10.9" y="3.6" width="2" height="7.5" rx="1" />
-      <rect x="4.3" y="7" width="8.6" height="8" rx="2.6" />
-      <rect x="4.9" y="6" width="2.2" height="7.2" rx="1.1" transform="rotate(-38 6 12.6)" />
-    </>
+    <path
+      fillRule="evenodd"
+      d="M4 1.5h8a3 3 0 0 1 3 3v4a3 3 0 0 1-3 3H7.2l-3.7 3 .9-3H4a3 3 0 0 1-3-3v-4a3 3 0 0 1 3-3zM4 6.5a1 1 0 1 0 2 0a1 1 0 1 0-2 0zM7 6.5a1 1 0 1 0 2 0a1 1 0 1 0-2 0zM10 6.5a1 1 0 1 0 2 0a1 1 0 1 0-2 0z"
+    />
   ),
   // Zzz: finished, asleep.
   done: (

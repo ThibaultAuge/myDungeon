@@ -86,7 +86,7 @@ Chaque agent a un état. Il se lit à la couleur de l'étiquette, à la forme de
 |---|---|---|---|
 | Il travaille | Vert | Marteau | Il marche ou travaille à son poste. |
 | Il attend ton prochain message | Ambre | Sablier | Un petit losange ambre s'affiche au-dessus de son étiquette. |
-| Il a besoin de toi | Rouge | Main ouverte levée | Une bulle de requête rouge s'affiche (voir plus bas). |
+| Il a besoin de toi | Rouge | Bulle rouge « … » | Une bulle de requête rouge s'affiche (voir plus bas). |
 | Il a terminé | Gris | « Zzz » | Il reste immobile, en pose calme. |
 
 Les icônes de la liste latérale et de la fiche d'agent portent l'état sans couleur, grâce à leur forme. Dans la 3D, le losange ambre et la bulle rouge gardent leur rôle.
