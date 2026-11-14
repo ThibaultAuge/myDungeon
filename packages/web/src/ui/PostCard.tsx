@@ -1,5 +1,7 @@
 import { useEffect } from 'react';
 import { useT } from '../i18n/useT.ts';
+import { DestinationIcon } from '../scene/DestinationIcon.tsx';
+import { postDestination } from '../scene/destinations.ts';
 import { POST_ROOM, type PostId } from '../scene/layout.ts';
 import { useOffice } from '../store.ts';
 import { postButtonId } from './PostList.tsx';
@@ -41,19 +43,19 @@ export function PostCard() {
     <div className="post-card-region" aria-live="polite">
       {post && text && (
         <section className="post-card" aria-labelledby="post-card-title">
-          <div className="post-card__head">
-            <div>
-              {room && <p className="post-card__room">{t.rooms[room]}</p>}
-              <h2 id="post-card-title">{text.title}</h2>
-            </div>
-            <button type="button" className="icon-button" aria-label={t.postCard.close} onClick={(e) => {
-                selectPost(null);
-                // detail is 0 for a keyboard activation, the click count for a pointer.
-                focusPostButton(post, e.detail > 0);
-              }}>
-              ×
-            </button>
+          {/* Same plate as the agent cards: the icon is the badge of an agent walking to this post. */}
+          <div className="post-card__plate">
+            <DestinationIcon kind={postDestination(post)} className="post-card__icon" />
+            <h2 id="post-card-title">{text.title}</h2>
           </div>
+          <button type="button" className="post-card__close" aria-label={t.postCard.close} onClick={(e) => {
+              selectPost(null);
+              // detail is 0 for a keyboard activation, the click count for a pointer.
+              focusPostButton(post, e.detail > 0);
+            }}>
+            ×
+          </button>
+          {room && <p className="post-card__room">{t.rooms[room]}</p>}
           <p className="post-card__role">{text.role}</p>
           <p className="post-card__who">{t.labelled(t.postCard.who, text.who)}</p>
         </section>
