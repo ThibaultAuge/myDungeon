@@ -1786,3 +1786,421 @@ describe('tavern cycle: applyInventory definedAgents', () => {
     expect(rosterView(state, 'env-alpha')).toEqual(['Explore']);
   });
 });
+
+describe('tavern follow-ups: hookEventSchema agent_id and agent_type', () => {
+  const base = { hook_event_name: 'PreToolUse', session_id: 's1', tool_name: 'Read', tool_input: { file_path: 'a.ts' } };
+
+  /**
+   * Verifies that well-formed agent ids and types, up to their maximum length, are kept as sent
+   */
+  it.each([
+    ['ag-1', 'Explore'],
+    ['a0f3c9e1b2d4', 'general-purpose'],
+    ['A.b_c-9', 'v1.2'],
+    ['a'.repeat(128), 'a'.repeat(64)],
+    ['ag-2', 'rest:dexter'],
+    ['ag-3', 'my-plugin:reviewer'],
+    ['ag-4', `${'p'.repeat(64)}:${'r'.repeat(64)}`],
+  ])('keeps agent_id %s and agent_type %s', (id, type) => {
+    const r = hookEventSchema.safeParse({ ...base, agent_id: id, agent_type: type });
+    expect(r.success).toBe(true);
+    expect(r.data).toMatchObject({ agent_id: id, agent_type: type });
+  });
+
+  /**
+   * Verifies that absent agent fields stay undefined, never null
+   */
+  it('leaves absent agent_id and agent_type undefined', () => {
+    const r = hookEventSchema.parse(base);
+    expect(r.agent_id).toBeUndefined();
+    expect(r.agent_type).toBeUndefined();
+  });
+
+  /**
+   * Verifies that an invalid agent_id becomes null while the rest of the payload is kept
+   */
+  it.each([
+    [42],
+    [true],
+    [{}],
+    [['ag-1']],
+    [''],
+    ['rest:dexter'],
+    ['x#main'],
+    [`cli:${CLI_A}#main`],
+    ['-lead'],
+    ['.hidden'],
+    ['_x'],
+    ['a b'],
+    ['ag/1'],
+    ['é'],
+    ['a'.repeat(129)],
+  ])('maps agent_id %j to null without rejecting the event', (id) => {
+    const r = hookEventSchema.safeParse({ ...base, agent_id: id, agent_type: 'Explore' });
+    expect(r.success).toBe(true);
+    expect(r.data!.agent_id).toBeNull();
+    expect(r.data).toMatchObject({ hook_event_name: 'PreToolUse', session_id: 's1', tool_name: 'Read', agent_type: 'Explore' });
+  });
+
+  /**
+   * Verifies that an invalid agent_type becomes null while the rest of the payload is kept
+   */
+  it.each([
+    [7],
+    [{}],
+    [''],
+    ['x#main'],
+    ['-lead'],
+    ['.hidden'],
+    ['my agent'],
+    ['<script>'],
+    ['é'],
+    ['a'.repeat(65)],
+    // Plugin namespacing allows exactly one colon between two valid names.
+    ['a::b'],
+    [':a'],
+    ['a:'],
+    [':'],
+    ['a:b:c'],
+    ['a:-b'],
+    ['a:.b'],
+    ['p:#x'],
+    ['a#b:c'],
+    [`p:${'r'.repeat(65)}`],
+    [`${'p'.repeat(65)}:r`],
+  ])('maps agent_type %j to null without rejecting the event', (type) => {
+    const r = hookEventSchema.safeParse({ ...base, agent_id: 'ag-1', agent_type: type });
+    expect(r.success).toBe(true);
+    expect(r.data!.agent_type).toBeNull();
+    expect(r.data).toMatchObject({ agent_id: 'ag-1', tool_name: 'Read' });
+  });
+
+  /**
+   * Verifies that a JSON null reads as absent, so a main-agent event that sends null still counts
+   */
+  it('treats a JSON null agent_id or agent_type as absent', () => {
+    const r = hookEventSchema.parse({ ...base, agent_id: null, agent_type: null });
+    expect(r.agent_id).toBeUndefined();
+    expect(r.agent_type).toBeUndefined();
+    const state = createState();
+    const s = applyHook(state, hookEventSchema.parse({ ...base, agent_id: null }), 1000);
+    expect(s.main).toMatchObject({ state: 'working', tool: 'Read' });
+  });
+
+  /**
+   * Verifies that agent_id allows 128 characters but agent_type only 64 (different limits)
+   */
+  it('applies the 128-character limit to ids and the 64-character limit to types', () => {
+    const r = hookEventSchema.parse({ ...base, agent_id: 'a'.repeat(100), agent_type: 'a'.repeat(100) });
+    expect(r.agent_id).toBe('a'.repeat(100));
+    expect(r.agent_type).toBeNull();
+  });
+
+  /**
+   * Verifies that a namespaced type is not accepted as an id (ids still forbid the colon)
+   */
+  it('refuses a colon in agent_id even where agent_type accepts it', () => {
+    const r = hookEventSchema.parse({ ...base, agent_id: 'my-plugin:reviewer', agent_type: 'my-plugin:reviewer' });
+    expect(r.agent_id).toBeNull();
+    expect(r.agent_type).toBe('my-plugin:reviewer');
+  });
+
+  /**
+   * Verifies that summaries map refused ids and types to undefined, never null
+   */
+  it('keeps crafted values out of the event summary', () => {
+    const state = stateWithEnvs();
+    const ev = hookEventSchema.parse(hook('PreToolUse', { agent_id: 'x#main', agent_type: 'a::b', tool_name: 'Bash' }));
+    expect(ev).toMatchObject({ agent_id: null, agent_type: null });
+    const sum = summarize(ev, applyHook(state, ev, 5), 5);
+    expect(sum.agentId).toBeUndefined();
+    expect(sum.agentType).toBeUndefined();
+    expect(sum.tool).toBe('Bash');
+  });
+
+  /**
+   * Verifies that a valid namespaced type is carried as is in the event summary
+   */
+  it('keeps a namespaced agent type in the event summary', () => {
+    const state = stateWithEnvs();
+    const ev = hookEventSchema.parse(hook('SubagentStart', { agent_id: 'ag-p', agent_type: 'my-plugin:reviewer' }));
+    const sum = summarize(ev, applyHook(state, ev, 5), 5);
+    expect(sum).toMatchObject({ agentId: 'ag-p', agentType: 'my-plugin:reviewer' });
+  });
+});
+
+describe('tavern follow-ups: events with a refused agent_id', () => {
+  /** Parses a hook like the HTTP route does, so crafted fields become null. */
+  const parsed = (name: string, extra: Record<string, unknown> = {}) => hookEventSchema.parse(hook(name, extra));
+
+  /**
+   * Verifies that a tool event with a refused agent_id leaves the main agent unchanged
+   */
+  it('never applies a tool event with a crafted agent_id to the main agent', () => {
+    const state = stateWithEnvs();
+    run(state, [[1, hook('UserPromptSubmit', { prompt: 'go' })]]);
+    const s = applyHook(
+      state,
+      parsed('PreToolUse', { agent_id: 'rest:dexter', agent_type: 'dexter', tool_name: 'Read', tool_input: { file_path: 'a.ts' } }),
+      50,
+    );
+    expect(s.main).toMatchObject({ state: 'working', room: 'cartes', since: 1, toolDetail: 'go' });
+    expect(s.main.tool).toBeUndefined();
+    expect(s.subagents).toEqual([]);
+    expect(rosterView(state, 'env-alpha')).toEqual([]);
+  });
+
+  /**
+   * Verifies that a permission request with a refused agent_id never sends main to the altar
+   */
+  it('never sets the main agent waiting on a crafted PermissionRequest', () => {
+    const state = stateWithEnvs();
+    run(state, [[1, hook('PreToolUse', { tool_name: 'Bash', tool_input: { command: 'ls' } })]]);
+    const s = applyHook(state, parsed('PermissionRequest', { agent_id: 'x#main', tool_name: 'Bash', tool_input: { command: 'rm -rf /' } }), 60);
+    expect(s.main).toMatchObject({ state: 'working', room: 'machines', tool: 'Bash', toolDetail: 'ls', since: 1 });
+    expect(s.main.waitReason).toBeUndefined();
+  });
+
+  /**
+   * Verifies that a refused agent_id still counts as session activity (hook time, activity, live)
+   */
+  it('still refreshes the session activity', () => {
+    const state = stateWithEnvs();
+    const s = applyHook(state, parsed('PreToolUse', { agent_id: 42, agent_type: 'neo', tool_name: 'Read' }), 700);
+    expect(s).toMatchObject({ id: CLI_KEY, live: true, lastActivityAt: 700 });
+    expect(state.lastHookAt.get(CLI_KEY)).toBe(700);
+    // A new session's main agent stays as created: nothing was applied to it.
+    expect(s.main.state).toBe('done');
+    expect(s.subagents).toEqual([]);
+  });
+
+  /**
+   * Verifies that a fresh crafted hook keeps the session live against a missing process
+   */
+  it('keeps hook authority over the inventory like any other hook', () => {
+    const state = stateWithEnvs();
+    applyInventory(state, inventory({ desktopSessions: [desk()], live: [proc()] }), 1000);
+    applyHook(state, parsed('PreToolUse', { agent_id: 'x#main', tool_name: 'Read' }), 50_000);
+    applyInventory(state, inventory({ desktopSessions: [desk()] }), 50_000 + HOOK_AUTHORITY_MS);
+    expect(state.sessions.get(LOCAL_A)?.live).toBe(true);
+  });
+
+  /**
+   * Verifies that SubagentStart or SubagentStop with a refused id or type affects no figure
+   */
+  it.each([
+    [{ agent_id: 'x#main', agent_type: 'neo' }],
+    [{ agent_id: 'rest:neo', agent_type: 'neo' }],
+    [{ agent_id: 'ag-1', agent_type: 'a::b' }],
+    [{ agent_id: 'ag-1', agent_type: 7 }],
+  ])('ignores SubagentStart %j after parsing', (extra) => {
+    const state = stateWithEnvs();
+    const s = applyHook(state, parsed('SubagentStart', extra), 1);
+    expect(s.subagents).toEqual([]);
+    expect(rosterView(state, 'env-alpha')).toEqual([]);
+  });
+
+  /**
+   * Verifies that a refused id never stops a running subagent nor touches main
+   */
+  it('ignores a SubagentStop with a refused id', () => {
+    const state = stateWithEnvs();
+    withSubagent(state, 1000);
+    const s = applyHook(state, parsed('SubagentStop', { agent_id: 'ag-1#x' }), 1100);
+    expect(s.subagents[0]).toMatchObject({ id: 'ag-1', state: 'working' });
+    expect(s.main.state).toBe('working');
+  });
+});
+
+describe('tavern follow-ups: namespaced agent types', () => {
+  /**
+   * Verifies that a plugin-namespaced subagent gets a figure and joins the roster
+   */
+  it.each([['my-plugin:reviewer'], ['rest:dexter']])('creates a subagent of type %s and records it', (type) => {
+    const state = stateWithEnvs();
+    const s = applyHook(state, hookEventSchema.parse(hook('SubagentStart', { agent_id: 'ag-p', agent_type: type })), 1);
+    expect(s.subagents).toHaveLength(1);
+    expect(s.subagents[0]).toMatchObject({ id: 'ag-p', agentType: type, kind: 'sub' });
+    expect(rosterView(state, 'env-alpha')).toEqual([type]);
+  });
+
+  /**
+   * Verifies that a namespaced type seen first through a tool call is also recorded
+   */
+  it('records a namespaced type when SubagentStart was missed', () => {
+    const state = stateWithEnvs();
+    run(state, [[1, hook('PreToolUse', { agent_id: 'ag-x', agent_type: 'tools:linter', tool_name: 'Read' })]]);
+    expect(rosterView(state, 'env-alpha')).toEqual(['tools:linter']);
+  });
+
+  /**
+   * Verifies that an Agent call with a namespaced subagent_type is matched to its SubagentStart
+   */
+  it('matches a pending spawn with a namespaced type', () => {
+    const s = run(stateWithEnvs(), [
+      [1, hook('PreToolUse', { tool_name: 'Agent', tool_input: { subagent_type: 'my-plugin:reviewer', description: 'Review' } })],
+      [2, hook('SubagentStart', { agent_id: 'ag-r', agent_type: 'my-plugin:reviewer' })],
+    ]);
+    expect(s.subagents[0]).toMatchObject({ agentType: 'my-plugin:reviewer', description: 'Review' });
+  });
+
+  /**
+   * Verifies that an unparsed hook with an invalid namespaced type is still kept out of the roster
+   */
+  it.each([['a::b'], ['a:b:c'], [':a'], ['a:']])('keeps %s out of the roster', (type) => {
+    const state = stateWithEnvs();
+    run(state, [[1, hook('SubagentStart', { agent_id: 'ag-1', agent_type: type })]]);
+    expect(rosterView(state, 'env-alpha')).toEqual([]);
+  });
+});
+
+describe('tavern follow-ups: pending spawns with an invalid subagent_type', () => {
+  /**
+   * Verifies that an Agent call with an invalid subagent_type queues no spawn
+   */
+  it.each([[42], [null], [''], ['a::b'], ['a:b:c'], ['plugin:'], ['x#main'], ['my agent'], ['<script>'], ['a'.repeat(65)], [{ name: 'Explore' }]])(
+    'queues no spawn for subagent_type %j',
+    (type) => {
+      const state = stateWithEnvs();
+      const s = run(state, [[1, hook('PreToolUse', { tool_name: 'Agent', tool_input: { subagent_type: type, description: 'Crafted' } })]]);
+      expect(state.pendingSpawns.get(CLI_KEY) ?? []).toEqual([]);
+      // The call itself still counts as main-agent activity.
+      expect(s.main).toMatchObject({ state: 'working', tool: 'Agent' });
+      // A later generic start must not inherit the crafted call's description.
+      run(state, [[2, hook('SubagentStart', { agent_id: 'ag-g', agent_type: 'general-purpose' })]]);
+      expect(s.subagents[0]?.description).toBeUndefined();
+    },
+  );
+
+  /**
+   * Verifies that a Task call with an invalid subagent_type also queues no spawn
+   */
+  it('queues no spawn for a Task call with a crafted type', () => {
+    const state = stateWithEnvs();
+    run(state, [[1, hook('PreToolUse', { tool_name: 'Task', tool_input: { subagent_type: 'x#main', description: 'T' } })]]);
+    expect(state.pendingSpawns.get(CLI_KEY) ?? []).toEqual([]);
+  });
+
+  /**
+   * Verifies that a valid type of maximum length (64) still queues a spawn
+   */
+  it('queues a spawn for a 64-character type', () => {
+    const state = stateWithEnvs();
+    const type = 'a'.repeat(64);
+    const s = run(state, [
+      [1, hook('PreToolUse', { tool_name: 'Agent', tool_input: { subagent_type: type, description: 'Long' } })],
+      [2, hook('SubagentStart', { agent_id: 'ag-l', agent_type: type })],
+    ]);
+    expect(s.subagents[0]).toMatchObject({ agentType: type, description: 'Long' });
+  });
+
+  /**
+   * Verifies that an Agent call without any tool_input defaults its spawn to general-purpose
+   */
+  it('defaults to general-purpose when the Agent call has no tool_input', () => {
+    const state = stateWithEnvs();
+    run(state, [[1, hook('PreToolUse', { tool_name: 'Agent' })]]);
+    expect(state.pendingSpawns.get(CLI_KEY)).toEqual([{ agentType: 'general-purpose', description: undefined }]);
+  });
+
+  /**
+   * Verifies that an invalid call between two valid ones leaves the valid spawns matched
+   */
+  it('keeps the valid spawns around an invalid one', () => {
+    const s = run(stateWithEnvs(), [
+      [1, hook('PreToolUse', { tool_name: 'Agent', tool_input: { subagent_type: 'Explore', description: 'E' } })],
+      [2, hook('PreToolUse', { tool_name: 'Agent', tool_input: { subagent_type: 'bad type', description: 'X' } })],
+      [3, hook('PreToolUse', { tool_name: 'Agent', tool_input: { description: 'G' } })],
+      [4, hook('SubagentStart', { agent_id: 'ag-g', agent_type: 'general-purpose' })],
+      [5, hook('SubagentStart', { agent_id: 'ag-e', agent_type: 'Explore' })],
+    ]);
+    expect(s.subagents.map((a) => [a.id, a.description])).toEqual([
+      ['ag-g', 'G'],
+      ['ag-e', 'E'],
+    ]);
+  });
+});
+
+describe('tavern follow-ups: seen types of an absorbed cli session', () => {
+  /**
+   * Verifies that types of a cli session absorbed by a desktop session join the desktop env roster
+   */
+  it.each([
+    ['no environment', 'D:/elsewhere', NO_ENV],
+    ['another environment', 'C:/work/alpha', 'env-alpha'],
+  ])('notes the types of a cli session from %s under the desktop environment', (_label, cwd, before) => {
+    const state = stateWithEnvs();
+    applyHook(state, hook('SubagentStart', { cwd, agent_id: 'ag-n', agent_type: 'neo' }), 1000);
+    applyHook(state, hook('PreToolUse', { cwd, agent_id: 'ag-d', agent_type: 'dexter', tool_name: 'Read' }), 1010);
+    expect(rosterView(state, before)).toEqual(['dexter', 'neo']);
+    expect(rosterView(state, 'env-beta')).toEqual([]);
+
+    applyInventory(
+      state,
+      inventory({ desktopSessions: [desk({ envId: 'env-beta', matchFolders: ['C:\\work\\beta'], cwd: 'C:\\work\\beta' })] }),
+      2000,
+    );
+
+    const s = state.sessions.get(LOCAL_A)!;
+    expect(state.sessions.has(CLI_KEY)).toBe(false);
+    expect(s.envId).toBe('env-beta');
+    expect(s.subagents.map((a) => a.id).sort()).toEqual(['ag-d', 'ag-n']);
+    expect(rosterView(state, 'env-beta')).toEqual(['dexter', 'neo']);
+  });
+
+  /**
+   * Verifies that absorbing into a session of the same environment adds no duplicate type
+   */
+  it('adds no duplicate when the cli session was already in the desktop environment', () => {
+    const state = stateWithEnvs();
+    applyHook(state, hook('SubagentStart', { agent_id: 'ag-n', agent_type: 'neo' }), 1000);
+    applyInventory(state, inventory({ desktopSessions: [desk({ envId: 'env-alpha' })] }), 2000);
+    expect(rosterView(state, 'env-alpha')).toEqual(['neo']);
+  });
+
+  /**
+   * Verifies that a desktop session with no environment notes absorbed types in the virtual roster
+   */
+  it('notes absorbed types under the virtual environment for an env-less desktop session', () => {
+    const state = stateWithEnvs();
+    applyHook(state, hook('SubagentStart', { agent_id: 'ag-o', agent_type: 'oracle' }), 1000);
+    applyInventory(state, inventory({ desktopSessions: [desk({ matchFolders: ['D:\\elsewhere'], cwd: 'D:\\elsewhere' })] }), 2000);
+    expect(state.sessions.get(LOCAL_A)?.envId).toBeNull();
+    expect(rosterView(state, NO_ENV)).toEqual(['oracle']);
+  });
+
+  /**
+   * Verifies that a later poll absorbing nothing does not re-add a type evicted by the 32 cap
+   */
+  it('does not revive an evicted type on a poll that absorbs nothing', () => {
+    const state = stateWithEnvs();
+    const type = (i: number) => `t${String(i).padStart(2, '0')}`;
+    applyHook(state, hook('SubagentStart', { agent_id: 'ag-0', agent_type: type(0) }), 1);
+    applyInventory(state, inventory({ desktopSessions: [desk()] }), 2);
+    expect(state.sessions.has(CLI_KEY)).toBe(false);
+    expect(rosterView(state, 'env-alpha')).toEqual([type(0)]);
+
+    // 32 newer types on the desktop session push t00 out of the environment's seen list.
+    for (let i = 1; i <= 32; i++) applyHook(state, hook('SubagentStart', { agent_id: `ag-${i}`, agent_type: type(i) }), 2 + i);
+    expect(rosterView(state, 'env-alpha')).not.toContain(type(0));
+
+    applyInventory(state, inventory({ desktopSessions: [desk()] }), 100);
+
+    const s = state.sessions.get(LOCAL_A)!;
+    // The t00 subagent is still on the session: only the absorb-only rule keeps it out.
+    expect(s.subagents.some((a) => a.agentType === type(0))).toBe(true);
+    const roster = rosterView(state, 'env-alpha');
+    expect(roster).not.toContain(type(0));
+    expect(roster).toEqual(Array.from({ length: 32 }, (_, k) => type(k + 1)));
+  });
+
+  /**
+   * Verifies that a namespaced type moves with an absorbed session to the desktop environment
+   */
+  it('re-keys a namespaced type of an absorbed session', () => {
+    const state = stateWithEnvs();
+    applyHook(state, hook('SubagentStart', { cwd: 'D:/elsewhere', agent_id: 'ag-p', agent_type: 'my-plugin:reviewer' }), 1);
+    applyInventory(state, inventory({ desktopSessions: [desk({ envId: 'env-beta' })] }), 2);
+    expect(rosterView(state, 'env-beta')).toEqual(['my-plugin:reviewer']);
+  });
+});

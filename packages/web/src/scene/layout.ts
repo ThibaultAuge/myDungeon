@@ -516,8 +516,20 @@ function toSpot(room: RoomDef, seat: Seat, id: string): Spot {
 const WALL_SEAT_STEP = 1;
 const WALL_SEAT_MARGIN = 0.6;
 
-/** Standing places along the inner walls, facing the room centre, the door left clear. */
-export function wallSeats(room: RoomDef): Seat[] {
+/** Rooms are static: their wall seats are computed once. */
+const wallSeatsCache = new WeakMap<RoomDef, readonly Seat[]>();
+
+/** Standing places along the inner walls, facing the room centre, the door left clear. Shared, read-only. */
+export function wallSeats(room: RoomDef): readonly Seat[] {
+  let seats = wallSeatsCache.get(room);
+  if (!seats) {
+    seats = computeWallSeats(room);
+    wallSeatsCache.set(room, seats);
+  }
+  return seats;
+}
+
+function computeWallSeats(room: RoomDef): Seat[] {
   // The Scriptorium is a corner of the library: its overflow goes to the library walls.
   if (room.insideOf) return [];
   const hw = room.w / 2 - WALL_SEAT_MARGIN;
@@ -626,13 +638,32 @@ const STATIONS: Record<string, string> = {
   'claude-code-guide': 'sacristain',
 };
 
+/** Candidate lists by room, then by station ('' for none). */
+const candidatesCache = new WeakMap<RoomDef, Map<string, readonly { id: string; seat: Seat }[]>>();
+
 /**
  * Seats an agent may take in a room, in order of preference: its own post, the shared
  * seats, then the standing places along the walls. Each comes with a stable id.
  */
-export function candidateSeats(room: RoomDef, agentType: string): { id: string; seat: Seat }[] {
+export function candidateSeats(room: RoomDef, agentType: string): readonly { id: string; seat: Seat }[] {
   const key = agentType.toLowerCase();
   const station = Object.hasOwn(STATIONS, key) ? STATIONS[key] : undefined;
+  // Cached by station, not by type: the types come from the server, the stations are few.
+  let byStation = candidatesCache.get(room);
+  if (!byStation) {
+    byStation = new Map();
+    candidatesCache.set(room, byStation);
+  }
+  const cacheKey = station ?? '';
+  let list = byStation.get(cacheKey);
+  if (!list) {
+    list = computeCandidates(room, station);
+    byStation.set(cacheKey, list);
+  }
+  return list;
+}
+
+function computeCandidates(room: RoomDef, station: string | undefined): { id: string; seat: Seat }[] {
   const own = station ? (room.stations?.[station] ?? []) : [];
   return [
     ...own.map((seat, i) => ({ id: `${room.id}:${station}:${i}`, seat })),
