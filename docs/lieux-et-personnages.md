@@ -272,12 +272,15 @@ Fait :
   l'attente d'un prompt ;
 - la bulle de requête à l'autel (« … », « ? », « ! ») et le losange ambre de l'attente d'un prompt ;
 - la boîte de dialogue en lecture seule, ouverte par un clic sur un personnage ou sur sa ligne,
-  avec la connexion par lien à usage unique qui protège la lecture de la conversation.
+  lisible sans connexion depuis la page servie en local ;
+- les postes de travail : survol et clic sur le mobilier (`packages/web/src/scene/Post.tsx`),
+  carte du poste (`packages/web/src/ui/PostCard.tsx`), un poste par fonction dans les pièces à
+  plusieurs fonctions, et la liste « Lieux du bureau » du panneau latéral.
 
 Reste à faire :
 
-- la zone de saisie dans la boîte de dialogue, pour répondre depuis la 3D. La connexion posée
-  aujourd'hui servira à cette phase ;
+- la zone de saisie dans la boîte de dialogue, pour répondre depuis la 3D. Cette phase aura sa
+  propre protection d'accès ;
 - rapprocher les tenues du cliché visuel quand des modèles plus proches existent (lunettes, plume, pinceau, pigeon…) ;
 - la tenue de l'agent principal selon le mode plan (`permission_mode`, toujours à vérifier) ;
 - les badges de skills.

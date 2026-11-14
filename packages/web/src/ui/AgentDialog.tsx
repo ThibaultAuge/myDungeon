@@ -51,7 +51,6 @@ function Conversation({
   onClose(): void;
 }) {
   const { t, lang } = useT();
-  const loginFailed = useOffice((s) => s.loginFailed);
   const { entries, older, status, loadingOlder, loadOlder } = useTranscript(session.id, agent.id);
   const name = agentName(agent, session, t);
   const log = useRef<HTMLDivElement>(null);
@@ -88,12 +87,11 @@ function Conversation({
   };
 
   let notice: string | null = null;
-  if (status === 'signin') notice = loginFailed ? t.dialog.loginFailed : t.dialog.signIn;
-  else if (status === 'loading') notice = t.dialog.loading;
+  if (status === 'loading') notice = t.dialog.loading;
   else if (status === 'empty' || (status === 'ready' && entries.length === 0 && older === null)) notice = t.dialog.empty;
   else if (status === 'error') notice = t.dialog.error;
   // Shown even before any entry: the newest part of a transcript may hold nothing to display.
-  const showOlder = status !== 'signin' && status !== 'loading' && (entries.length > 0 || older !== null);
+  const showOlder = status !== 'loading' && (entries.length > 0 || older !== null);
 
   return (
     <section
@@ -106,7 +104,7 @@ function Conversation({
     >
       {/* The log is silent: only the notices that ask for something are announced. */}
       <p className="sr-only" role="status">
-        {status === 'signin' || status === 'error' ? notice : ''}
+        {status === 'error' ? notice : ''}
       </p>
       <div className="agent-dialog__plate">
         <h2>{name}</h2>
@@ -146,14 +144,14 @@ function Conversation({
             )}
           </p>
         )}
-        {status !== 'signin' && entries.length > 0 && (
+        {entries.length > 0 && (
           <ol className="dialogue" role="list">
             {entries.map((e) => (
               <Entry key={e.key} entry={e} name={name} userName={userName} timeFmt={timeFmt} />
             ))}
           </ol>
         )}
-        {notice && (entries.length === 0 || status === 'signin' || status === 'error') && <p className="agent-dialog__notice">{notice}</p>}
+        {notice && (entries.length === 0 || status === 'error') && <p className="agent-dialog__notice">{notice}</p>}
       </div>
     </section>
   );
