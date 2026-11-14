@@ -1,5 +1,5 @@
 ---
-description: Use when changing the 3D dungeon map — rooms, floors, walls, cutaway, props, lighting, KayKit models or their import — agent figures (walking motion, character models, role looks and held props, animations), or when previewing the web scene.
+description: Use when changing the 3D dungeon map — rooms, floors, walls, castle gate, cutaway, props, lighting, KayKit models or their import — agent figures (walking motion, character models, role looks and held props, animations), or when previewing the web scene.
 ---
 
 # 3D dungeon scene (KayKit assets)
@@ -19,6 +19,15 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cuta
   Back-to-back rooms (garde / epreuves / heraut) share ONE wall on the common edge, drawn
   by the west/north room; wide pillars bridge corners. `edgeRuns` closes corridor ends at
   the map edge in line with room walls, never doubling a room wall.
+- Castle gate: `GATE` in `layout.ts` (south side only, x 4→7, end of the x=5 corridor).
+  `edgeRuns` leaves it open; `gate()` in `dungeon.ts` adds two `GATE_JAMB` (0.6 m) jambs, a
+  lintel at `GATE_H` 2.2 (squashed wall model) and two outward torches. Every gate piece
+  shares the gate-middle anchor so the gate sinks as one piece with the cutaway; room
+  corner pillars on a jamb spot are skipped (`isGateJamb`). The Concierge (cx 10.5, w 7)
+  has its door on the north (z=5.5 corridor). Not verified: gate jambs vs the nearby
+  Concierge wall seat / Héraut chest overlap.
+- Outside the castle (forest, moat, drawbridge, night shading, pan clamp):
+  `docs/ai/night-forest.md`.
 - Cutaway (user-designed rule): each tall wall piece, with the torch/banner sharing its
   anchor, sinks when its anchor projects below an upside-down parabola through the mouse
   cursor (`inForeground`, NDC, `CUT_CURVE = 0.3`). Low barrier walls always stand. The
@@ -71,8 +80,8 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cuta
 ## Relevant Files
 - `packages/web/src/scene/dungeon.ts` — pure geometry, no three scene: `KIT_SCALE`,
   `KitItem`, `Placement` (`Map<model, KitItem[]>`), `roomFloor`, `corridorFloor`,
-  `foundation`, `wallRuns`, `edgeRuns`, `wallLayout`, `WALL_T`, `WALL_INSET`, `CUT_CURVE`,
-  `inForeground`.
+  `foundation`, `OUTER`, `wallRuns`, `edgeRuns`, `wallLayout`, `GATE_JAMB`, `GATE_H`,
+  `WALL_T`, `WALL_INSET`, `CUT_CURVE`, `inForeground`.
 - `packages/web/src/scene/Structure.tsx` — `Floors` (instanced) and `Walls`.
 - `packages/web/src/scene/KitInstances.tsx` — `<KitInstances>` (one InstancedMesh per model
   part, for repeated pieces) and `<Kit>` (single model, for furniture).
@@ -120,8 +129,9 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cuta
   the test server on 4778. `agent-office` / `agent-office-test` serve `packages/web/dist`,
   which needs `npm run build` first. Previewing from a worktree with fake hooks:
   `docs/ai/agent-lifecycle.md`. The preview launcher reads the main folder's
-  `.claude/launch.json`, so from a worktree run Vite on another port (5174 worked; the
-  WebSocket is refused there, which is fine for store-injected galleries). The in-app
+  `.claude/launch.json`, so from a worktree run Vite on another free port (5174 may be taken
+  by another session; 5175 worked; the WebSocket is refused there, which is fine for
+  store-injected galleries; `/env/<anything>` renders the scene without a server). The in-app
   Browser pane, when hidden, gives the Canvas size 0 and renders no frames; use Playwright
   for visual verification.
 - Where figures rest, wait, appear and leave (tavern, altar, roster):
@@ -142,7 +152,7 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cuta
 - Wall footprint matches the pre-KayKit one, so seat positions are unaffected.
 - Orientation-based cutaway was tried and rejected; keep the cursor parabola.
 - Tests must not import `kit.ts` or any `.tsx` file (drei / `import.meta.env`); test
-  `dungeon.ts`, `layout.ts`, `walk.ts`, `characters.ts` and the manifest JSON.
+  `dungeon.ts`, `layout.ts`, `walk.ts`, `characters.ts`, `forest.ts` and the manifest JSON.
 - Walk speed was set so figures reach the room before short tasks finish (user request).
   The chibi legs walk naturally at 0.57 (`Walking_A`) and 1.4 u/s (`Running_A`) at
   `KIT_SCALE`, so feet slide at cruise speed by design. Accepted limits: a reroute to a

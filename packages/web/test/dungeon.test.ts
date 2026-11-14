@@ -6,6 +6,9 @@ import type { RoomId } from '@agent-office/shared';
 import {
   CUT_CURVE,
   DOOR_W,
+  GATE_H,
+  GATE_JAMB,
+  KIT_SCALE,
   LARGE_TILE,
   OUTER,
   SMALL_TILE,
@@ -28,6 +31,7 @@ import {
 import {
   BOUNDS,
   CORRIDORS,
+  GATE,
   ROOMS,
   ROOM_BY_ID,
   doorOf,
@@ -271,6 +275,22 @@ const LAYOUT = wallLayout();
 const TALL: { name: string; item: CutItem }[] = [...LAYOUT.tall].flatMap(([name, items]) => items.map((item) => ({ name, item })));
 const EDGE_RUNS = edgeRuns();
 const LOW = entries(LAYOUT.low);
+
+// The castle gate in the south edge: its jambs stand on the edge wall line, on the wall
+// lines of the two rooms either side of the opening.
+const GATE_LO = GATE.lo - WALL_INSET;
+const GATE_HI = GATE.hi + WALL_INSET;
+const GATE_MID = (GATE_LO + GATE_HI) / 2;
+
+/** True for the gate's own decor: torches that sink with the lintel (anchored on its middle). */
+function isGateDecor(t: { name: string; item: CutItem }): boolean {
+  return t.name === 'torch_mounted' && Math.abs(t.item.ax - GATE_MID) < 1e-9 && Math.abs(t.item.az - EDGE_LINE.s) < 1e-9;
+}
+
+/** Corridor ends lying in the gate opening, on the south edge. */
+function gateCorridorEnds(): Point[] {
+  return CORRIDORS.flat().filter((p) => Math.abs(p.z - BOUNDS.z1) <= 1 && p.x > GATE.lo && p.x < GATE.hi);
+}
 
 // ---------------------------------------------------------------- manifest
 
@@ -1039,17 +1059,16 @@ describe('wallRuns', () => {
 
 describe('edgeRuns', () => {
   /**
-   * Verifies that the current map gets 4 north, 2 south, 2 west and no east corridor ends
+   * Verifies that the map gets 4 north, 1 south, 2 west, no east ends (x=5 is the gate)
    */
-  it('closes 8 corridor ends: 4 on n, 2 on s, 2 on w', () => {
+  it('closes 7 corridor ends: 4 on n, 1 on s, 2 on w', () => {
     const count = (s: Side) => EDGE_RUNS.filter((r) => r.side === s).length;
-    expect(EDGE_RUNS).toHaveLength(8);
-    expect([count('n'), count('s'), count('w'), count('e')]).toEqual([4, 2, 2, 0]);
-    const south = EDGE_RUNS.filter((r) => r.side === 's').map(runRange).sort((p, q) => p[0] - q[0]);
-    expect(south[0][0]).toBeCloseTo(3.85, 9);
-    expect(south[0][1]).toBeCloseTo(6.15, 9);
-    expect(south[1][0]).toBeCloseTo(13.85, 9);
-    expect(south[1][1]).toBeCloseTo(16.15, 9);
+    expect(EDGE_RUNS).toHaveLength(7);
+    expect([count('n'), count('s'), count('w'), count('e')]).toEqual([4, 1, 2, 0]);
+    // Only the x = 15 corridor end is closed on the south edge; x = 5 opens on the gate.
+    const south = EDGE_RUNS.filter((r) => r.side === 's').map(runRange);
+    expect(south[0][0]).toBeCloseTo(13.85, 9);
+    expect(south[0][1]).toBeCloseTo(16.15, 9);
   });
 
   /**
@@ -1091,11 +1110,14 @@ describe('edgeRuns', () => {
   });
 
   /**
-   * Verifies that every corridor reaching the map edge is closed by an edge run
+   * Verifies that every corridor end at the map edge is closed, except the gate's end
    */
-  it('closes every corridor end at the map edge', () => {
+  it('closes every corridor end at the map edge but the gate', () => {
     const open: string[] = [];
+    const gateEnds = gateCorridorEnds();
     for (const p of CORRIDORS.flat()) {
+      // The castle gate is deliberately open: checked in the castle gate tests below.
+      if (gateEnds.includes(p)) continue;
       const near: [Side, number, number][] = [
         ['n', Math.abs(p.z - BOUNDS.z0), p.x],
         ['s', Math.abs(p.z - BOUNDS.z1), p.x],
@@ -1115,17 +1137,22 @@ describe('edgeRuns', () => {
   });
 
   /**
-   * Verifies that without rooms each map side is one wall from corner to corner
+   * Verifies that without rooms each side is one corner-to-corner wall, south split by the gate
    */
-  it('closes each whole side of the map when there is no room', () => {
+  it('closes each whole side of the map when there is no room, the gate left open', () => {
     const runs = edgeRuns([]);
-    expect(runs.map((r) => r.side).sort()).toEqual(['e', 'n', 's', 'w']);
-    for (const run of runs) {
+    expect(runs.map((r) => r.side).sort()).toEqual(['e', 'n', 's', 's', 'w']);
+    for (const run of runs.filter((r) => r.side !== GATE.side)) {
       const [lo, hi] = runRange(run);
       const [l0, l1] = horizontalSide(run.side) ? [BOUNDS.x0, BOUNDS.x1] : [BOUNDS.z0, BOUNDS.z1];
       expect(lo).toBeCloseTo(l0 + WALL_INSET, 9);
       expect(hi).toBeCloseTo(l1 - WALL_INSET, 9);
     }
+    const south = runs.filter((r) => r.side === GATE.side).map(runRange).sort((p, q) => p[0] - q[0]);
+    expect(south[0][0]).toBeCloseTo(BOUNDS.x0 + WALL_INSET, 9);
+    expect(south[0][1]).toBeCloseTo(GATE_LO, 9);
+    expect(south[1][0]).toBeCloseTo(GATE_HI, 9);
+    expect(south[1][1]).toBeCloseTo(BOUNDS.x1 - WALL_INSET, 9);
   });
 
   /**
@@ -1189,8 +1216,11 @@ describe('wallLayout', () => {
   /**
    * Verifies that every wall piece and every pillar sinks or stands on its own position
    */
-  it('anchors walls and pillars on their own centre', () => {
-    const pieces = TALL.filter((t) => t.name.startsWith('wall') || t.name === 'pillar');
+  it('anchors walls and pillars on their own centre, the gate jambs aside', () => {
+    const onGate = (it: CutItem) => Math.abs(it.ax - GATE_MID) < 1e-9 && Math.abs(it.az - EDGE_LINE.s) < 1e-9;
+    const pieces = TALL.filter(
+      (t) => (t.name.startsWith('wall') || t.name === 'pillar') && !(t.name === 'pillar' && onGate(t.item)),
+    );
     expect(pieces.length).toBeGreaterThan(0);
     for (const { name, item } of pieces) {
       expect(Math.abs(item.ax - item.x), name).toBeLessThan(1e-9);
@@ -1199,11 +1229,27 @@ describe('wallLayout', () => {
   });
 
   /**
+   * Verifies that every gate piece (jambs, lintel, torches) shares the gate middle anchor, so the gate sinks as one piece
+   */
+  it('anchors every gate piece on the gate middle', () => {
+    const near = (it: CutItem) => Math.abs(it.z - EDGE_LINE.s) < 0.5 && it.x > GATE_LO - 1.5 && it.x < GATE_HI + 1.5;
+    const jambs = TALL.filter((t) => t.name === 'pillar' && near(t.item) && Math.abs(t.item.scale![0] * 1.5 - GATE_JAMB) < 1e-9);
+    const lintel = TALL.filter((t) => t.name.startsWith('wall') && t.item.y > 0 && near(t.item));
+    const torches = TALL.filter(isGateDecor);
+    expect([jambs.length, lintel.length, torches.length]).toEqual([2, 1, 2]);
+    for (const { name, item } of [...jambs, ...lintel, ...torches]) {
+      expect(item.ax, name).toBeCloseTo(GATE_MID, 9);
+      expect(item.az, name).toBeCloseTo(EDGE_LINE.s, 9);
+    }
+  });
+
+  /**
    * Verifies that every torch or banner shares the anchor of a wall piece, so it sinks with it
    */
   it('anchors wall decor on the wall chunk it hangs on', () => {
     const walls = TALL.filter((t) => t.name.startsWith('wall')).map((t) => t.item);
-    const decor = TALL.filter((t) => t.name === 'torch_mounted' || t.name.startsWith('banner_'));
+    // The gate torches face outwards, unlike the lintel they sink with: see the gate tests.
+    const decor = TALL.filter((t) => (t.name === 'torch_mounted' || t.name.startsWith('banner_')) && !isGateDecor(t));
     expect(decor.length).toBeGreaterThan(0);
     const orphans = decor.filter(
       ({ item }) =>
@@ -1236,7 +1282,8 @@ describe('wallLayout', () => {
    * Verifies that no torch or banner hangs where a prop stands in front of the wall
    */
   it('never hangs wall decor in front of furniture or over a nested zone', () => {
-    const decor = TALL.filter((t) => t.name === 'torch_mounted' || t.name.startsWith('banner_'));
+    // The gate torches hang outside the castle, facing the forest: see the gate tests.
+    const decor = TALL.filter((t) => (t.name === 'torch_mounted' || t.name.startsWith('banner_')) && !isGateDecor(t));
     expect(decor.length).toBeGreaterThan(0);
     const problems: string[] = [];
     for (const { name, item } of decor) {
@@ -1297,14 +1344,21 @@ describe('wallLayout', () => {
   });
 
   /**
-   * Verifies that without rooms only the map-edge walls remain, with no pillar or banner
+   * Verifies that without rooms only the edge walls and the gate remain, with no banner
    */
-  it('keeps only the edge walls for no rooms', () => {
+  it('keeps only the edge walls and the gate for no rooms', () => {
     const empty = wallLayout([]);
     const names = [...empty.tall.keys()];
     expect(names.some((n) => n.startsWith('wall'))).toBe(true);
-    for (const n of names) expect(n === 'torch_mounted' || n.startsWith('wall'), n).toBe(true);
-    expect([...empty.low.keys()]).toEqual(['barrier']);
+    for (const n of names) expect(n === 'torch_mounted' || n === 'pillar' || n.startsWith('wall'), n).toBe(true);
+    expect([...empty.low.keys()].sort()).toEqual(['barrier', 'column']);
+    // The only pillars are the two gate jambs, each with its low column.
+    const pillars = empty.tall.get('pillar')!.map((p) => [p.x, p.z]).sort((p, q) => p[0] - q[0]);
+    expect(pillars).toHaveLength(2);
+    expect(pillars[0][0]).toBeCloseTo(GATE_LO, 9);
+    expect(pillars[1][0]).toBeCloseTo(GATE_HI, 9);
+    for (const [, z] of pillars) expect(z).toBeCloseTo(EDGE_LINE.s, 9);
+    expect(empty.low.get('column')).toHaveLength(2);
     // Every wall chunk lies on one of the four edge lines.
     for (const [n, items] of empty.tall) {
       if (!n.startsWith('wall')) continue;
@@ -1317,6 +1371,172 @@ describe('wallLayout', () => {
         expect(onLine, `${n} (${w.x}, ${w.z})`).toBe(true);
       }
     }
+  });
+});
+
+// ---------------------------------------------------------------- castle gate
+
+describe('castle gate', () => {
+  /** Span along x of a horizontal wall or barrier piece (a wall model is 4 pack units wide). */
+  const spanX = (item: KitItem): [number, number] => [item.x - 2 * item.scale![0], item.x + 2 * item.scale![0]];
+  const overlapsOpening = ([lo, hi]: [number, number]) => Math.min(hi, GATE.hi) - Math.max(lo, GATE.lo) > TOL;
+  const lintels = () => TALL.filter((t) => t.name.startsWith('wall') && t.item.y > TOL);
+
+  /**
+   * Verifies that the gate opens in the south edge from the Héraut's east edge to the Concierge's west
+   */
+  it('lies on the south edge between the Héraut and the Conciergerie', () => {
+    const heraut = room('heraut');
+    const concierge = room('concierge');
+    expect(GATE.side).toBe('s');
+    expect(GATE.lo).toBeLessThan(GATE.hi);
+    expect(heraut.cx + heraut.w / 2).toBeCloseTo(GATE.lo, 9);
+    expect(concierge.cx - concierge.w / 2).toBeCloseTo(GATE.hi, 9);
+    // Both rooms stand on the south edge of the map.
+    expect(heraut.cz + heraut.d / 2).toBeCloseTo(BOUNDS.z1, 9);
+    expect(concierge.cz + concierge.d / 2).toBeCloseTo(BOUNDS.z1, 9);
+  });
+
+  /**
+   * Verifies that no room, nested or not, covers the corridor strip leading to the gate
+   */
+  it('has no room overlapping the opening', () => {
+    const blocking = ROOMS.filter((r) => {
+      const b = rect(r);
+      const ox = Math.min(b.x1, GATE.hi) - Math.max(b.x0, GATE.lo);
+      const oz = Math.min(b.z1, BOUNDS.z1) - Math.max(b.z0, BOUNDS.z1 - 2);
+      return ox > TOL && oz > TOL;
+    });
+    expect(blocking.map((r) => r.id)).toEqual([]);
+  });
+
+  /**
+   * Verifies that the x = 5 corridor is the one corridor ending inside the gate opening
+   */
+  it('receives the end of the x = 5 corridor', () => {
+    const ends = gateCorridorEnds();
+    expect(ends).toHaveLength(1);
+    expect(ends[0].x).toBeCloseTo(5, 9);
+    const corridor = CORRIDORS.find(([a, b]) => a === ends[0] || b === ends[0])!;
+    // A north-south corridor, running into the gate.
+    expect(corridor[0].x).toBeCloseTo(corridor[1].x, 9);
+  });
+
+  /**
+   * Verifies that no edge wall closes the gate, with or without rooms on the map
+   */
+  it.each([
+    ['the real rooms', EDGE_RUNS],
+    ['no room', edgeRuns([])],
+  ])('leaves the opening free of edge walls with %s', (_label, runs) => {
+    const closing = runs.filter((r) => r.side === GATE.side).map(runRange).filter(overlapsOpening);
+    expect(closing).toEqual([]);
+  });
+
+  /**
+   * Verifies that the corridor end at the gate is not closed by any edge or room wall run
+   */
+  it('leaves the corridor end at the gate open', () => {
+    const [end] = gateCorridorEnds();
+    const southRuns = [...EDGE_RUNS, ...WALLED.flatMap((r) => wallRuns(r))].filter(
+      (run) => run.side === 's' && Math.abs(run.a[1] - EDGE_LINE.s) < 0.6,
+    );
+    const closing = southRuns.filter((run) => {
+      const [lo, hi] = runRange(run);
+      return end.x >= lo - TOL && end.x <= hi + TOL;
+    });
+    expect(closing).toEqual([]);
+  });
+
+  /**
+   * Verifies that no wall piece or low barrier at floor level stands across the opening
+   */
+  it('keeps the opening clear of floor-level walls and barriers', () => {
+    const onSouthLine = (item: KitItem) => Math.abs(item.z - EDGE_LINE.s) < 0.3 && horizontalSide(sideOfRotation(item.rotY) ?? 'w');
+    const walls = TALL.filter((t) => t.name.startsWith('wall') && t.item.y < TOL && onSouthLine(t.item)).map((t) => t.item);
+    const barriers = LOW.filter(([n, b]) => n === 'barrier' && onSouthLine(b)).map(([, b]) => b);
+    expect(walls.filter((w) => overlapsOpening(spanX(w))).map((w) => `wall (${w.x}, ${w.z})`)).toEqual([]);
+    expect(barriers.filter((b) => overlapsOpening(spanX(b))).map((b) => `barrier (${b.x}, ${b.z})`)).toEqual([]);
+  });
+
+  /**
+   * Verifies that a GATE_JAMB-wide pillar, with its low column, stands on each side of the gate
+   */
+  it.each([
+    ['west', GATE_LO],
+    ['east', GATE_HI],
+  ])('puts a %s jamb GATE_JAMB wide on the edge wall line', (_side, x) => {
+    const at = (item: KitItem) => Math.abs(item.x - x) < TOL && Math.abs(item.z - EDGE_LINE.s) < TOL;
+    // A 1.5 m pillar: its x and z scales times 1.5 are its width and depth.
+    const jambs = TALL.filter(
+      (t) =>
+        t.name === 'pillar' &&
+        at(t.item) &&
+        Math.abs(t.item.scale![0] * 1.5 - GATE_JAMB) < TOL &&
+        Math.abs(t.item.scale![2] * 1.5 - GATE_JAMB) < TOL,
+    );
+    expect(jambs).toHaveLength(1);
+    expect(jambs[0].item.y).toBe(0);
+    expect(LOW.some(([n, c]) => n === 'column' && at(c))).toBe(true);
+  });
+
+  /**
+   * Verifies that one lintel spans the whole opening at GATE_H and tops out at wall height
+   */
+  it('lays one lintel over the opening, from GATE_H up to the top of the walls', () => {
+    const found = lintels();
+    expect(found).toHaveLength(1);
+    const { item } = found[0];
+    expect(item.y).toBeCloseTo(GATE_H, 9);
+    expect(item.x).toBeCloseTo(GATE_MID, 9);
+    expect(item.z).toBeCloseTo(EDGE_LINE.s, 9);
+    expect(sideOfRotation(item.rotY)).toBe('s');
+    // It reaches from jamb to jamb, over the whole opening.
+    const [lo, hi] = spanX(item);
+    expect(lo).toBeCloseTo(GATE_LO, 9);
+    expect(hi).toBeCloseTo(GATE_HI, 9);
+    expect(lo).toBeLessThanOrEqual(GATE.lo);
+    expect(hi).toBeGreaterThanOrEqual(GATE.hi);
+    // A wall is 4 pack units high, drawn at KIT_SCALE: the lintel's top meets the walls' top.
+    expect(GATE_H + 4 * item.scale![1]).toBeCloseTo(4 * KIT_SCALE, 9);
+    expect(item.scale![2]).toBe(WALL_T);
+    expect(GATE_H).toBeGreaterThan(0);
+    expect(GATE_H).toBeLessThan(4 * KIT_SCALE);
+  });
+
+  /**
+   * Verifies that two torches hang on the gate's outside face, one beyond each jamb
+   */
+  it('hangs two outward-facing torches beside the gate, sinking with the lintel', () => {
+    const torches = TALL.filter(isGateDecor).map((t) => t.item).sort((p, q) => p.x - q.x);
+    expect(torches).toHaveLength(2);
+    for (const t of torches) {
+      // Rotation 0 turns the decorated face towards +z: out of the castle, to the forest.
+      expect(Math.cos(t.rotY)).toBeCloseTo(1, 9);
+      expect(t.z).toBeCloseTo(EDGE_LINE.s + WALL_T / 2, 9);
+      expect(t.y).toBeGreaterThan(0);
+      expect(t.y).toBeLessThan(4 * KIT_SCALE);
+    }
+    expect(torches[0].x).toBeLessThan(GATE_LO - GATE_JAMB / 2);
+    expect(torches[1].x).toBeGreaterThan(GATE_HI + GATE_JAMB / 2);
+    // Their anchor is the lintel's, so the whole gate goes down as one piece.
+    const lintel = lintels()[0].item;
+    for (const t of torches) {
+      expect(t.ax).toBeCloseTo(lintel.ax, 9);
+      expect(t.az).toBeCloseTo(lintel.az, 9);
+    }
+  });
+
+  /**
+   * Verifies that the narrowed Conciergerie opens north onto the z = 5.5 corridor
+   */
+  it('opens the Conciergerie door north onto the z = 5.5 corridor', () => {
+    const concierge = room('concierge');
+    expect(concierge.door.side).toBe('n');
+    const { outside } = doorOf(concierge);
+    expect(outside.z).toBeCloseTo(5.5, 9);
+    expect(outside.x).toBeGreaterThanOrEqual(5);
+    expect(outside.x).toBeLessThanOrEqual(15);
   });
 });
 

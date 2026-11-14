@@ -1,4 +1,4 @@
-import { BOUNDS, doorOf, inFootprint, ROOMS, type FloorKind, type RoomDef, type Side } from './layout.ts';
+import { BOUNDS, doorOf, GATE, inFootprint, ROOMS, type FloorKind, type RoomDef, type Side } from './layout.ts';
 
 // Where the KayKit floor tiles, walls and wall decor go. Pure geometry, no three.js scene:
 // testable in node. Every list is grouped by model name, ready for <KitInstances>.
@@ -269,6 +269,8 @@ export function edgeRuns(rooms: RoomDef[] = walledRooms()): WallRun[] {
       .map((r) => edge(r, side))
       .filter((e) => Math.abs(e.at - line.at) < 0.6)
       .map((e) => [e.lo + WALL_INSET, e.hi - WALL_INSET] as const)
+      // The gate leaves the edge open from one room's wall line to the other's.
+      .concat(side === GATE.side ? [[GATE.lo - WALL_INSET, GATE.hi + WALL_INSET] as const] : [])
       .sort((p, q) => p[0] - q[0]);
     let from = line.lo + WALL_INSET;
     const point = (v: number): [number, number] => (side === 'n' || side === 's' ? [v, at] : [at, v]);
@@ -324,9 +326,9 @@ function wallIsFree(room: RoomDef, x: number, z: number, side: Side): boolean {
 
 const PILLAR_W = 0.3;
 
-function pillar(layout: WallLayout, x: number, z: number, wx = PILLAR_W, wz = PILLAR_W): void {
+function pillar(layout: WallLayout, x: number, z: number, wx = PILLAR_W, wz = PILLAR_W, anchor: [number, number] = [x, z]): void {
   // A 1.5 m pillar thinned to 0.3 m, and a short column for the lowered state.
-  addTall(layout, 'pillar', { x, y: 0, z, rotY: 0, scale: [wx / 1.5, KIT_SCALE, wz / 1.5], ax: x, az: z });
+  addTall(layout, 'pillar', { x, y: 0, z, rotY: 0, scale: [wx / 1.5, KIT_SCALE, wz / 1.5], ax: anchor[0], az: anchor[1] });
   add(layout.low, 'column', { x, y: 0, z, rotY: 0, scale: [(wx / PILLAR_W) * 0.4, KIT_SCALE, (wz / PILLAR_W) * 0.4] });
 }
 
@@ -397,10 +399,42 @@ function placeRun(layout: WallLayout, run: WallRun, rand: () => number): void {
   }
 }
 
+/** Wide jambs of the castle gate. */
+export const GATE_JAMB = 0.6;
+/** Height of the gate opening, under the lintel. */
+export const GATE_H = 2.2;
+
+/** True on the spot of one of the gate jambs (room corners on either side of the gate). */
+function isGateJamb(x: number, z: number): boolean {
+  if (GATE.side !== 's' || Math.abs(z - (BOUNDS.z1 - WALL_INSET)) > 1e-6) return false;
+  return Math.abs(x - (GATE.lo - WALL_INSET)) < 1e-6 || Math.abs(x - (GATE.hi + WALL_INSET)) < 1e-6;
+}
+
+/**
+ * The castle gate: two wide jambs on the room corners, a lintel over the opening and a torch
+ * on each side facing the drawbridge. All of it goes down with the cutaway like a wall.
+ */
+function gate(layout: WallLayout): void {
+  const z = BOUNDS.z1 - WALL_INSET;
+  const lo = GATE.lo - WALL_INSET;
+  const hi = GATE.hi + WALL_INSET;
+  const mid = (lo + hi) / 2;
+  // Every gate piece shares the anchor of the gate middle: the gate goes down as one piece.
+  for (const x of [lo, hi]) pillar(layout, x, z, GATE_JAMB, GATE_JAMB, [mid, z]);
+  // A wall model is 4 m high in the pack: squashed into a beam above the opening.
+  const lintel = 4 * KIT_SCALE - GATE_H;
+  addTall(layout, 'wall', { x: mid, y: GATE_H, z, rotY: FACE_IN.s, scale: [(hi - lo) / 4, lintel / 4, WALL_T], ax: mid, az: z });
+  // Outside face: rotation 0 turns the torch towards +z, out of the castle.
+  for (const x of [lo - 0.8, hi + 0.8]) {
+    addTall(layout, 'torch_mounted', { x, y: 1.9, z: z + WALL_T / 2, rotY: 0, ax: mid, az: z });
+  }
+}
+
 export function wallLayout(rooms: RoomDef[] = walledRooms()): WallLayout {
   const layout: WallLayout = { tall: new Map(), low: new Map() };
   const edgeRand = seeded('walls:edge');
   for (const run of edgeRuns(rooms)) placeRun(layout, run, edgeRand);
+  gate(layout);
   for (const room of rooms) {
     const rand = seeded(`walls:${room.id}`);
     const shared = sharedSides(room, rooms);
@@ -433,6 +467,8 @@ export function wallLayout(rooms: RoomDef[] = walledRooms()): WallLayout {
         z = room.cz + room.d / 2;
         wz = 2 * (WALL_INSET + PILLAR_W / 2);
       }
+      // The wide gate jamb already stands on this corner.
+      if (isGateJamb(x, z)) continue;
       pillar(layout, x, z, wx, wz);
     }
     const door = doorOf(room).wall;

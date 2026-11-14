@@ -16,6 +16,7 @@ Un petit bureau en 3D où chaque agent Claude Code du poste local est un personn
   - Chaque pièce a ses places. Un agent garde la sienne tant qu'il reste dans la pièce ; quand elle est pleine, les suivants se tiennent le long des murs.
 - **Une carte en vrais modèles 3D** : dalles de pierre, de bois ou de terre selon la pièce, murs avec fenêtres, arches, torches et bannières aux couleurs de la pièce, meubles et objets de décoration, ombres douces.
   - **Déplace la souris pour découvrir les salles.** Les murs situés devant le curseur s'enfoncent dans le sol, et il ne reste qu'un muret qui marque le contour des pièces. Ceux situés derrière restent debout.
+  - **Un château dans une forêt de nuit.** Des arbres en 3D entourent le donjon : détaillés près du château, plus simples au loin, puis une lisière peinte à l'horizon. Des douves longent le sud, un pont-levis baissé mène à la porte du château, et un chemin de terre se perd dans la forêt. La forêt est sombre pour que le château, aux lumières chaudes, ressorte. La vue reste limitée autour du château.
 - **Trois états.**
   - Vert : il travaille.
   - Ambre : il attend ton prochain message. Un petit losange ambre s'affiche au-dessus de son étiquette.
