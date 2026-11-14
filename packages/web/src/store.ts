@@ -30,6 +30,7 @@ function browserStorage(): Storage | undefined {
 }
 
 const startLang = initialLang(browserStorage(), navigator);
+
 document.documentElement.lang = startLang;
 
 interface OfficeStore {
@@ -47,10 +48,13 @@ interface OfficeStore {
   selectedAgentId: string | null;
   /** Workstation whose card is open. */
   selectedPost: PostId | null;
+  /** The conversation box of the selected agent. Selecting an agent opens it. */
+  dialogOpen: boolean;
   lang: Lang;
   navigate(r: Route): void;
   select(agentId: string | null): void;
   selectPost(post: PostId | null): void;
+  closeDialog(): void;
   setLang(lang: Lang): void;
 }
 
@@ -65,6 +69,7 @@ export const useOffice = create<OfficeStore>((set) => ({
   events: [],
   selectedAgentId: null,
   selectedPost: null,
+  dialogOpen: false,
   lang: startLang,
   navigate(r) {
     history.pushState(null, '', routePath(r));
@@ -72,7 +77,10 @@ export const useOffice = create<OfficeStore>((set) => ({
     connect();
   },
   select(agentId) {
-    set({ selectedAgentId: agentId });
+    set({ selectedAgentId: agentId, dialogOpen: agentId !== null });
+  },
+  closeDialog() {
+    set({ dialogOpen: false });
   },
   selectPost(post) {
     set({ selectedPost: post });

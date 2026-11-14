@@ -5,6 +5,7 @@ import fastifyStatic from '@fastify/static';
 import fastifyWebsocket from '@fastify/websocket';
 import { hookEventSchema } from './reducer.ts';
 import type { OfficeStore } from './store.ts';
+import { findTranscript, readTranscriptPage, transcriptEtag } from './transcript.ts';
 
 export const TOKEN_HEADER = 'x-agent-office-token';
 /** Vite dev server ports allowed as browser origins. */
@@ -16,7 +17,12 @@ export interface AppOptions {
   token: string | null;
   webDist?: string;
   logger?: boolean;
+  /** `~/.claude/projects`, where transcripts live. */
+  projectsDir?: string;
 }
+
+/** Query ids are matched against the office state, never used as paths. */
+const MAX_ID = 256;
 
 function tokenMatches(expected: string | null, received: unknown): boolean {
   if (!expected || typeof received !== 'string') return false;
@@ -75,6 +81,45 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
     opts.store.ingestHook(parsed.data);
     return {};
   });
+
+  // An agent's conversation, read from its transcript. Paths come from the office state only.
+  // No sign-in: whoever can load the page reads it. Exposure stays limited to this machine by
+  // the loopback bind and the Host/Origin guard above.
+  app.get<{ Querystring: { session?: string; agent?: string; before?: string } }>(
+    '/api/transcript',
+    async (req, reply) => {
+      reply.header('Cache-Control', 'no-store');
+      const { session: sessionId, agent: agentId, before: beforeRaw } = req.query;
+      if (typeof sessionId !== 'string' || typeof agentId !== 'string' || sessionId.length > MAX_ID || agentId.length > MAX_ID) {
+        return reply.code(400).send({ error: 'requête invalide' });
+      }
+      let before: number | undefined;
+      if (beforeRaw !== undefined) {
+        if (typeof beforeRaw !== 'string' || !/^\d{1,15}$/.test(beforeRaw)) return reply.code(400).send({ error: 'curseur invalide' });
+        before = Number(beforeRaw);
+      }
+      const session = opts.store.state.sessions.get(sessionId);
+      const file = session && opts.projectsDir ? findTranscript(opts.projectsDir, session, agentId) : null;
+      if (!file) return reply.code(404).send({ error: 'pas de transcript' });
+      let st: fs.Stats;
+      try {
+        st = fs.statSync(file);
+      } catch {
+        return reply.code(404).send({ error: 'pas de transcript' });
+      }
+      // Only the latest page is polled: older pages of an append-only file never change.
+      if (before === undefined) {
+        const etag = transcriptEtag(file, st);
+        reply.header('ETag', etag);
+        if (req.headers['if-none-match'] === etag) return reply.code(304).send();
+      }
+      try {
+        return readTranscriptPage(file, before);
+      } catch {
+        return reply.code(404).send({ error: 'pas de transcript' });
+      }
+    },
+  );
 
   app.get('/api/environments', async () => {
     const snap = opts.store.snapshot('__none__');

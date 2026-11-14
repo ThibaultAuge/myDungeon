@@ -108,7 +108,7 @@ s'agglutiner, les agents de l'autel **se mettent en file**, les uns derrière le
 dans l'allée :
 
 - le **premier** de la file est à genoux devant l'autel, avec la bulle rouge de sa
-  demande ;
+  demande (« … » pour une permission, « ? » pour une question, « ! » pour une erreur) ;
 - les **suivants** attendent debout derrière lui, par ordre d'arrivée (le plus ancien en
   tête) ;
 - quand l'humain répond au premier, il repart vers son poste et toute la file **avance
@@ -172,7 +172,7 @@ Les dossiers sont relus au plus une fois par minute.
 
 **L'agent principal fait exception.** Il représente la session elle-même. Quand elle
 attend ton prochain prompt, il se repose à la taverne, dans la couleur de sa session, avec
-une bulle ambre. Il ne fait la queue à l'autel que pour une permission, une question ou une
+un losange ambre au-dessus de son étiquette. Il ne fait la queue à l'autel que pour une permission, une question ou une
 erreur.
 
 ## Les personnages
@@ -270,12 +270,17 @@ Fait :
 - le cycle de vie de la taverne : un exemplaire neutre de chaque type au repos, appel, appels
   simultanés depuis les casiers, retour et disparition, et l'agent principal au repos pendant
   l'attente d'un prompt ;
+- la bulle de requête à l'autel (« … », « ? », « ! ») et le losange ambre de l'attente d'un prompt ;
+- la boîte de dialogue en lecture seule, ouverte par un clic sur un personnage ou sur sa ligne,
+  lisible sans connexion depuis la page servie en local ;
 - les postes de travail : survol et clic sur le mobilier (`packages/web/src/scene/Post.tsx`),
   carte du poste (`packages/web/src/ui/PostCard.tsx`), un poste par fonction dans les pièces à
   plusieurs fonctions, et la liste « Lieux du bureau » du panneau latéral.
 
 Reste à faire :
 
+- la zone de saisie dans la boîte de dialogue, pour répondre depuis la 3D. Cette phase aura sa
+  propre protection d'accès ;
 - rapprocher les tenues du cliché visuel quand des modèles plus proches existent (lunettes, plume, pinceau, pigeon…) ;
 - la tenue de l'agent principal selon le mode plan (`permission_mode`, toujours à vérifier) ;
 - les badges de skills.

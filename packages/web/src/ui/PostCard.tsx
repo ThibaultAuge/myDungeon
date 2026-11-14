@@ -25,6 +25,8 @@ export function PostCard() {
       if (e.key !== 'Escape' || e.defaultPrevented || e.isComposing) return;
       // Focus moves only if it was in the card; otherwise it stays where the user left it.
       const inCard = document.querySelector('.post-card')?.contains(document.activeElement);
+      // One Escape closes one thing: the agent dialog (on window) keeps its own for the next press.
+      e.preventDefault();
       selectPost(null);
       if (inCard) focusPostButton(post);
     };

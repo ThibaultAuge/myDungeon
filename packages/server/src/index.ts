@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import path from 'node:path';
 import chokidar from 'chokidar';
 import { buildApp } from './app.ts';
 import { loadConfig, WEB_DIST } from './config.ts';
@@ -67,7 +68,13 @@ setInterval(() => {
   }
 }, REDISCOVER_MS);
 
-const app = await buildApp({ store, port: config.port, token: config.token, webDist: WEB_DIST });
+const app = await buildApp({
+  store,
+  port: config.port,
+  token: config.token,
+  webDist: WEB_DIST,
+  projectsDir: path.join(paths.claudeHome, 'projects'),
+});
 await app.listen({ host: '127.0.0.1', port: config.port });
 
 console.log(`Agent Office : http://127.0.0.1:${config.port}`);

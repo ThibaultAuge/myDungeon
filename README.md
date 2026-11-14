@@ -22,15 +22,16 @@ Un petit bureau en 3D où chaque agent Claude Code du poste local est un personn
     - Si un agent se tient devant un meuble, le plus proche sous le pointeur l'emporte : l'agent ou le poste.
 - **Trois états.**
   - Vert : il travaille.
-  - Ambre : il attend ton prochain message. La bulle devient rouge quand il attend ta permission ou ta réponse, ou qu'il est bloqué par une erreur.
+  - Ambre : il attend ton prochain message. Un petit losange ambre s'affiche au-dessus de son étiquette.
   - Gris : il a terminé. Il reste immobile, en pose calme.
+- **La bulle de requête.** Un agent qui a besoin de toi porte au-dessus de son étiquette une bulle de BD rouge : « … » pour une permission, « ? » pour une question, « ! » pour une erreur. Il se place alors à l'autel des requêtes.
 - **Les sous-agents** apparaissent comme des collègues de la même couleur que leur session. Ils surgissent du sol à leur arrivée.
 - **Des personnages animés** (pack KayKit Adventurers 2.0) : un chevalier pour l'agent principal, et pour chaque type de sous-agent une tenue de son rôle (barbare, mage, rôdeur, voleur, voleur encapuchonné) avec un objet en main. Tous les agents d'un même type se ressemblent, y compris au repos à la taverne. La liste complète est dans [docs/lieux-et-personnages.md](docs/lieux-et-personnages.md).
   - Ils marchent ou courent entre les pièces, et font une animation de travail quand ils travaillent.
-  - En attente, ils regardent autour d'eux, la bulle d'attente restant affichée. Le premier de la file s'agenouille devant l'autel.
+  - En attente, ils regardent autour d'eux, le losange ambre restant affiché. Le premier de la file s'agenouille devant l'autel.
   - Chaque personnage a un disque au sol de la couleur de sa session, et le bord de son étiquette porte cette même couleur. L'étiquette du personnage sélectionné a un contour bleu et du texte en gras.
   - Si la réduction des animations est activée dans le système, les personnages gardent une pose fixe et n'effectuent pas de surgissement, mais ils se déplacent toujours d'une pièce à l'autre.
-- **Un clic sur un personnage**, ou sur sa ligne dans la liste, affiche sa tâche, son outil, le temps écoulé et son dernier message. La liste latérale, nommée « Agents et lieux », est l'équivalent complet de la vue 3D au clavier et au lecteur d'écran. Sa liste « Lieux du bureau », groupée par pièce, ouvre la même carte que le clic sur un poste ; fermer la carte rend le focus au bouton choisi.
+- **Un clic sur un personnage**, ou sur sa ligne dans la liste, affiche sa tâche, son outil, le temps écoulé et son dernier message, et ouvre sa [boîte de dialogue](#dialogue-avec-un-agent) en bas de la scène. La liste latérale, nommée « Agents et lieux », est l'équivalent complet de la vue 3D au clavier et au lecteur d'écran. Sa liste « Lieux du bureau », groupée par pièce, ouvre la même carte que le clic sur un poste ; fermer la carte rend le focus au bouton choisi.
 - **L'historique** liste les sessions terminées.
 - **`/debug`** montre le flux brut des événements reçus.
 
@@ -106,6 +107,34 @@ L'interface existe en français, en allemand et en anglais. Les boutons `FR | DE
 
 Les titres de sessions, noms d'environnements, tâches et messages des agents s'affichent tels qu'ils ont été écrits. Les journaux du serveur restent en français.
 
+## Dialogue avec un agent
+
+Clique sur un personnage dans la 3D, ou sur sa ligne dans la liste des sessions. Une boîte de dialogue s'ouvre en bas de la scène et affiche la conversation de l'agent, comme dans un jeu de rôle :
+
+- tes messages ;
+- les réponses de l'agent ;
+- une ligne courte pour chaque outil appelé. Le contenu brut des résultats et la réflexion de l'agent ne s'affichent pas.
+
+Pour un sous-agent, la boîte affiche sa propre conversation. La consigne qu'il a reçue s'affiche sous le nom « Agent principal ».
+
+- **Historique.** Fais défiler vers le haut, ou clique sur « Charger les messages précédents ».
+- **Nouveaux messages.** Ils arrivent tout seuls : le serveur relit la conversation toutes les 2 s.
+- **Fermer.** Clique sur × ou appuie sur Échap. La boîte se ferme et l'agent reste sélectionné.
+- **Lecture seule.** La boîte n'a pas encore de zone de saisie. Répondre à un agent depuis la 3D fera l'objet d'une phase distincte (voir [Limites et suite](#limites-et-suite)).
+
+Le texte des conversations s'affiche comme du texte brut. Il n'est jamais interprété comme du HTML.
+
+### Accès aux conversations
+
+Aucune connexion n'est requise. La page charge la conversation de l'agent ouvert directement depuis le serveur local (`GET /api/transcript`).
+
+Ce choix convient à un outil mono-utilisateur, lancé à la main sur ton propre poste. L'accès reste limité à la machine :
+
+- le serveur n'écoute que sur `127.0.0.1` ;
+- il refuse tout en-tête `Host` ou `Origin` inconnu, ce qui bloque le DNS rebinding et les requêtes venues d'autres sites.
+
+Exposer le serveur au-delà de la machine serait un projet distinct, avec son propre contrôle d'accès. Ne change pas l'adresse d'écoute sans cette protection.
+
 ## Ce que l'installation des hooks modifie
 
 `npm run hooks:install` :
@@ -128,7 +157,8 @@ Tout est lu en lecture seule. Seuls ces fichiers sont ouverts :
 
 - `%LOCALAPPDATA%\Claude-Data\claude_*\ccd-session-presets.json` : les environnements ;
 - `…\claude-code-sessions\<compte>\<org>\local_*.json` et `archived-sessions.idx` : les sessions de l'app desktop ;
-- `~/.claude/sessions/<pid>.json` : les processus Claude Code en cours (occupé ou au repos).
+- `~/.claude/sessions/<pid>.json` : les processus Claude Code en cours (occupé ou au repos) ;
+- `~/.claude/projects/<dossier>/<session>.jsonl` et `…/<session>/subagents/agent-<id>.jsonl` : la conversation de l'agent ouvert dans la boîte de dialogue, en lecture bornée. Le chemin est déduit de l'état du serveur.
 
 Le serveur n'ouvre jamais `config.json` de l'app desktop (il contient des jetons de connexion) ni les fichiers `*.key`.
 
@@ -139,7 +169,10 @@ Ces formats sont internes à Claude et peuvent changer d'une version à l'autre.
 - Le serveur écoute sur `127.0.0.1` uniquement. Il refuse un en-tête `Host` ou `Origin` inconnu, ce qui protège contre le DNS rebinding et les pages web malveillantes.
 - `POST /hooks` exige le jeton, vérifié avant même la lecture de la requête.
 - Les pages ne peuvent pas être intégrées dans une iframe (`X-Frame-Options: DENY`, `frame-ancestors 'none'`).
-- **Limite connue.** L'API de lecture (`/api/*`) et le WebSocket ne demandent pas d'authentification. Tout programme local peut donc lire les titres, dossiers, prompts et commandes (tronqués). Une authentification par session est prévue avant toute fonction qui permettrait d'agir sur les agents.
+- **Conversations.** `GET /api/transcript` renvoie la conversation de l'agent ouvert, sans authentification (voir la section « Dialogue avec un agent »).
+- **Chemin du transcript.** Il est déduit de l'état du serveur, jamais d'une valeur envoyée par le navigateur ou par un hook.
+- **Lecture bornée.** Le serveur ne lit qu'une partie bornée de la conversation. Le texte est affiché comme du texte, jamais interprété en HTML.
+- **Limite connue.** Les routes `/api/*` (inventaire et `/api/transcript`) et le WebSocket ne demandent pas d'authentification. Tout programme local peut donc lire les titres, dossiers, prompts et commandes (tronqués), ainsi que la conversation de l'agent ouvert. Toute action future sur les agents aura sa propre protection.
 - **Sur un poste partagé**, restreins les droits du dossier du projet. Un lecteur secondaire comme `F:\` donne souvent le contrôle total aux « Utilisateurs authentifiés ». Dans une invite de commandes administrateur :
 
 ```bash
@@ -170,5 +203,5 @@ npm run typecheck
 ## Limites et suite
 
 - La scène fait environ 700 appels de dessin par image, ombres comprises : les meubles ne sont pas encore regroupés en instances. Des assets Unreal ne seraient utilisables que si leur licence Fab autorise un usage hors Unreal Engine.
-- Répondre aux agents depuis la 3D (permission, question) fera l'objet d'une phase distincte, qui demandera une authentification forte du serveur. Envoyer un prompt libre à une session déjà ouverte n'a pas encore de solution officielle.
+- La boîte de dialogue est en lecture seule. Répondre aux agents depuis la 3D (permission, question) fera l'objet d'une phase distincte, avec sa propre protection d'accès. Envoyer un prompt libre à une session déjà ouverte n'a pas encore de solution officielle.
 - Le plan complet se trouve dans [plans/plan-agent-office-2026-11-13.md](plans/plan-agent-office-2026-11-13.md).
