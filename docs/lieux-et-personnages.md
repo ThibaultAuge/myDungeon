@@ -269,7 +269,10 @@ Fait :
 - la file d'attente à l'autel, réservée aux permissions, questions et erreurs ;
 - le cycle de vie de la taverne : un exemplaire neutre de chaque type au repos, appel, appels
   simultanés depuis les casiers, retour et disparition, et l'agent principal au repos pendant
-  l'attente d'un prompt.
+  l'attente d'un prompt ;
+- les postes de travail : survol et clic sur le mobilier (`packages/web/src/scene/Post.tsx`),
+  carte du poste (`packages/web/src/ui/PostCard.tsx`), un poste par fonction dans les pièces à
+  plusieurs fonctions, et la liste « Lieux du bureau » du panneau latéral.
 
 Reste à faire :
 

@@ -143,6 +143,7 @@ export function OfficeScene() {
   const snapshotReceived = useOffice((s) => s.snapshotReceived);
   const selected = useOffice((s) => s.selectedAgentId);
   const select = useOffice((s) => s.select);
+  const selectPost = useOffice((s) => s.selectPost);
   const now = useNow();
   const { t } = useT();
   // Finished subagents that reached the tavern: they have left the scene.
@@ -169,7 +170,10 @@ export function OfficeScene() {
       camera={{ position: [CENTER[0], 40, CENTER[2] + 30], fov: 42 }}
       dpr={[1, 2]}
       gl={{ toneMapping: NeutralToneMapping }}
-      onPointerMissed={() => select(null)}
+      onPointerMissed={() => {
+        select(null);
+        selectPost(null);
+      }}
     >
       <SoftShadows size={18} samples={10} focus={0.6} />
       <hemisphereLight args={['#fff6e8', '#8a8478', 1.6]} />

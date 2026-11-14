@@ -16,6 +16,10 @@ Un petit bureau en 3D où chaque agent Claude Code du poste local est un personn
   - Chaque pièce a ses places. Un agent garde la sienne tant qu'il reste dans la pièce ; quand elle est pleine, les suivants se tiennent le long des murs.
 - **Une carte en vrais modèles 3D** : dalles de pierre, de bois ou de terre selon la pièce, murs avec fenêtres, arches, torches et bannières aux couleurs de la pièce, meubles et objets de décoration, ombres douces.
   - **Déplace la souris pour découvrir les salles.** Les murs situés devant le curseur s'enfoncent dans le sol, et il ne reste qu'un muret qui marque le contour des pièces. Ceux situés derrière restent debout.
+  - **Les postes de travail.** Le mobilier de chaque pièce forme des postes. Survole un poste : ses meubles s'éclairent légèrement et le curseur devient une main. Clique dessus pour ouvrir une carte en haut à droite de la 3D, avec le nom de la pièce, le titre du poste, sa fonction en quelques mots et les agents qui y travaillent. Le poste dont la carte est ouverte reste éclairé. Ferme la carte avec ×, avec Échap ou en cliquant dans le vide. Un clic après un glissement de caméra ne fait rien.
+    - Les pièces à plusieurs fonctions ont un poste par fonction : la Bibliothèque (rayonnages et tables) et son Scriptorium (pupitres des copistes), l'Atelier (établis) et le chevalet de l'enlumineur, la Salle des épreuves (table de relecture et laboratoire d'alchimie), la Salle Accessibilité / SEO (estrade du héraut et pupitre d'inspection).
+    - Le décor (caisses, tonneaux, coffres, pièces, bougies, tapis) ne réagit pas au survol.
+    - Si un agent se tient devant un meuble, le plus proche sous le pointeur l'emporte : l'agent ou le poste.
 - **Trois états.**
   - Vert : il travaille.
   - Ambre : il attend ton prochain message. La bulle devient rouge quand il attend ta permission ou ta réponse, ou qu'il est bloqué par une erreur.
@@ -26,7 +30,7 @@ Un petit bureau en 3D où chaque agent Claude Code du poste local est un personn
   - En attente, ils regardent autour d'eux, la bulle d'attente restant affichée. Le premier de la file s'agenouille devant l'autel.
   - Chaque personnage a un disque au sol de la couleur de sa session, et le bord de son étiquette porte cette même couleur. L'étiquette du personnage sélectionné a un contour bleu et du texte en gras.
   - Si la réduction des animations est activée dans le système, les personnages gardent une pose fixe et n'effectuent pas de surgissement, mais ils se déplacent toujours d'une pièce à l'autre.
-- **Un clic sur un personnage**, ou sur sa ligne dans la liste, affiche sa tâche, son outil, le temps écoulé et son dernier message. La liste latérale est l'équivalent complet de la vue 3D au clavier et au lecteur d'écran.
+- **Un clic sur un personnage**, ou sur sa ligne dans la liste, affiche sa tâche, son outil, le temps écoulé et son dernier message. La liste latérale, nommée « Agents et lieux », est l'équivalent complet de la vue 3D au clavier et au lecteur d'écran. Sa liste « Lieux du bureau », groupée par pièce, ouvre la même carte que le clic sur un poste ; fermer la carte rend le focus au bouton choisi.
 - **L'historique** liste les sessions terminées.
 - **`/debug`** montre le flux brut des événements reçus.
 

@@ -34,8 +34,8 @@ export const de: Messages = {
   },
   office: {
     heading: (name: string) => `Büro ${name}`,
-    canvas: '3D-Ansicht des Büros. Dieselben Informationen stehen in der Liste der Sitzungen.',
-    side: 'Details der Agenten',
+    canvas: '3D-Ansicht des Büros. Die Agenten stehen auch unter „Laufende Sitzungen“, die Orte unter „Orte des Büros“.',
+    side: 'Agenten und Orte',
   },
   state: {
     working: 'Arbeitet',
@@ -105,6 +105,105 @@ export const de: Messages = {
     detente: 'Ruheecke',
     concierge: 'Kammer des Hausmeisters',
     taverne: 'Taverne',
+  },
+  posts: {
+    autel: {
+      title: 'Altar der Anfragen',
+      role: 'Den Menschen um eine Erlaubnis, eine Antwort oder Hilfe nach einem Fehler bitten',
+      who: 'Jeder Agent, der dich braucht, und claude-code-guide',
+    },
+    cartes: {
+      title: 'Kartentisch',
+      role: 'Den Bedarf erkunden, entwerfen und den Plan schreiben',
+      who: 'Der Hauptagent beim Planen, Plan',
+    },
+    atelier: {
+      title: 'Werkbänke',
+      role: 'Code schreiben und ändern',
+      who: 'Der Hauptagent, general-purpose, fork, und Hancock auf seinem Rundgang',
+    },
+    chevalet: {
+      title: 'Staffelei des Buchmalers',
+      role: 'Entwürfe in HTML/CSS-Vorlagen zerlegen',
+      who: 'Barbapapa',
+    },
+    biblio: {
+      title: 'Regale und Lesetische',
+      role: 'Den lokalen Code lesen und durchsuchen',
+      who: 'Explore, und der Hauptagent beim Lesen',
+    },
+    scriptorium: {
+      title: 'Pulte der Kopisten',
+      role: 'Dokumentation schreiben, für KIs und für Menschen',
+      who: 'Curator (KI), Otis (Menschen)',
+    },
+    observatoire: {
+      title: 'Großes Fernrohr',
+      role: 'Im Web und in der offiziellen Dokumentation suchen',
+      who: 'Oracle, und der Hauptagent bei der Onlinesuche',
+    },
+    pigeonnier: {
+      title: 'Voliere',
+      role: 'Externe APIs testen: eine Taube fliegt los, eine kommt zurück',
+      who: 'Samuel Morse',
+    },
+    machines: {
+      title: 'Dampfmaschinen',
+      role: 'Befehle ausführen, bauen, Tests laufen lassen, git',
+      who: 'Der Hauptagent und die generischen Agenten',
+    },
+    arithmetique: {
+      title: 'Abakus und Schiefertafel',
+      role: 'Berechnungen und Statistik, in Python ausgeführt',
+      who: 'Turing',
+    },
+    garde: {
+      title: 'Wachtisch',
+      role: 'Sicherheitsaudit',
+      who: 'Neo',
+    },
+    relecture: {
+      title: 'Korrekturtisch',
+      role: 'Code-Review',
+      who: 'Hermione',
+    },
+    labo: {
+      title: 'Alchemielabor',
+      role: 'Tests schreiben',
+      who: 'Dexter',
+    },
+    estrade: {
+      title: 'Bühne des Herolds',
+      role: 'SEO-Audit',
+      who: 'Gatsby',
+    },
+    inspection: {
+      title: 'Prüfpult',
+      role: 'Barrierefreiheitsaudit',
+      who: 'Timmy',
+    },
+    detente: {
+      title: 'Sofa und Würfeltisch',
+      role: 'Ausgefallene Ideen, Brainstorming',
+      who: 'Butt Stallion',
+    },
+    concierge: {
+      title: 'Besen und Wagen',
+      role: 'Toten Code entfernen',
+      who: 'Hancock',
+    },
+    taverne: {
+      title: 'Tische der Taverne',
+      role: 'Ruhe: das verfügbare Team, ohne Aufgabe',
+      who: 'Ein Exemplar jedes Agententyps, und der Hauptagent, der auf deine nächste Nachricht wartet',
+    },
+  },
+  postList: {
+    title: 'Orte des Büros',
+  },
+  postCard: {
+    who: 'Wer hier arbeitet',
+    close: 'Karte schließen',
   },
   time: {
     seconds: (n: number) => `${n} s`,

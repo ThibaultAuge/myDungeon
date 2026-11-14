@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it, vi } from 'vitest';
 import { DEFAULT_LANG, LANGS, MESSAGES, STORAGE_KEY, detectLang, initialLang, isLang, saveLang, type Lang } from '../src/i18n/index.ts';
 import { plural } from '../src/i18n/plural.ts';
+import { POST_IDS } from '../src/scene/layout.ts';
 
 const ALL_LANGS: Lang[] = ['fr', 'de', 'en'];
 
@@ -341,6 +342,63 @@ describe('dictionaries', () => {
       expect(rooms[id].trim(), id).not.toBe('');
     }
     expect(Object.keys(rooms).sort()).toEqual([...ids].sort());
+  });
+
+  /**
+   * Verifies that every workstation has exactly one card per language, keyed by POST_IDS
+   */
+  it.each(ALL_LANGS)('%s has a card for every workstation and no other', (lang) => {
+    const posts = MESSAGES[lang].posts as Record<string, unknown>;
+    expect(Object.keys(posts).sort()).toEqual([...POST_IDS].sort());
+  });
+
+  /**
+   * Verifies that each workstation card has a non-empty, trimmed title, role and who
+   */
+  it.each(ALL_LANGS)('%s workstation cards have trimmed non-empty title, role and who', (lang) => {
+    const posts = MESSAGES[lang].posts as Record<string, Record<string, unknown>>;
+    for (const id of POST_IDS) {
+      const card = posts[id];
+      expect(card, id).toBeDefined();
+      expect(Object.keys(card).sort(), id).toEqual(['role', 'title', 'who']);
+      for (const field of ['title', 'role', 'who']) {
+        const v = card[field];
+        expect(typeof v, `${id}.${field}`).toBe('string');
+        expect((v as string).trim(), `${id}.${field}`).not.toBe('');
+        expect(v, `${id}.${field} has stray whitespace`).toBe((v as string).trim());
+      }
+    }
+  });
+
+  /**
+   * Verifies that workstation titles are distinct within a language
+   */
+  it.each(ALL_LANGS)('%s gives every workstation a distinct title', (lang) => {
+    const titles = POST_IDS.map((id) => MESSAGES[lang].posts[id].title);
+    expect(new Set(titles).size).toBe(titles.length);
+  });
+
+  /**
+   * Verifies that the workstation card chrome (who heading, close label) is non-empty
+   */
+  it.each(ALL_LANGS)('%s has non-empty postCard labels', (lang) => {
+    const { who, close } = MESSAGES[lang].postCard;
+    for (const [name, v] of [
+      ['who', who],
+      ['close', close],
+    ] as const) {
+      expect(typeof v, name).toBe('string');
+      expect(v.trim(), name).not.toBe('');
+      expect(v, name).toBe(v.trim());
+    }
+  });
+
+  /**
+   * Verifies that the workstation card labels are translated, not French copies
+   */
+  it.each(['de', 'en'] as const)('%s translates the postCard labels', (lang) => {
+    expect(MESSAGES[lang].postCard.who).not.toBe(MESSAGES.fr.postCard.who);
+    expect(MESSAGES[lang].postCard.close).not.toBe(MESSAGES.fr.postCard.close);
   });
 
   /**

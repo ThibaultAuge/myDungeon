@@ -17,8 +17,8 @@ npm workspaces: `packages/server`, `packages/web`, `packages/shared`.
 
 ## AI context index
 
-- `docs/ai/i18n.md` — Use when adding or changing any text shown in the web interface, a language, a RoomId, or server data that the client displays.
-- `docs/ai/dungeon-scene.md` — Use when changing the 3D dungeon map — rooms, floors, walls, cutaway, props, lighting, KayKit models or their import — agent figures (walking motion, character models, role looks and held props, animations), or when previewing the web scene.
+- `docs/ai/i18n.md` — Use when adding or changing any text shown in the web interface, a language, a RoomId or PostId, or server data that the client displays.
+- `docs/ai/dungeon-scene.md` — Use when changing the 3D dungeon map — rooms, floors, walls, cutaway, props, lighting, KayKit models or their import — clickable workstations (posts, hover glow, post card and list), pointer/cursor handling of 3D targets, agent figures (walking motion, character models, role looks and held props, animations), or when previewing the web scene.
 - `docs/ai/agent-lifecycle.md` — Use when changing where agents rest or wait (tavern, altar queue), how subagent figures appear, leave or return, the agent roster (snapshot.roster, agent definitions, seen types), or when testing the scene with fake hooks.
 
 Human docs (French): `README.md` and `docs/`.

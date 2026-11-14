@@ -82,6 +82,34 @@ export type PropKind =
   | 'coins'
   | 'candle';
 
+/**
+ * A workstation: the furniture of one function of a room. Hovering it lights all its pieces,
+ * clicking it opens its card. A room with two functions (the library and its scriptorium,
+ * the workshop and its easel…) has two posts.
+ */
+export const POST_IDS = [
+  'autel',
+  'cartes',
+  'atelier',
+  'chevalet',
+  'biblio',
+  'scriptorium',
+  'observatoire',
+  'pigeonnier',
+  'machines',
+  'arithmetique',
+  'garde',
+  'relecture',
+  'labo',
+  'estrade',
+  'inspection',
+  'detente',
+  'concierge',
+  'taverne',
+] as const;
+
+export type PostId = (typeof POST_IDS)[number];
+
 export interface Prop {
   kind: PropKind;
   /** Position relative to the room centre. */
@@ -89,6 +117,8 @@ export interface Prop {
   z: number;
   /** Y rotation. */
   rot?: number;
+  /** The workstation this piece belongs to; decoration has none. */
+  post?: PostId;
 }
 
 export interface RoomDef {
@@ -151,8 +181,8 @@ export const ROOMS: RoomDef[] = [
     door: { side: 's', at: 0 },
     props: [
       { kind: 'candle', x: 3.4, z: 1.4 },
-      { kind: 'telescope', x: 2.4, z: -0.7 },
-      { kind: 'starTable', x: -2, z: -0.9 },
+      { kind: 'telescope', x: 2.4, z: -0.7, post: 'observatoire' },
+      { kind: 'starTable', x: -2, z: -0.9, post: 'observatoire' },
     ],
     stations: { lunette: around(2.4, -0.7, 1.1, [S, W + 0.4, E - 0.4]) },
     seats: [...row(0.1, [-2.8, -2, -1.2], N), ...around(2.4, -0.7, 1.1, [W - 0.2])],
@@ -168,8 +198,8 @@ export const ROOMS: RoomDef[] = [
     door: { side: 's', at: 0 },
     props: [
       { kind: 'barrels', x: -2.8, z: 1.3 },
-      { kind: 'aviary', x: -2.4, z: -1.1 },
-      { kind: 'lectern', x: 2.2, z: -0.7, rot: 0 },
+      { kind: 'aviary', x: -2.4, z: -1.1, post: 'pigeonnier' },
+      { kind: 'lectern', x: 2.2, z: -0.7, rot: 0, post: 'pigeonnier' },
     ],
     seats: [...row(-0.1, [-3, -1.8], N), ...around(2.2, -0.7, 0.9, [S, W])],
   },
@@ -184,8 +214,8 @@ export const ROOMS: RoomDef[] = [
     door: { side: 'e', at: 0 },
     props: [
       { kind: 'chest', x: -3.1, z: -3.8 },
-      { kind: 'mapTable', x: -0.6, z: -0.6 },
-      { kind: 'globe', x: 2.6, z: -3.3 },
+      { kind: 'mapTable', x: -0.6, z: -0.6, post: 'cartes' },
+      { kind: 'globe', x: 2.6, z: -3.3, post: 'cartes' },
       { kind: 'rug', x: -0.6, z: -0.6 },
     ],
     seats: [
@@ -207,12 +237,12 @@ export const ROOMS: RoomDef[] = [
     accent: 'green',
     door: { side: 'e', at: 0 },
     props: [
-      { kind: 'bookcase', x: -2.6, z: -4.1 },
-      { kind: 'bookcase', x: 0, z: -4.1 },
-      { kind: 'bookcase', x: 2.6, z: -4.1 },
-      { kind: 'bookcase', x: -3.7, z: -1.6, rot: E },
-      { kind: 'readingTable', x: 1.4, z: -0.9 },
-      { kind: 'readingTable', x: 1.4, z: 2.6 },
+      { kind: 'bookcase', x: -2.6, z: -4.1, post: 'biblio' },
+      { kind: 'bookcase', x: 0, z: -4.1, post: 'biblio' },
+      { kind: 'bookcase', x: 2.6, z: -4.1, post: 'biblio' },
+      { kind: 'bookcase', x: -3.7, z: -1.6, rot: E, post: 'biblio' },
+      { kind: 'readingTable', x: 1.4, z: -0.9, post: 'biblio' },
+      { kind: 'readingTable', x: 1.4, z: 2.6, post: 'biblio' },
     ],
     seats: [
       ...row(-3.2, [-2.6, 0, 2.6], N),
@@ -236,8 +266,8 @@ export const ROOMS: RoomDef[] = [
     insideOf: 'biblio',
     props: [
       { kind: 'rug', x: 0, z: 0 },
-      { kind: 'lectern', x: -0.9, z: 0, rot: N },
-      { kind: 'lectern', x: 0.9, z: 0, rot: N },
+      { kind: 'lectern', x: -0.9, z: 0, rot: N, post: 'scriptorium' },
+      { kind: 'lectern', x: 0.9, z: 0, rot: N, post: 'scriptorium' },
     ],
     stations: {
       ia: [{ x: -0.9, z: 0.8, facing: N }, { x: -0.9, z: -0.8, facing: S }],
@@ -256,12 +286,12 @@ export const ROOMS: RoomDef[] = [
     door: { side: 's', at: 0 },
     props: [
       { kind: 'crates', x: 3.2, z: 3.4 },
-      { kind: 'bench', x: -2, z: -2.4 },
-      { kind: 'bench', x: 2, z: -2.4 },
-      { kind: 'bench', x: -2, z: 0.6 },
-      { kind: 'bench', x: 2, z: 0.6 },
-      { kind: 'toolRack', x: 0, z: -4 },
-      { kind: 'easel', x: -3.1, z: 3.3, rot: N },
+      { kind: 'bench', x: -2, z: -2.4, post: 'atelier' },
+      { kind: 'bench', x: 2, z: -2.4, post: 'atelier' },
+      { kind: 'bench', x: -2, z: 0.6, post: 'atelier' },
+      { kind: 'bench', x: 2, z: 0.6, post: 'atelier' },
+      { kind: 'toolRack', x: 0, z: -4, post: 'atelier' },
+      { kind: 'easel', x: -3.1, z: 3.3, rot: N, post: 'chevalet' },
     ],
     stations: { chevalet: [{ x: -3.1, z: 2.4, facing: S }, { x: -2.2, z: 2.6, facing: faceTo(-2.2, 2.6, -3.1, 3.3) }] },
     seats: [
@@ -281,13 +311,13 @@ export const ROOMS: RoomDef[] = [
     accent: 'red',
     door: { side: 's', at: 0 },
     props: [
-      { kind: 'altar', x: 0, z: -1.65 },
-      { kind: 'candles', x: -1.1, z: -1.8 },
-      { kind: 'candles', x: 1.1, z: -1.8 },
-      { kind: 'pew', x: -2.5, z: -0.1 },
-      { kind: 'pew', x: 2.5, z: -0.1 },
-      { kind: 'pew', x: -2.5, z: 1.2 },
-      { kind: 'pew', x: 2.5, z: 1.2 },
+      { kind: 'altar', x: 0, z: -1.65, post: 'autel' },
+      { kind: 'candles', x: -1.1, z: -1.8, post: 'autel' },
+      { kind: 'candles', x: 1.1, z: -1.8, post: 'autel' },
+      { kind: 'pew', x: -2.5, z: -0.1, post: 'autel' },
+      { kind: 'pew', x: 2.5, z: -0.1, post: 'autel' },
+      { kind: 'pew', x: -2.5, z: 1.2, post: 'autel' },
+      { kind: 'pew', x: 2.5, z: 1.2, post: 'autel' },
     ],
     stations: { sacristain: [{ x: 1.9, z: -1.4, facing: faceTo(1.9, -1.4, 0, -1.65) }] },
     seats: [
@@ -307,9 +337,9 @@ export const ROOMS: RoomDef[] = [
     door: { side: 's', at: 0 },
     props: [
       { kind: 'crates', x: 3.2, z: 1.4 },
-      { kind: 'boiler', x: -2.7, z: -1 },
-      { kind: 'engine', x: 0.2, z: -1.3 },
-      { kind: 'engine', x: 2.7, z: -1.3 },
+      { kind: 'boiler', x: -2.7, z: -1, post: 'machines' },
+      { kind: 'engine', x: 0.2, z: -1.3, post: 'machines' },
+      { kind: 'engine', x: 2.7, z: -1.3, post: 'machines' },
     ],
     seats: row(0.2, [-2.7, -1.8, 0.2, 1.1, 2.7, 3.4], N),
   },
@@ -324,8 +354,8 @@ export const ROOMS: RoomDef[] = [
     door: { side: 's', at: 0 },
     props: [
       { kind: 'coins', x: 3.3, z: 1.6 },
-      { kind: 'abacus', x: -1.8, z: -1.4 },
-      { kind: 'slate', x: 1.9, z: -2 },
+      { kind: 'abacus', x: -1.8, z: -1.4, post: 'arithmetique' },
+      { kind: 'slate', x: 1.9, z: -2, post: 'arithmetique' },
     ],
     stations: { boulier: row(-0.4, [-1.8, -0.8], N) },
     seats: [...row(-0.9, [1.4, 2.6], N), ...row(-0.4, [-2.8], N)],
@@ -340,9 +370,9 @@ export const ROOMS: RoomDef[] = [
     accent: 'red',
     door: { side: 's', at: 0 },
     props: [
-      { kind: 'couch', x: -2.3, z: -1.5 },
-      { kind: 'diceTable', x: 1.6, z: -0.2 },
-      { kind: 'posters', x: 1.6, z: -2.15 },
+      { kind: 'couch', x: -2.3, z: -1.5, post: 'detente' },
+      { kind: 'diceTable', x: 1.6, z: -0.2, post: 'detente' },
+      { kind: 'posters', x: 1.6, z: -2.15, post: 'detente' },
     ],
     seats: [...row(-0.9, [-3, -1.6], S), ...around(1.6, -0.2, 1, [W, E, N])],
   },
@@ -356,9 +386,9 @@ export const ROOMS: RoomDef[] = [
     accent: 'brown',
     door: { side: 'w', at: 0 },
     props: [
-      { kind: 'brooms', x: 2.8, z: -1.3 },
-      { kind: 'cart', x: 0.8, z: 0.6 },
-      { kind: 'barrel', x: 3.2, z: 1 },
+      { kind: 'brooms', x: 2.8, z: -1.3, post: 'concierge' },
+      { kind: 'cart', x: 0.8, z: 0.6, post: 'concierge' },
+      { kind: 'barrel', x: 3.2, z: 1, post: 'concierge' },
     ],
     seats: [
       { x: 2, z: -0.7, facing: faceTo(2, -0.7, 2.8, -1.3) },
@@ -377,11 +407,11 @@ export const ROOMS: RoomDef[] = [
     door: { side: 'n', at: 0 },
     props: [
       { kind: 'crates', x: -3.5, z: 2.2 },
-      { kind: 'portcullis', x: -4.4, z: 0.4, rot: E },
-      { kind: 'weaponRack', x: 1.8, z: 2.7 },
-      { kind: 'lantern', x: -3.4, z: -2.2 },
-      { kind: 'lantern', x: 3.4, z: -2.2 },
-      { kind: 'guardTable', x: 0, z: 0.4 },
+      { kind: 'portcullis', x: -4.4, z: 0.4, rot: E, post: 'garde' },
+      { kind: 'weaponRack', x: 1.8, z: 2.7, post: 'garde' },
+      { kind: 'lantern', x: -3.4, z: -2.2, post: 'garde' },
+      { kind: 'lantern', x: 3.4, z: -2.2, post: 'garde' },
+      { kind: 'guardTable', x: 0, z: 0.4, post: 'garde' },
     ],
     seats: [
       ...around(0, 0.4, 1.1, [N, S, W, E]),
@@ -400,8 +430,8 @@ export const ROOMS: RoomDef[] = [
     door: { side: 'n', at: 0 },
     props: [
       { kind: 'barrels', x: -4.6, z: -2.2 },
-      { kind: 'readingTable', x: -2.6, z: 0.6 },
-      { kind: 'alchemyBench', x: 2.8, z: 2.4 },
+      { kind: 'readingTable', x: -2.6, z: 0.6, post: 'relecture' },
+      { kind: 'alchemyBench', x: 2.8, z: 2.4, post: 'labo' },
     ],
     stations: {
       relecture: [...row(-0.2, [-3.1, -2.1], S), ...row(1.4, [-3.1, -2.1], N)],
@@ -420,8 +450,8 @@ export const ROOMS: RoomDef[] = [
     door: { side: 'n', at: -2.4 },
     props: [
       { kind: 'chest', x: 3.3, z: 2.35 },
-      { kind: 'stage', x: -1.6, z: 1.6 },
-      { kind: 'inspectionDesk', x: 2.2, z: 0.6 },
+      { kind: 'stage', x: -1.6, z: 1.6, post: 'estrade' },
+      { kind: 'inspectionDesk', x: 2.2, z: 0.6, post: 'inspection' },
     ],
     stations: {
       estrade: [{ x: -1.6, z: 1.6, facing: N }, { x: -2.6, z: 1.6, facing: N }, { x: -0.6, z: 1.6, facing: N }],
@@ -440,14 +470,14 @@ export const ROOMS: RoomDef[] = [
     door: { side: 'w', at: 0 },
     props: [
       { kind: 'crates', x: -2.7, z: -10.6 },
-      { kind: 'fireplace', x: 0, z: -11 },
-      { kind: 'longTable', x: 0.6, z: -6.5 },
-      { kind: 'longTable', x: 0.6, z: -1 },
-      { kind: 'longTable', x: 0.6, z: 4.5 },
-      { kind: 'barrel', x: 2.8, z: -9 },
-      { kind: 'barrel', x: 2.8, z: -8.1 },
-      { kind: 'barrel', x: -2.8, z: -9.4 },
-      { kind: 'lockers', x: 3.1, z: 9 },
+      { kind: 'fireplace', x: 0, z: -11, post: 'taverne' },
+      { kind: 'longTable', x: 0.6, z: -6.5, post: 'taverne' },
+      { kind: 'longTable', x: 0.6, z: -1, post: 'taverne' },
+      { kind: 'longTable', x: 0.6, z: 4.5, post: 'taverne' },
+      { kind: 'barrel', x: 2.8, z: -9, post: 'taverne' },
+      { kind: 'barrel', x: 2.8, z: -8.1, post: 'taverne' },
+      { kind: 'barrel', x: -2.8, z: -9.4, post: 'taverne' },
+      { kind: 'lockers', x: 3.1, z: 9, post: 'taverne' },
     ],
     seats: [-6.5, -1, 4.5].flatMap((tz) => [
       ...[-1.2, 0, 1.2].map((dz) => ({ x: -0.4, z: tz + dz, facing: E })),
@@ -457,6 +487,20 @@ export const ROOMS: RoomDef[] = [
 ];
 
 export const ROOM_BY_ID = new Map(ROOMS.map((r) => [r.id, r]));
+
+/** The furniture of a room split into workstations, in order of first piece, and the decoration left over. */
+export function postGroups(room: RoomDef): { posts: { post: PostId; props: Prop[] }[]; decor: Prop[] } {
+  const posts = new Map<PostId, Prop[]>();
+  const decor: Prop[] = [];
+  for (const p of room.props) {
+    if (!p.post) decor.push(p);
+    else posts.set(p.post, [...(posts.get(p.post) ?? []), p]);
+  }
+  return { posts: [...posts].map(([post, props]) => ({ post, props })), decor };
+}
+
+/** The room each workstation stands in. */
+export const POST_ROOM = new Map<PostId, RoomId>(ROOMS.flatMap((r) => postGroups(r).posts.map((g) => [g.post, r.id])));
 
 /** Outer bounds of the dungeon, corridors included. */
 export const BOUNDS = { x0: -24, x1: 23, z0: -13, z1: 10 };
