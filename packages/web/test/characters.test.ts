@@ -139,10 +139,10 @@ describe('clips of the death outside the castle', () => {
 });
 
 describe('SKELETON_LOOKS', () => {
-  /** Verifies that each skeleton has its own body from the skeletons pack */
-  it('gives three distinct skeleton bodies from the skeletons pack', () => {
+  /** Verifies that the three skeletons are all the bare Minion (no helmet nor hood hiding the skull) */
+  it('gives three bare skeletons from the skeletons pack', () => {
     expect(SKELETON_LOOKS).toHaveLength(3);
-    expect(new Set(SKELETON_LOOKS.map((l) => l.body)).size).toBe(3);
+    expect(SKELETON_LOOKS.map((l) => l.body)).toEqual(['Skeleton_Minion', 'Skeleton_Minion', 'Skeleton_Minion']);
     for (const l of SKELETON_LOOKS) {
       expect(l.pack).toBe('skeletons');
       expect(l.body).toMatch(/^Skeleton_/);

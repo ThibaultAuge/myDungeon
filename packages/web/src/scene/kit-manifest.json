@@ -92,7 +92,7 @@
     "license": "skeletons/KayKit_Skeletons_1.1_FREE/License.txt",
     "format": "glb",
     "textures": [],
-    "models": ["Skeleton_Warrior", "Skeleton_Minion", "Skeleton_Rogue"]
+    "models": ["Skeleton_Minion"]
   },
   "skeletons_props": {
     "source": "skeletons/KayKit_Skeletons_1.1_FREE/assets/gltf",

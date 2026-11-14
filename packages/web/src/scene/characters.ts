@@ -11,7 +11,7 @@ export const MAIN_BODY: CharacterModel = 'Knight';
 export const SUB_BODIES: readonly CharacterModel[] = ['Barbarian', 'Mage', 'Ranger', 'Rogue', 'Rogue_Hooded'];
 
 /** Character models of the `skeletons` pack: the enemies outside the castle. */
-export type SkeletonModel = 'Skeleton_Warrior' | 'Skeleton_Minion' | 'Skeleton_Rogue';
+export type SkeletonModel = 'Skeleton_Minion';
 
 /** A model held in a hand: an Adventurers prop, an RPG Tools item, or a skeleton's weapon. */
 export interface PropRef {
@@ -59,11 +59,15 @@ export const LOOKS: Readonly<Record<string, Look>> = {
 
 const weapon = (model: string): PropRef => Object.freeze({ pack: 'skeletons_props', model });
 
-/** The three skeletons, each with its own body and weapon. */
+/**
+ * The three skeletons: all the bare Minion, the only body that reads as a skeleton from
+ * above (user decision: the Warrior's helmet and the Rogue's red hood hide the skull).
+ * They differ by their weapon.
+ */
 export const SKELETON_LOOKS: readonly Look[] = Object.freeze([
-  Object.freeze({ pack: 'skeletons', body: 'Skeleton_Warrior', right: weapon('Skeleton_Blade') }),
+  Object.freeze({ pack: 'skeletons', body: 'Skeleton_Minion', right: weapon('Skeleton_Blade') }),
   Object.freeze({ pack: 'skeletons', body: 'Skeleton_Minion', right: weapon('Skeleton_Axe') }),
-  Object.freeze({ pack: 'skeletons', body: 'Skeleton_Rogue', right: weapon('Skeleton_Blade') }),
+  Object.freeze({ pack: 'skeletons', body: 'Skeleton_Minion', right: weapon('Skeleton_Blade') }),
 ] satisfies Look[]);
 
 // Shared by every figure of a type: frozen, with their PropRefs and the grips, so that no

@@ -97,7 +97,8 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cast
 - Looks (`characters.ts`): a `Look` is a body (`pack`: `'adventurers'` by default, or
   `'skeletons'`) plus optional `right` / `left` held props
   (`PropRef { pack: 'adventurers_props' | 'tools' | 'skeletons_props'; model }`).
-  `SKELETON_LOOKS`: Warrior + Blade, Minion + Axe, Rogue + Blade. Main agents use `MAIN_BODY`
+  `SKELETON_LOOKS`: three bare `Skeleton_Minion` bodies (Blade, Axe, Blade); `SkeletonModel`
+  is only `'Skeleton_Minion'`. Main agents use `MAIN_BODY`
   (`Knight`). Every subagent figure, whatever its look, is scaled 0.85 by kind in
   `AgentFigure` (whole group: model, tag, ring, disc). Subagents get a role look from `LOOKS`, keyed by the
   lower-case agent TYPE (18 entries: the user's agents plus `Explore`, `Plan`,
@@ -288,6 +289,9 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cast
   outer walls may stand up to 0.175 m off the inner face, which moved outward from 0.275 m
   to 0.1 m inside the room edge.
 - Orientation-based cutaway was tried and rejected; keep the cursor parabola.
+- Attacking skeletons stay bare `Skeleton_Minion` bodies (user decision): do not use
+  Skeleton_Warrior / Rogue / Mage, whose helmet or hood hides the skull from the top-down
+  camera so they did not read as skeletons. Only Minion is in the manifest's `skeletons` pack.
 - Tests must not import `kit.ts` or any `.tsx` file (drei / `import.meta.env`); test
   `dungeon.ts`, `layout.ts`, `walk.ts`, `characters.ts`, `destinations.ts`, `forest.ts`,
   `outside.ts`, `stage.ts`, `ambush.ts`, `tavern.ts` and the manifest JSON.
