@@ -27,8 +27,9 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cuta
 
 ### Agent figures
 - Skins: `CHARACTERS` in `characters.ts` lists skins per kind — `Knight` for main agents,
-  `Rogue_Hooded` for subagents (scale 0.85). `characterFor(kind, id)` picks one
-  deterministically from a hash of the id.
+  `Rogue_Hooded` for subagents. `characterFor(kind, id)` picks one deterministically from
+  a hash of the id. Every subagent figure, whatever its skin, is scaled 0.85 by kind in
+  `AgentFigure` (whole group: model, tag, ring, disc).
 - Walking: cruise `CRUISE_SPEED` 9 u/s, `ACCELERATION` 18 u/s², `MIN_SPEED` 0.3, with
   ease-in / ease-out over the WHOLE route (braking curve `sqrt(2·A·remaining)` on the total
   remaining distance, so no stop at corners). Speed lives in a ref in `AgentFigure`, reset
@@ -37,7 +38,8 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cuta
 - Clips: `clipFor` (pure, in `characters.ts`) picks, in priority order: spawn
   (`Spawn_Ground`, once, ×1.5, only for a figure whose `start` is the lockers `SPAWN` and not
   done; one coming from a resting seat just walks) > moving (`Walking_A`, or `Running_A` above
-  `RUN_THRESHOLD`; rate = speed / measured clip speed, capped at `MAX_CLIP_RATE`) >
+  `RUN_THRESHOLD`; rate = speed / measured clip speed, capped at `MAX_CLIP_RATE`, with a
+  0.5 floor for `Walking_A` only) >
   kneeling at the altar (`PickUp` frozen at `KNEEL_POSE_TIME`) > done (`Idle_A` frozen, no
   transparency) > working (`Interact`) > waiting (`Idle_B`). Reduced motion: still poses,
   turns snap, no spawn; position still moves.
@@ -76,7 +78,9 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cuta
   `nextSpeed`, `advance` (mutates the position, shifts reached waypoints, carries leftover
   step past corners, lands exactly on the last waypoint), `turnToward`.
 - `packages/web/src/scene/layout.ts`, `Room.tsx`, `Office.tsx`.
-- `packages/web/test/dungeon.test.ts`, `walk.test.ts`, `characters.test.ts`.
+- `packages/web/test/dungeon.test.ts`, `walk.test.ts`, `characters.test.ts`,
+  `layout.test.ts` (`layout.ts`: `ROOMS`, seats and `assignSpots`, altar `queueSpot`,
+  `SPAWN`, `corridorPath`, `routeBetween`, `reroute`).
 
 ## Usage
 - New model: add it to `kit-manifest.json`, run `npm run kaykit:import`. Never hand-copy
@@ -113,7 +117,7 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cuta
 - Wall footprint matches the pre-KayKit one, so seat positions are unaffected.
 - Orientation-based cutaway was tried and rejected; keep the cursor parabola.
 - Tests must not import `kit.ts` or any `.tsx` file (drei / `import.meta.env`); test
-  `dungeon.ts`, `walk.ts`, `characters.ts` and the manifest JSON.
+  `dungeon.ts`, `layout.ts`, `walk.ts`, `characters.ts` and the manifest JSON.
 - Walk speed was set so figures reach the room before short tasks finish (user request).
   The chibi legs walk naturally at 0.57 (`Walking_A`) and 1.4 u/s (`Running_A`) at
   `KIT_SCALE`, so feet slide at cruise speed by design. Accepted limits: a reroute to a
