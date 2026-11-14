@@ -2,7 +2,6 @@ import fs from 'node:fs';
 import path from 'node:path';
 import chokidar from 'chokidar';
 import { buildApp } from './app.ts';
-import { AuthGate } from './auth.ts';
 import { loadConfig, WEB_DIST } from './config.ts';
 import { readInventory, type AgentsCache } from './inventory.ts';
 import { resolvePaths, type ClaudePaths } from './paths.ts';
@@ -69,31 +68,17 @@ setInterval(() => {
   }
 }, REDISCOVER_MS);
 
-// Without a build, the page is served by Vite (port 5173), which proxies /login here.
-const loginOrigin = fs.existsSync(WEB_DIST) ? `http://127.0.0.1:${config.port}` : 'http://127.0.0.1:5173';
-let listening = false;
-let pendingLink: string | null = null;
-const printLink = (code: string) => {
-  const link = `${loginOrigin}/login?code=${code}`;
-  if (listening) console.log(`Lien de connexion (usage unique, 10 min) : ${link}`);
-  else pendingLink = link;
-};
-const auth = new AuthGate(printLink);
-
 const app = await buildApp({
   store,
   port: config.port,
   token: config.token,
   webDist: WEB_DIST,
-  auth,
   projectsDir: path.join(paths.claudeHome, 'projects'),
 });
 await app.listen({ host: '127.0.0.1', port: config.port });
 
 console.log(`Agent Office : http://127.0.0.1:${config.port}`);
 console.log(`  données desktop : ${paths.desktopData ?? 'introuvables'} (${paths.sessionDirs.length} dossier(s) de sessions)`);
-listening = true;
-if (pendingLink) console.log(`  lien de connexion (usage unique, 10 min) : ${pendingLink}`);
 if (!config.token) {
   console.warn('  aucun jeton : les hooks sont refusés. Lance `npm run hooks:install`.');
 }

@@ -30,15 +30,6 @@ function browserStorage(): Storage | undefined {
 
 const startLang = initialLang(browserStorage(), navigator);
 
-/** `/login` redirects to `/?login=failed` on a wrong or expired code: noted, then removed from the URL. */
-function takeLoginFailed(): boolean {
-  const params = new URLSearchParams(location.search);
-  if (params.get('login') !== 'failed') return false;
-  params.delete('login');
-  const query = params.toString();
-  history.replaceState(null, '', `${location.pathname}${query ? `?${query}` : ''}${location.hash}`);
-  return true;
-}
 document.documentElement.lang = startLang;
 
 interface OfficeStore {
@@ -56,8 +47,6 @@ interface OfficeStore {
   selectedAgentId: string | null;
   /** The conversation box of the selected agent. Selecting an agent opens it. */
   dialogOpen: boolean;
-  /** The last sign-in link was wrong or expired. */
-  loginFailed: boolean;
   lang: Lang;
   navigate(r: Route): void;
   select(agentId: string | null): void;
@@ -76,7 +65,6 @@ export const useOffice = create<OfficeStore>((set) => ({
   events: [],
   selectedAgentId: null,
   dialogOpen: false,
-  loginFailed: takeLoginFailed(),
   lang: startLang,
   navigate(r) {
     history.pushState(null, '', routePath(r));

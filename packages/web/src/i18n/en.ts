@@ -76,8 +76,6 @@ export const en: Messages = {
     start: 'Start of the conversation',
     empty: 'No conversation yet for this agent.',
     error: 'The conversation cannot be read right now. Retrying…',
-    signIn: 'To read conversations, open the sign-in link shown in the server console.',
-    loginFailed: 'This sign-in link is invalid or expired. Open the latest link shown in the server console.',
     truncated: 'Message shortened.',
   },
   sessionList: {
