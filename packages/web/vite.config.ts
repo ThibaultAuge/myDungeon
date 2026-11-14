@@ -12,6 +12,8 @@ export default defineConfig({
     proxy: {
       '/api': { target },
       '/ws': { target, ws: true },
+      '/login': { target },
+      '/logout': { target },
     },
   },
 });

@@ -1,6 +1,7 @@
 import { useEffect, type ReactNode } from 'react';
 import { connect, loadEnvironments, useOffice } from './store.ts';
 import { OfficeScene } from './scene/Office.tsx';
+import { AgentDialog } from './ui/AgentDialog.tsx';
 import { AgentPanel } from './ui/AgentPanel.tsx';
 import { EnvSwitcher } from './ui/EnvSwitcher.tsx';
 import { History } from './ui/History.tsx';
@@ -117,6 +118,7 @@ function EnvPage({ envId }: { envId: string }) {
             <OfficeScene />
           </div>
           <Legend />
+          <AgentDialog sessions={sessions} />
         </div>
         {/* Focusable: the panel scrolls, and keyboard users must be able to scroll it. */}
         <aside className="office__side" aria-label={t.office.side} tabIndex={0}>

@@ -22,6 +22,11 @@ description: Use when changing where agents rest or wait (tavern, altar queue), 
 - Main agent: waiting for a prompt (Stop, SessionStart, idle notification) rests in the
   tavern. The altar queue is only for `permission`, `question` and `error`
   (`setWaiting` in `reducer.ts`). User decision.
+- Waiting markers (`AgentFigure`): an agent waiting for a prompt shows the amber
+  octahedron. An agent at the altar (`permission`, `question`, `error`) shows an HTML/SVG
+  speech bubble (`RequestBubble`, glyph … / ? / !, fill `#b3261e` for contrast,
+  `aria-hidden`) rendered inside the name tag `<Html>` (wrapper class `agent-tag-anchor`,
+  name span `agent-tag`).
 - Roster (`snapshot.roster`, `rosterView` in `reducer.ts`): agents defined in
   `~/.claude/agents` and `<env folder>/.claude/agents`, plus types seen at work in that
   environment (`seenTypes`, max 32 per env, kept until server restart), deduped
@@ -36,6 +41,7 @@ description: Use when changing where agents rest or wait (tavern, altar queue), 
 - `packages/web/src/scene/Office.tsx` — `useStarts`, `arrived` set, resting figures.
 - `packages/web/src/scene/AgentFigure.tsx` — `onArrive` when a done subagent reaches its
   tavern spot.
+- `packages/web/src/scene/RequestBubble.tsx` — altar speech bubble.
 - `packages/web/src/store.ts`, `packages/shared/src/index.ts` — roster in the snapshot.
 - `packages/server/src/inventory.ts` — `AGENT_NAME`, `agentNameFromDefinition`,
   `AgentsCache`, agent folder reads.
@@ -49,10 +55,14 @@ description: Use when changing where agents rest or wait (tavern, altar queue), 
 - Test the scene without real sessions: the server only accepts the Vite origin on port
   5173, so from a worktree build the web client and run a second server on another port
   (`AGENT_OFFICE_PORT` and `AGENT_OFFICE_TOKEN` env), then POST fake hook events to
-  `/hooks` with header `x-agent-office-token`. A hidden Browser pane renders no frames, so
-  figures do not move there.
+  `/hooks` with header `x-agent-office-token`. Without `AGENT_OFFICE_TOKEN`, the server reads
+  the token from `relay.env` (`config.ts`). Fake sessions with no live process are ended by
+  the inventory after about 30 s, so screenshot quickly. A hidden Browser pane renders no
+  frames, so figures do not move there: keep it shown.
 
 ## Notes
+- A 3D altar bubble was tried and rejected: the HTML tags and room signs are drawn over the
+  canvas and hid it. Keep the request bubble in the tag `<Html>`.
 - Security, keep both: `agentNameFromDefinition` must not run a backtracking regex on the
   `name:` value (a former regex took 31 s on a crafted 4 KB line; a time-bounded test
   guards it). Hook agent types must pass `AGENT_NAME` before joining `seenTypes`, which is
@@ -61,4 +71,5 @@ description: Use when changing where agents rest or wait (tavern, altar queue), 
   in the first render; `wallSeats` cost; per-figure `<Html>` cost; `seenTypes` not re-keyed
   when a CLI session is absorbed; `loaded` guessed from stage contents; synchronous agent
   folder reads (slow on UNC paths); hook `agent_type` unvalidated in `AgentView` /
-  `pendingSpawns`; an `agent_id` could collide with `rest:` ids.
+  `pendingSpawns`; an `agent_id` could collide with `rest:` ids; request bubbles of queued
+  altar agents overlap under the near-vertical camera.

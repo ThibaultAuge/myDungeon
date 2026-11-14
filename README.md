@@ -18,15 +18,16 @@ Un petit bureau en 3D où chaque agent Claude Code du poste local est un personn
   - **Déplace la souris pour découvrir les salles.** Les murs situés devant le curseur s'enfoncent dans le sol, et il ne reste qu'un muret qui marque le contour des pièces. Ceux situés derrière restent debout.
 - **Trois états.**
   - Vert : il travaille.
-  - Ambre : il attend ton prochain message. La bulle devient rouge quand il attend ta permission ou ta réponse, ou qu'il est bloqué par une erreur.
+  - Ambre : il attend ton prochain message. Un petit losange ambre s'affiche au-dessus de son étiquette.
   - Gris : il a terminé. Il reste immobile, en pose calme.
+- **La bulle de requête.** Un agent qui a besoin de toi porte au-dessus de son étiquette une bulle de BD rouge : « … » pour une permission, « ? » pour une question, « ! » pour une erreur. Il se place alors à l'autel des requêtes.
 - **Les sous-agents** apparaissent comme des collègues de la même couleur que leur session. Ils surgissent du sol à leur arrivée.
 - **Des personnages animés** (pack KayKit Adventurers 2.0) : un chevalier pour l'agent principal, un voyou encapuchonné pour les sous-agents.
   - Ils marchent ou courent entre les pièces, et font une animation de travail quand ils travaillent.
-  - En attente, ils regardent autour d'eux, la bulle d'attente restant affichée. Le premier de la file s'agenouille devant l'autel.
+  - En attente, ils regardent autour d'eux, le losange ambre restant affiché. Le premier de la file s'agenouille devant l'autel.
   - Chaque personnage a un disque au sol de la couleur de sa session, et le bord de son étiquette porte cette même couleur. L'étiquette du personnage sélectionné a un contour bleu et du texte en gras.
   - Si la réduction des animations est activée dans le système, les personnages gardent une pose fixe et n'effectuent pas de surgissement, mais ils se déplacent toujours d'une pièce à l'autre.
-- **Un clic sur un personnage**, ou sur sa ligne dans la liste, affiche sa tâche, son outil, le temps écoulé et son dernier message. La liste latérale est l'équivalent complet de la vue 3D au clavier et au lecteur d'écran.
+- **Un clic sur un personnage**, ou sur sa ligne dans la liste, affiche sa tâche, son outil, le temps écoulé et son dernier message, et ouvre sa [boîte de dialogue](#dialogue-avec-un-agent) en bas de la scène. La liste latérale est l'équivalent complet de la vue 3D au clavier et au lecteur d'écran.
 - **L'historique** liste les sessions terminées.
 - **`/debug`** montre le flux brut des événements reçus.
 
@@ -102,6 +103,54 @@ L'interface existe en français, en allemand et en anglais. Les boutons `FR | DE
 
 Les titres de sessions, noms d'environnements, tâches et messages des agents s'affichent tels qu'ils ont été écrits. Les journaux du serveur restent en français.
 
+## Dialogue avec un agent
+
+Clique sur un personnage dans la 3D, ou sur sa ligne dans la liste des sessions. Une boîte de dialogue s'ouvre en bas de la scène et affiche la conversation de l'agent, comme dans un jeu de rôle :
+
+- tes messages ;
+- les réponses de l'agent ;
+- une ligne courte pour chaque outil appelé. Le contenu brut des résultats et la réflexion de l'agent ne s'affichent pas.
+
+Pour un sous-agent, la boîte affiche sa propre conversation. La consigne qu'il a reçue s'affiche sous le nom « Agent principal ».
+
+- **Historique.** Fais défiler vers le haut, ou clique sur « Charger les messages précédents ».
+- **Nouveaux messages.** Ils arrivent tout seuls : le serveur relit la conversation toutes les 2 s.
+- **Fermer.** Clique sur × ou appuie sur Échap. La boîte se ferme et l'agent reste sélectionné.
+- **Lecture seule.** La boîte n'a pas encore de zone de saisie. Répondre à un agent depuis la 3D fera l'objet d'une phase distincte (voir [Limites et suite](#limites-et-suite)).
+
+Le texte des conversations s'affiche comme du texte brut. Il n'est jamais interprété comme du HTML.
+
+### Connexion
+
+Les conversations sont protégées. La 3D et la liste des sessions restent visibles sans connexion.
+
+1. Au démarrage, la console du serveur affiche un lien de connexion à usage unique, valable 10 minutes :
+
+   ```
+   http://127.0.0.1:<port>/login?code=…
+   ```
+
+   Le port est celui de Vite (5173) quand le client n'est pas compilé, et celui du serveur (4777 par défaut) sinon.
+2. Ouvre ce lien dans ton navigateur. Il pose un cookie de session : `HttpOnly`, `SameSite=Strict`, valable 12 h. Chaque utilisation prolonge la durée de 12 h.
+3. Un lien expiré renvoie vers la page de connexion avec un message. La console affiche alors un nouveau lien.
+4. Après une connexion réussie, la console affiche aussi un nouveau lien. Utilise-le pour te connecter depuis un autre navigateur.
+5. Un redémarrage du serveur déconnecte tous les navigateurs.
+
+Le cookie est posé pour `127.0.0.1`, pas pour `localhost`. Utilise donc `http://127.0.0.1:<port>` partout.
+
+```mermaid
+sequenceDiagram
+    participant Nav as Navigateur
+    participant Srv as Serveur
+    Note over Srv: Affiche le lien /login?code=… dans la console
+    Nav->>Srv: GET /login?code=…
+    Srv-->>Nav: Cookie de session (12 h glissantes)
+    Note over Srv: Affiche un nouveau lien pour un autre navigateur
+    Nav->>Srv: GET /api/transcript (cookie)
+    Srv-->>Nav: Messages de la conversation, bornés
+```
+*Figure: Connexion par lien à usage unique, puis lecture d'une conversation.*
+
 ## Ce que l'installation des hooks modifie
 
 `npm run hooks:install` :
@@ -124,7 +173,8 @@ Tout est lu en lecture seule. Seuls ces fichiers sont ouverts :
 
 - `%LOCALAPPDATA%\Claude-Data\claude_*\ccd-session-presets.json` : les environnements ;
 - `…\claude-code-sessions\<compte>\<org>\local_*.json` et `archived-sessions.idx` : les sessions de l'app desktop ;
-- `~/.claude/sessions/<pid>.json` : les processus Claude Code en cours (occupé ou au repos).
+- `~/.claude/sessions/<pid>.json` : les processus Claude Code en cours (occupé ou au repos) ;
+- `~/.claude/projects/<dossier>/<session>.jsonl` et `…/<session>/subagents/agent-<id>.jsonl` : la conversation de l'agent ouvert dans la boîte de dialogue, en lecture bornée. Le chemin est déduit de l'état du serveur.
 
 Le serveur n'ouvre jamais `config.json` de l'app desktop (il contient des jetons de connexion) ni les fichiers `*.key`.
 
@@ -135,7 +185,10 @@ Ces formats sont internes à Claude et peuvent changer d'une version à l'autre.
 - Le serveur écoute sur `127.0.0.1` uniquement. Il refuse un en-tête `Host` ou `Origin` inconnu, ce qui protège contre le DNS rebinding et les pages web malveillantes.
 - `POST /hooks` exige le jeton, vérifié avant même la lecture de la requête.
 - Les pages ne peuvent pas être intégrées dans une iframe (`X-Frame-Options: DENY`, `frame-ancestors 'none'`).
-- **Limite connue.** L'API de lecture (`/api/*`) et le WebSocket ne demandent pas d'authentification. Tout programme local peut donc lire les titres, dossiers, prompts et commandes (tronqués). Une authentification par session est prévue avant toute fonction qui permettrait d'agir sur les agents.
+- **Conversations.** `GET /login` consomme le lien à usage unique et pose le cookie de session. `POST /logout` le supprime (aucun bouton de l'interface ne l'appelle encore). `GET /api/transcript` exige ce cookie.
+- **Chemin du transcript.** Il est déduit de l'état du serveur, jamais d'une valeur envoyée par le navigateur ou par un hook.
+- **Lecture bornée.** Le serveur ne lit qu'une partie bornée de la conversation. Le texte est affiché comme du texte, jamais interprété en HTML.
+- **Limite connue.** Les routes de l'inventaire (`/api/*`, hors `/api/transcript`) et le WebSocket ne demandent pas d'authentification. Tout programme local peut donc lire les titres, dossiers, prompts et commandes (tronqués). Une authentification par session est prévue avant toute fonction qui permettrait d'agir sur les agents.
 - **Sur un poste partagé**, restreins les droits du dossier du projet. Un lecteur secondaire comme `F:\` donne souvent le contrôle total aux « Utilisateurs authentifiés ». Dans une invite de commandes administrateur :
 
 ```bash
@@ -167,5 +220,5 @@ npm run typecheck
 
 - Tous les sous-agents portent le même modèle (Rogue_Hooded). Les silhouettes propres à chaque type d'agent (Hermione, Dexter…) restent à faire.
 - La scène fait environ 700 appels de dessin par image, ombres comprises : les meubles ne sont pas encore regroupés en instances. Des assets Unreal ne seraient utilisables que si leur licence Fab autorise un usage hors Unreal Engine.
-- Répondre aux agents depuis la 3D (permission, question) fera l'objet d'une phase distincte, qui demandera une authentification forte du serveur. Envoyer un prompt libre à une session déjà ouverte n'a pas encore de solution officielle.
+- La boîte de dialogue est en lecture seule. Répondre aux agents depuis la 3D (permission, question) fera l'objet d'une phase distincte. La connexion par lien posée ici (cookie de session) servira à cette phase. Envoyer un prompt libre à une session déjà ouverte n'a pas encore de solution officielle.
 - Le plan complet se trouve dans [plans/plan-agent-office-2026-11-13.md](plans/plan-agent-office-2026-11-13.md).

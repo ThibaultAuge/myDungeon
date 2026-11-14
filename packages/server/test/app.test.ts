@@ -1,8 +1,13 @@
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import type { FastifyInstance } from 'fastify';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { TOKEN_HEADER, buildApp } from '../src/app.ts';
+import { AuthGate, SESSION_COOKIE, SESSION_TTL_MS } from '../src/auth.ts';
 import { OfficeStore } from '../src/store.ts';
-import { CLI_A, ENV_ALPHA, desk, inventory, proc } from './fixtures/builders.ts';
+import { projectDirName } from '../src/transcript.ts';
+import { CLI_A, CLI_B, ENV_ALPHA, desk, hook, inventory, proc } from './fixtures/builders.ts';
 
 const PORT = 4777;
 const TOKEN = 'tok_0123456789abcdef0123456789abcdef01';
@@ -274,6 +279,437 @@ describe('buildApp', () => {
       expect(res.headers['x-frame-options']).toBe('DENY');
       expect(res.headers['content-security-policy']).toContain("frame-ancestors 'none'");
       expect(res.headers['x-content-type-options']).toBe('nosniff');
+    });
+  });
+});
+
+describe('conversation routes', () => {
+  const SESSION_ID = `cli:${CLI_A}`;
+  const MAIN_ID = `${SESSION_ID}#main`;
+  const SUB_ID = 'sub01';
+
+  let store: OfficeStore;
+  let app: FastifyInstance;
+  let projectsDir: string;
+  let codes: string[];
+  let now: number;
+  let auth: AuthGate;
+
+  async function start(opts: { withAuth?: boolean; withProjects?: boolean } = {}) {
+    const { withAuth = true, withProjects = true } = opts;
+    store = new OfficeStore(() => 1000);
+    app = await buildApp({
+      store,
+      port: PORT,
+      token: TOKEN,
+      logger: false,
+      auth: withAuth ? auth : undefined,
+      projectsDir: withProjects ? projectsDir : undefined,
+    });
+    // A terminal session in C:/work/alpha with one Explore subagent.
+    store.ingestHook(hook('UserPromptSubmit', { prompt: 'go' }));
+    store.ingestHook(hook('SubagentStart', { agent_id: SUB_ID, agent_type: 'Explore' }));
+  }
+
+  async function restart(opts: { withAuth?: boolean; withProjects?: boolean }) {
+    store.close();
+    await app.close();
+    await start(opts);
+  }
+
+  beforeEach(async () => {
+    projectsDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-office-app-'));
+    codes = [];
+    now = 5_000_000;
+    auth = new AuthGate(
+      (c) => codes.push(c),
+      () => now,
+    );
+    await start();
+  });
+
+  afterEach(async () => {
+    store.close();
+    await app.close();
+    fs.rmSync(projectsDir, { recursive: true, force: true });
+  });
+
+  const latestCode = () => codes[codes.length - 1]!;
+
+  function setCookieOf(res: { headers: Record<string, unknown> }): string | undefined {
+    const raw = res.headers['set-cookie'];
+    return Array.isArray(raw) ? (raw[0] as string) : (raw as string | undefined);
+  }
+
+  /** Signs in with the current code and returns the `Cookie` header value. */
+  async function login(): Promise<string> {
+    const res = await app.inject({ method: 'GET', url: `/login?code=${encodeURIComponent(latestCode())}`, headers: HOST });
+    const set = setCookieOf(res);
+    if (!set) throw new Error('login failed');
+    return set.split(';')[0]!;
+  }
+
+  function getTranscript(query: Record<string, string> | string, headers: Record<string, string> = {}) {
+    const qs = typeof query === 'string' ? query : new URLSearchParams(query).toString();
+    return app.inject({ method: 'GET', url: `/api/transcript?${qs}`, headers: { ...HOST, ...headers } });
+  }
+
+  function userLine(text: string): string {
+    return JSON.stringify({ type: 'user', message: { role: 'user', content: text } });
+  }
+
+  function writeTranscript(rel: string, lines: string[]): string {
+    const file = path.join(projectsDir, projectDirName('C:/work/alpha'), rel);
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, lines.map((l) => l + '\n').join(''));
+    return file;
+  }
+
+  describe('GET /login', () => {
+    /**
+     * Verifies that a valid code redirects home with a hardened session cookie
+     */
+    it('sets an HttpOnly SameSite=Strict cookie and redirects with 303', async () => {
+      const res = await app.inject({ method: 'GET', url: `/login?code=${latestCode()}`, headers: HOST });
+      expect(res.statusCode).toBe(303);
+      expect(res.headers.location).toBe('/');
+      const set = setCookieOf(res);
+      expect(set).toMatch(new RegExp(`^${SESSION_COOKIE}=[A-Za-z0-9_-]+;`));
+      expect(set).toContain('HttpOnly');
+      expect(set).toContain('SameSite=Strict');
+    });
+
+    /**
+     * Verifies that a wrong, missing or reused code redirects to the failure page without a cookie
+     */
+    it.each([['wrong code', '?code=nope'], ['missing code', ''], ['empty code', '?code=']])(
+      'redirects to /?login=failed for a %s',
+      async (_label, qs) => {
+        const res = await app.inject({ method: 'GET', url: `/login${qs}`, headers: HOST });
+        expect(res.statusCode).toBe(303);
+        expect(res.headers.location).toBe('/?login=failed');
+        expect(res.headers['set-cookie']).toBeUndefined();
+      },
+    );
+
+    /**
+     * Verifies that a code cannot be used twice
+     */
+    it('refuses a reused code', async () => {
+      const code = latestCode();
+      await app.inject({ method: 'GET', url: `/login?code=${code}`, headers: HOST });
+      const res = await app.inject({ method: 'GET', url: `/login?code=${code}`, headers: HOST });
+      expect(res.headers.location).toBe('/?login=failed');
+      expect(res.headers['set-cookie']).toBeUndefined();
+    });
+
+    /**
+     * Verifies that sign-in always fails when the server has no auth gate
+     */
+    it('always fails without an auth gate', async () => {
+      await restart({ withAuth: false });
+      const res = await app.inject({ method: 'GET', url: `/login?code=${latestCode()}`, headers: HOST });
+      expect(res.statusCode).toBe(303);
+      expect(res.headers.location).toBe('/?login=failed');
+      expect(res.headers['set-cookie']).toBeUndefined();
+    });
+
+    /**
+     * Verifies that the host guard also protects the sign-in route
+     */
+    it('returns 403 for a foreign host', async () => {
+      const res = await app.inject({ method: 'GET', url: `/login?code=${latestCode()}`, headers: { host: 'evil.example:4777' } });
+      expect(res.statusCode).toBe(403);
+      expect(res.headers['set-cookie']).toBeUndefined();
+      // The code was not consumed.
+      expect(codes).toHaveLength(1);
+    });
+  });
+
+  describe('POST /logout', () => {
+    /**
+     * Verifies that logout answers 204, clears the cookie and revokes the session
+     */
+    it('clears the cookie and revokes the session', async () => {
+      writeTranscript(`${CLI_A}.jsonl`, [userLine('hello')]);
+      const cookie = await login();
+      expect((await getTranscript({ session: SESSION_ID, agent: MAIN_ID }, { cookie })).statusCode).toBe(200);
+
+      const res = await app.inject({ method: 'POST', url: '/logout', headers: { ...HOST, cookie } });
+      expect(res.statusCode).toBe(204);
+      const set = setCookieOf(res);
+      expect(set).toMatch(new RegExp(`^${SESSION_COOKIE}=;`));
+      expect(set).toContain('Max-Age=0');
+
+      expect((await getTranscript({ session: SESSION_ID, agent: MAIN_ID }, { cookie })).statusCode).toBe(401);
+    });
+
+    /**
+     * Verifies that logout without a session still answers 204 with a cleared cookie
+     */
+    it('answers 204 without a cookie', async () => {
+      const res = await app.inject({ method: 'POST', url: '/logout', headers: HOST });
+      expect(res.statusCode).toBe(204);
+      expect(setCookieOf(res)).toContain('Max-Age=0');
+    });
+
+    /**
+     * Verifies that logging out one browser leaves another signed in
+     */
+    it('revokes only the presented session', async () => {
+      writeTranscript(`${CLI_A}.jsonl`, [userLine('hello')]);
+      const a = await login();
+      const b = await login();
+      await app.inject({ method: 'POST', url: '/logout', headers: { ...HOST, cookie: a } });
+      expect((await getTranscript({ session: SESSION_ID, agent: MAIN_ID }, { cookie: b })).statusCode).toBe(200);
+    });
+
+    /**
+     * Verifies that a foreign origin cannot log a browser out
+     */
+    it('returns 403 for a foreign origin', async () => {
+      const res = await app.inject({ method: 'POST', url: '/logout', headers: { ...HOST, origin: 'http://evil.example' } });
+      expect(res.statusCode).toBe(403);
+    });
+  });
+
+  describe('GET /api/transcript', () => {
+    /**
+     * Verifies that the route refuses requests without a valid session cookie
+     */
+    it.each([
+      ['no cookie', {}],
+      ['unknown session', { cookie: `${SESSION_COOKIE}=forged` }],
+      ['empty session', { cookie: `${SESSION_COOKIE}=` }],
+      ['other cookie name', { cookie: 'other=1' }],
+    ])('returns 401 with %s', async (_label, headers) => {
+      writeTranscript(`${CLI_A}.jsonl`, [userLine('secret')]);
+      const res = await getTranscript({ session: SESSION_ID, agent: MAIN_ID }, headers as Record<string, string>);
+      expect(res.statusCode).toBe(401);
+      expect(res.body).not.toContain('secret');
+    });
+
+    /**
+     * Verifies that authentication is checked before the query is validated
+     */
+    it('returns 401 rather than 400 for an invalid query without cookie', async () => {
+      const res = await getTranscript('');
+      expect(res.statusCode).toBe(401);
+    });
+
+    /**
+     * Verifies that the route always answers 401 when the server has no auth gate
+     */
+    it('returns 401 for every request without an auth gate', async () => {
+      const cookie = await login(); // issued by a gate the new app does not use
+      await restart({ withAuth: false });
+      writeTranscript(`${CLI_A}.jsonl`, [userLine('secret')]);
+      const res = await getTranscript({ session: SESSION_ID, agent: MAIN_ID }, { cookie });
+      expect(res.statusCode).toBe(401);
+    });
+
+    /**
+     * Verifies that a session cookie stops working once its lifetime has elapsed
+     */
+    it('returns 401 once the browser session expired', async () => {
+      writeTranscript(`${CLI_A}.jsonl`, [userLine('hello')]);
+      const cookie = await login();
+      now += SESSION_TTL_MS;
+      expect((await getTranscript({ session: SESSION_ID, agent: MAIN_ID }, { cookie })).statusCode).toBe(401);
+    });
+
+    /**
+     * Verifies that the host guard applies even to a signed-in browser
+     */
+    it('returns 403 for a foreign host even with a cookie', async () => {
+      writeTranscript(`${CLI_A}.jsonl`, [userLine('secret')]);
+      const cookie = await login();
+      const res = await app.inject({
+        method: 'GET',
+        url: `/api/transcript?${new URLSearchParams({ session: SESSION_ID, agent: MAIN_ID })}`,
+        headers: { host: 'evil.example:4777', cookie },
+      });
+      expect(res.statusCode).toBe(403);
+      expect(res.body).not.toContain('secret');
+    });
+
+    /**
+     * Verifies that the latest page of the main transcript is returned with caching headers
+     */
+    it('returns the latest page of the main agent', async () => {
+      writeTranscript(`${CLI_A}.jsonl`, [
+        userLine('hello'),
+        JSON.stringify({ type: 'assistant', message: { content: [{ type: 'text', text: 'hi!' }, { type: 'tool_use', name: 'Read', input: { file_path: 'a.ts' } }] } }),
+      ]);
+      const cookie = await login();
+      const res = await getTranscript({ session: SESSION_ID, agent: MAIN_ID }, { cookie });
+      expect(res.statusCode).toBe(200);
+      expect(res.headers['content-type']).toMatch(/application\/json/);
+      expect(res.headers['cache-control']).toBe('no-store');
+      expect(res.headers.etag).toMatch(new RegExp(`^"${CLI_A}-\\d+-\\d+"$`));
+      const offset = Buffer.byteLength(userLine('hello')) + 1;
+      expect(res.json()).toEqual({
+        file: CLI_A,
+        before: null,
+        entries: [
+          { key: '0:0', role: 'user', text: 'hello' },
+          { key: `${offset}:0`, role: 'assistant', text: 'hi!' },
+          { key: `${offset}:1`, role: 'tool', tool: 'Read', detail: 'a.ts' },
+        ],
+      });
+    });
+
+    /**
+     * Verifies that a matching If-None-Match yields 304 until the transcript changes
+     */
+    it('answers 304 for an unchanged transcript and 200 once it grows', async () => {
+      const file = writeTranscript(`${CLI_A}.jsonl`, [userLine('one')]);
+      const cookie = await login();
+      const first = await getTranscript({ session: SESSION_ID, agent: MAIN_ID }, { cookie });
+      const etag = first.headers.etag as string;
+
+      const same = await getTranscript({ session: SESSION_ID, agent: MAIN_ID }, { cookie, 'if-none-match': etag });
+      expect(same.statusCode).toBe(304);
+      expect(same.body).toBe('');
+
+      fs.appendFileSync(file, userLine('two') + '\n');
+      const grown = await getTranscript({ session: SESSION_ID, agent: MAIN_ID }, { cookie, 'if-none-match': etag });
+      expect(grown.statusCode).toBe(200);
+      expect(grown.headers.etag).not.toBe(etag);
+      expect((grown.json() as { entries: { text: string }[] }).entries.map((e) => e.text)).toEqual(['one', 'two']);
+    });
+
+    /**
+     * Verifies that a stale If-None-Match gets the full page
+     */
+    it('answers 200 for a non-matching If-None-Match', async () => {
+      writeTranscript(`${CLI_A}.jsonl`, [userLine('one')]);
+      const cookie = await login();
+      const res = await getTranscript({ session: SESSION_ID, agent: MAIN_ID }, { cookie, 'if-none-match': '"other"' });
+      expect(res.statusCode).toBe(200);
+    });
+
+    /**
+     * Verifies that the before cursor pages back to the start, without an ETag on older pages
+     */
+    it('pages back with the before cursor', async () => {
+      const texts = Array.from({ length: 60 }, (_, i) => `m${i}`);
+      writeTranscript(`${CLI_A}.jsonl`, texts.map(userLine));
+      const cookie = await login();
+
+      const latest = await getTranscript({ session: SESSION_ID, agent: MAIN_ID }, { cookie });
+      const page = latest.json() as { entries: { text: string }[]; before: number | null };
+      expect(page.entries.map((e) => e.text)).toEqual(texts.slice(10));
+      expect(typeof page.before).toBe('number');
+
+      const older = await getTranscript({ session: SESSION_ID, agent: MAIN_ID, before: String(page.before) }, { cookie });
+      expect(older.statusCode).toBe(200);
+      expect(older.headers.etag).toBeUndefined();
+      expect(older.headers['cache-control']).toBe('no-store');
+      expect(older.json()).toMatchObject({ file: CLI_A, before: null });
+      expect((older.json() as { entries: { text: string }[] }).entries.map((e) => e.text)).toEqual(texts.slice(0, 10));
+    });
+
+    /**
+     * Verifies that an older page ignores If-None-Match and always answers 200
+     */
+    it('never answers 304 for an older page', async () => {
+      writeTranscript(`${CLI_A}.jsonl`, [userLine('one')]);
+      const cookie = await login();
+      const etag = (await getTranscript({ session: SESSION_ID, agent: MAIN_ID }, { cookie })).headers.etag as string;
+      const res = await getTranscript({ session: SESSION_ID, agent: MAIN_ID, before: '0' }, { cookie, 'if-none-match': etag });
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toEqual({ file: CLI_A, entries: [], before: null });
+    });
+
+    /**
+     * Verifies that a known subagent's transcript is served
+     */
+    it("returns a subagent's transcript", async () => {
+      writeTranscript(path.join(CLI_A, 'subagents', `agent-${SUB_ID}.jsonl`), [userLine('explore the repo')]);
+      const cookie = await login();
+      const res = await getTranscript({ session: SESSION_ID, agent: SUB_ID }, { cookie });
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toMatchObject({ file: `agent-${SUB_ID}`, entries: [{ role: 'user', text: 'explore the repo' }] });
+    });
+
+    /**
+     * Verifies that a valid 15-digit cursor is accepted and clamped to the file
+     */
+    it('accepts a 15-digit cursor', async () => {
+      writeTranscript(`${CLI_A}.jsonl`, [userLine('one')]);
+      const cookie = await login();
+      const res = await getTranscript({ session: SESSION_ID, agent: MAIN_ID, before: '999999999999999' }, { cookie });
+      expect(res.statusCode).toBe(200);
+      expect((res.json() as { entries: unknown[] }).entries).toHaveLength(1);
+    });
+
+    /**
+     * Verifies that missing, repeated or over-long ids and malformed cursors are rejected with 400
+     */
+    it.each([
+      ['missing session', `agent=${encodeURIComponent(MAIN_ID)}`],
+      ['missing agent', `session=${encodeURIComponent(SESSION_ID)}`],
+      ['repeated session', `session=a&session=b&agent=x`],
+      ['257-char session', `session=${'s'.repeat(257)}&agent=x`],
+      ['257-char agent', `session=x&agent=${'a'.repeat(257)}`],
+      ['letters in before', `session=x&agent=y&before=abc`],
+      ['negative before', `session=x&agent=y&before=-1`],
+      ['decimal before', `session=x&agent=y&before=1.5`],
+      ['empty before', `session=x&agent=y&before=`],
+      ['16-digit before', `session=x&agent=y&before=1234567890123456`],
+    ])('returns 400 for %s', async (_label, qs) => {
+      const cookie = await login();
+      const res = await getTranscript(qs, { cookie });
+      expect(res.statusCode).toBe(400);
+      expect(res.json()).toHaveProperty('error');
+    });
+
+    /**
+     * Verifies that 256-character ids pass validation and reach the session lookup
+     */
+    it('accepts 256-character ids (then 404 for an unknown session)', async () => {
+      const cookie = await login();
+      const res = await getTranscript({ session: 's'.repeat(256), agent: 'a'.repeat(256) }, { cookie });
+      expect(res.statusCode).toBe(404);
+    });
+
+    /**
+     * Verifies that 404 is returned when the session, agent or transcript file is missing
+     */
+    it.each([
+      ['unknown session', { session: `cli:${CLI_B}`, agent: `cli:${CLI_B}#main` }],
+      ['agent not in session', { session: SESSION_ID, agent: 'intruder' }],
+      ['traversal agent id', { session: SESSION_ID, agent: '../../etc' }],
+      ["other session's main", { session: SESSION_ID, agent: `cli:${CLI_B}#main` }],
+    ])('returns 404 for %s', async (_label, query) => {
+      writeTranscript(`${CLI_A}.jsonl`, [userLine('hello')]);
+      writeTranscript(path.join(CLI_A, 'subagents', 'agent-intruder.jsonl'), [userLine('hidden')]);
+      const cookie = await login();
+      const res = await getTranscript(query, { cookie });
+      expect(res.statusCode).toBe(404);
+      expect(res.headers['cache-control']).toBe('no-store');
+      expect(res.body).not.toContain('hidden');
+    });
+
+    /**
+     * Verifies that a known session without a transcript file yet answers 404
+     */
+    it('returns 404 when the transcript does not exist yet', async () => {
+      const cookie = await login();
+      const res = await getTranscript({ session: SESSION_ID, agent: MAIN_ID }, { cookie });
+      expect(res.statusCode).toBe(404);
+    });
+
+    /**
+     * Verifies that without a projects folder no transcript is ever served
+     */
+    it('returns 404 when no projects folder is configured', async () => {
+      writeTranscript(`${CLI_A}.jsonl`, [userLine('hello')]);
+      await restart({ withProjects: false });
+      const cookie = await login();
+      const res = await getTranscript({ session: SESSION_ID, agent: MAIN_ID }, { cookie });
+      expect(res.statusCode).toBe(404);
     });
   });
 });

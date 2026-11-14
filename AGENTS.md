@@ -20,5 +20,6 @@ npm workspaces: `packages/server`, `packages/web`, `packages/shared`.
 - `docs/ai/i18n.md` — Use when adding or changing any text shown in the web interface, a language, a RoomId, or server data that the client displays.
 - `docs/ai/dungeon-scene.md` — Use when changing the 3D dungeon map — rooms, floors, walls, cutaway, props, lighting, KayKit models or their import — agent figures (walking motion, character models, animations), or when previewing the web scene.
 - `docs/ai/agent-lifecycle.md` — Use when changing where agents rest or wait (tavern, altar queue), how subagent figures appear, leave or return, the agent roster (snapshot.roster, agent definitions, seen types), or when testing the scene with fake hooks.
+- `docs/ai/dialogue.md` — Use when changing the agent conversation box (AgentDialog), how transcripts are found, parsed or paged (transcript.ts, /api/transcript, useTranscript), or browser sign-in (AuthGate, /login, /logout, session cookie).
 
 Human docs (French): `README.md` and `docs/`.

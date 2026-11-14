@@ -96,3 +96,26 @@ export type ServerMessage =
       at: number;
     }
   | { type: 'event'; event: HookEventSummary };
+
+/** One line of an agent's conversation, as shown in the dialogue box. Text is never HTML. */
+export type DialogueEntry =
+  | {
+      /** Stable within one transcript file: `<line byte offset>:<block index>`. */
+      key: string;
+      /** Epoch ms, when the transcript gives one. */
+      at?: number;
+      role: 'user' | 'assistant';
+      text: string;
+      /** True when the text was cut by the server. */
+      truncated?: boolean;
+    }
+  | { key: string; at?: number; role: 'tool'; tool: string; detail?: string };
+
+/** A page of a transcript, oldest entry first. */
+export interface TranscriptPage {
+  /** Identifies the transcript file (not a path): a change means another file, start over. */
+  file: string;
+  entries: DialogueEntry[];
+  /** Cursor for the previous (older) page, or null at the start of the file. */
+  before: number | null;
+}
