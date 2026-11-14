@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { destinationOf } from '../src/scene/destinations.ts';
-import { ROOMS, SPAWN, assignSpots, queueSpot } from '../src/scene/layout.ts';
+import { destinationOf, postDestination } from '../src/scene/destinations.ts';
+import { POST_IDS, ROOMS, SPAWN, assignSpots, queueSpot } from '../src/scene/layout.ts';
 
 describe('destinationOf', () => {
   /**
@@ -60,5 +60,38 @@ describe('Destination', () => {
     const rooms = new Set<string>(ROOMS.map((r) => r.id));
     const posts = ROOMS.flatMap((r) => Object.keys(r.stations ?? {}));
     expect(posts.filter((p) => rooms.has(p))).toEqual([]);
+  });
+});
+
+describe('postDestination', () => {
+  /**
+   * Verifies that every post resolves to a known room or station, so each card has an icon
+   */
+  it('maps every post to a room or a station', () => {
+    const known = new Set<string>([
+      ...ROOMS.map((r) => r.id),
+      ...ROOMS.flatMap((r) => Object.keys(r.stations ?? {})),
+    ]);
+    expect(POST_IDS.length).toBeGreaterThan(0);
+    expect(POST_IDS.map(postDestination).filter((d) => !known.has(d))).toEqual([]);
+  });
+
+  /**
+   * Verifies that a post's icon is the badge of a generic agent walking to its room or station
+   */
+  it('matches the badge of a generic seat at the post', () => {
+    expect(postDestination('chevalet')).toBe(destinationOf({ room: 'atelier', station: 'chevalet' }));
+    expect(postDestination('atelier')).toBe(destinationOf({ room: 'atelier' }));
+  });
+
+  /**
+   * Verifies that a room-wide post keeps the room icon, even where a dedicated seat inside
+   * it (the telescope, the scriptorium lecterns) gives a walking agent another badge
+   */
+  it('keeps the room icon for a room-wide post with dedicated seats', () => {
+    expect(postDestination('observatoire')).toBe('observatoire');
+    expect(destinationOf({ room: 'observatoire', station: 'lunette' })).toBe('lunette');
+    expect(postDestination('scriptorium')).toBe('scriptorium');
+    expect(destinationOf({ room: 'scriptorium', station: 'ia' })).toBe('ia');
   });
 });
