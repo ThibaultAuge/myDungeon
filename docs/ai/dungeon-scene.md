@@ -1,5 +1,5 @@
 ---
-description: Use when changing the 3D dungeon map — rooms, floors, walls, cutaway, props, lighting, KayKit models or their import — clickable workstations (posts, hover glow, post card and list), pointer/cursor handling of 3D targets, agent figures (walking motion, character models, role looks and held props, animations, destination badge), room or post icons, or when previewing the web scene.
+description: Use when changing the 3D dungeon map — rooms, floors, walls, cutaway, props, lighting, KayKit models or their import — clickable workstations (posts, hover glow, post card and list), pointer/cursor handling of 3D targets, agent figures (walking motion, character models, role looks and held props, animations, destination badge), post icons or which post a seat belongs to, or when previewing the web scene.
 ---
 
 # 3D dungeon scene (KayKit assets)
@@ -55,8 +55,8 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cuta
   `min(320px, 100% - 24px)`) inside a persistent `aria-live` wrapper. Same dark parchment
   style as `.agent-dialog` / `.agent-info` (the `--dlg-*` tokens are declared on
   `.post-card`, double gold border). Order: overhanging title plate `.post-card__plate`
-  (h2 with the post icon `<DestinationIcon kind={postDestination(post)}
-  className="post-card__icon">` at its left), then the room name as a gold uppercase
+  (h2 with the post icon `<DestinationIcon kind={post} className="post-card__icon">` at its
+  left), then the room name as a gold uppercase
   eyebrow below the plate, then role, then the "who" line via `t.labelled`. The close
   button `.post-card__close` shares the `.agent-dialog__close, .agent-info__close` rule
   and focus rule. Escape closes
@@ -113,21 +113,31 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cuta
   (`.destination-badge`, 28px, session-colour border) above its name, inside the tag
   `<Html>`. Visible only while the path is non-empty: hidden at rest, during the spawn clip
   and on arrival; follows reroutes. While shown it hides the altar request bubble (CSS
-  `.agent-tag-anchor[data-travelling] .request-bubble`). Icon = `destinationOf(spot)`:
-  the post when the assigned seat is one of that post's seats, else the room (post full,
-  shared/wall/scatter seat, altar queue). Bobs with `request-bob` (off under reduced
-  motion); forced-colors uses Canvas/CanvasText.
-- Icons (user decision: one per room AND per dedicated post): 25 hand-drawn 24×24 line SVGs
-  in `ICONS: Record<Destination, ReactNode>` (15 `RoomId`s + 10 `StationId`s), decorative
-  (`aria-hidden`, `focusable=false`, no i18n key; the side list and `StatusAnnouncer` stay
-  the accessible source). `DestinationIcon` is used by `DestinationBadge` and by the post
-  card (icon of `postDestination(post)`, the same SVG an agent carries while walking to
-  that post). Rooms have no title signs, so no room-sign icon exists.
-- Spots (`layout.ts`): `Spot` carries `room: RoomId` and optional `station?: StationId`
-  (key absent, not `undefined`). `RoomDef.stations` is `Partial<Record<StationId, Seat[]>>`,
-  `STATIONS` maps agent type → `StationId`, `candidateSeats` returns
-  `Candidate {id, seat, station?}`, `toSpot(room, seat, id, station?)`. Every `queueSpot`
-  rank has room `autel`; `SPAWN` has room `taverne`.
+  `.agent-tag-anchor[data-travelling] .request-bubble`). Icon = `destinationOf(spot)` =
+  `spot.post`, the `PostId` of the seat the agent walks to. Bobs with `request-bob` (off
+  under reduced motion); forced-colors uses Canvas/CanvasText.
+- Icons (user decision: icons belong to posts, never to rooms; a room is only a space
+  holding one or more posts): 18 hand-drawn 24×24 line SVGs in
+  `ICONS: Record<PostId, ReactNode>`, one per `PostId`, decorative (`aria-hidden`,
+  `focusable=false`, no i18n key; the side list and `StatusAnnouncer` stay the accessible
+  source). `DestinationIcon` / `DestinationBadge` take `kind: PostId`; the badge of an agent
+  walking to a post and that post's card show the same SVG. User choices: observatoire =
+  moon and star, scriptorium = quill, autel = candle, arithmetique = abacus. No room icon
+  and no room-sign icon exist.
+- Spots (`layout.ts`): `Spot` carries `room: RoomId`, `post: PostId` (required) and optional
+  `station?: StationId` (key absent, not `undefined`). A `StationId` is a reserved seat
+  group for one agent type, NOT a workstation; "post" always means `PostId`.
+  `RoomDef.stations` is `Partial<Record<StationId, Seat[]>>`, `STATIONS` maps agent type →
+  `StationId`, `candidateSeats` returns `Candidate {id, seat, station?}`,
+  `toSpot(room, seat, id, station?)` sets `post` via `postOfSeat`. Every `queueSpot` rank
+  has room and post `autel`; `SPAWN` has room and post `taverne`.
+- Seat → post (`postOfSeat(room, seat, station?)`, rule validated by the user: "nearest
+  furniture"): a station seat → `STATION_POST[station]` (frozen; lunette → observatoire,
+  ia / humains → scriptorium, sacristain → autel, boulier → arithmetique, chevalet /
+  relecture / labo / estrade / inspection → same-name post). Other seats (shared, wall,
+  scatter) → the post whose furniture (props with `post`) is nearest, by distance to the
+  footprint edge (0 inside, `footprintHalf(prop)` shared with `inFootprint`); first prop in
+  room order wins a tie; throws if the room has no post prop.
 
 ## Relevant Files
 - `packages/web/src/scene/dungeon.ts` — pure geometry, no three scene: `KIT_SCALE`,
@@ -151,15 +161,16 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cuta
   `LOOKS`, `lookFor`, `PROP_GRIP`, `gripFor`, `clipFor` and the clip constants.
 - `packages/web/src/scene/AgentFigure.tsx` — walk, `Character` (takes a `Look`), `Held`,
   `CharacterBoundary`, tag, destination badge toggle.
-- `packages/web/src/scene/destinations.ts` — pure: `Destination = RoomId | StationId`,
-  `destinationOf(spot)` (station ?? room), `postDestination(post: PostId)` (identity; it
-  compiles only because every `PostId` is a `RoomId` or a `StationId`).
+- `packages/web/src/scene/destinations.ts` — pure: only
+  `destinationOf(spot: Pick<Spot, 'post'>): PostId` (= `spot.post`), the named seam for
+  "which icon does the badge show".
 - `packages/web/src/scene/DestinationIcon.tsx` — `ICONS`, `DestinationIcon`,
   `DestinationBadge`. Badge styles in `packages/web/src/styles.css`.
 - `packages/web/src/scene/walk.ts` — pure walking motion, no three.js: `remainingDistance`,
   `nextSpeed`, `advance` (mutates the position, shifts reached waypoints, carries leftover
   step past corners, lands exactly on the last waypoint), `turnToward`, `approach`.
-- `packages/web/src/scene/layout.ts`, `Room.tsx`, `Office.tsx`.
+- `packages/web/src/scene/layout.ts` (also `STATION_POST`, `postOfSeat`, `footprintHalf`),
+  `Room.tsx`, `Office.tsx`.
 - `packages/web/src/scene/Post.tsx`, `highlight.ts`, `cursor.ts` — posts, hover glow,
   pointer rules.
 - `packages/web/src/ui/PostCard.tsx`, `PostList.tsx`; `packages/web/src/store.ts`
@@ -167,10 +178,11 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cuta
 - `packages/web/test/dungeon.test.ts`, `walk.test.ts`, `characters.test.ts`,
   `layout.test.ts` (`layout.ts`: `ROOMS`, seats and `assignSpots`, altar `queueSpot`,
   `SPAWN`, `corridorPath`, `routeBetween`, `reroute`, post tagging, `postGroups`,
-  `POST_ROOM`, spot `room`/`station`), `highlight.test.ts`, `cursor.test.ts`,
-  `destinations.test.ts` (`destinationOf`; room ids and post names never overlap;
-  `postDestination`: every `POST_IDS` entry is a `ROOMS` id or a stations key, and the
-  room-wide icon choice below is pinned).
+  `POST_ROOM`, spot `room`/`post`/`station`), `highlight.test.ts`, `cursor.test.ts`,
+  `destinations.test.ts` (badge = post for station agents; every seat, wall, scatter,
+  queue and `SPAWN` spot resolves to a post of its room; nearest-furniture cases, incl. the
+  pinned seat → post results below; `STATION_POST` consistency; every post reachable as a
+  badge).
 
 ## Usage
 - New model: add it to `kit-manifest.json`, run `npm run kaykit:import`. Never hand-copy
@@ -190,18 +202,20 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cuta
 - Agent motion logic goes in `walk.ts`, clip choice in `clipFor` (both tested), never
   inline in `AgentFigure`'s `useFrame`, which only calls them.
 - New decor must not cover seats or a door entry (tested in `dungeon.test.ts`).
-- New `RoomId` or new seat post (`StationId`, not the clickable `PostId`): add an `ICONS` entry (the `Record` type fails
-  typecheck otherwise) and keep its name distinct from every room id (tested). Reuse
-  `DestinationIcon` for any other place icon; never add a translated label for it.
-- Scene gallery with walking figures from a worktree: Vite on 5174, Playwright,
+- New `StationId`: add a `STATION_POST` entry (the `Record` type fails typecheck
+  otherwise). Reuse `DestinationIcon` for any other post icon; never add a translated label
+  for it, and never add a room icon.
+- Which post a seat belongs to: call `postOfSeat` / read `spot.post`; never derive it from
+  the room or the station elsewhere. Moving furniture or seats can flip a seat's post:
+  update the pinned cases in `destinations.test.ts`.
+- Scene gallery with walking figures from a worktree: Vite on 5174 or 5181, Playwright,
   `useOffice.getState().navigate({page:'env', envId:'demo'})` then
   `useOffice.setState({sessions, roster: [], snapshotReceived: true})` with hand-built
   sessions; changing an agent's `room` makes it walk. Without navigating to an env route
   the home page shows and no scene renders.
 - A new functional prop needs a `post`; a new function in a room needs a new `PostId` plus
-  its texts in fr / de / en (typecheck and tests enforce both). A new `PostId` must also be
-  a room id or a `StationId` (typecheck via `postDestination`, plus a test), so the post card
-  has an icon. Decoration kinds stay post-less.
+  its texts in fr / de / en and an `ICONS` entry (typecheck and tests enforce all three).
+  Decoration kinds stay post-less.
 - Post card styling: reuse the agent-dialog parchment tokens and close-button rule; do not
   give the card its own palette.
 - New clickable 3D object: give its hit object `TARGET_USER_DATA`, drive the cursor only
@@ -283,10 +297,17 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cuta
   `max-width: calc(100% - 44px)` and the room line's `padding-right: 30px` keep both clear of
   the absolute close button; the h2 has `overflow-wrap: anywhere`. Verified in Playwright
   for all 18 posts in FR/DE/EN at 1300 and 375 px wide.
-- Post card icon, accepted design: room-wide posts keep the room icon. `observatoire` shows
-  the moon although an agent at the telescope seat carries the `lunette` badge, and
-  `scriptorium` shows the quill although agents at the `ia` / `humains` seats carry those
-  badges (pinned in `destinations.test.ts`).
+- Seat → post, accepted by design: in two-post rooms a generic agent's badge depends on its
+  seat. epreuves shared seats resolve relecture, relecture, labo, labo; atelier wall seats
+  near the easel → chevalet; heraut back row → inspection (margin ~0.09 m over the stage).
+  All pinned in `destinations.test.ts`.
+- `SPAWN` is built at module load through `toSpot`, so `FOOTPRINTS` and `STATION_POST`
+  must stay declared above it in `layout.ts` (TDZ error otherwise).
+- Accepted limits (not done): library scatter seats are not kept out of the nested
+  scriptorium zone, so with 7+ overflow agents in biblio one can stand among the scriptorium
+  lecterns with the biblio badge (pre-existing placement issue). The destination is shown
+  only by the `aria-hidden` badge; the side list gives the room in text (accessibility
+  audit warning, pre-existing).
 - Post card open items (accessibility audit, not done): opening a card from the keyboard
   list does not move focus into it; the card has no max-height / scroll for very short
   scenes or 400% zoom.

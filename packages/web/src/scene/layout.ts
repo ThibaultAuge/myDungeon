@@ -32,11 +32,16 @@ export interface Spot extends Seat {
   entry: Point[];
   /** Room the agent is heading for (the altar for the queue, the tavern for the lockers). */
   room: RoomId;
-  /** Dedicated post, only when the seat is one of that post's seats. */
+  /** Reserved seat group (station), only when the seat is one of that station's seats. */
   station?: StationId;
+  /** Workstation the seat belongs to: its icon is the walking agent's badge. */
+  post: PostId;
 }
 
-/** Dedicated posts inside a room (the telescope, the easel…). */
+/**
+ * Seats reserved for one agent type inside a room (the telescope, the easel…). A station is
+ * not a workstation: its seats belong to a `PostId` through `STATION_POST`.
+ */
 export type StationId =
   | 'lunette'
   | 'ia'
@@ -156,7 +161,7 @@ export interface RoomDef {
   props: Prop[];
   /** Seats open to any agent, in order of preference. Relative to the room centre. */
   seats: Seat[];
-  /** Seats of a dedicated post (the easel, the telescope…), keyed by station name. */
+  /** Reserved seats of a station (the easel, the telescope…), keyed by station name. */
   stations?: Partial<Record<StationId, Seat[]>>;
 }
 
@@ -572,9 +577,53 @@ function toSpot(room: RoomDef, seat: Seat, id: string, station?: StationId): Spo
     anchor: door.outside,
     entry: [door.inside],
     room: room.id,
+    post: postOfSeat(room, seat, station),
   };
   if (station) spot.station = station;
   return spot;
+}
+
+/** The workstation that holds each station's reserved seats. */
+export const STATION_POST: Readonly<Record<StationId, PostId>> = Object.freeze({
+  lunette: 'observatoire',
+  ia: 'scriptorium',
+  humains: 'scriptorium',
+  chevalet: 'chevalet',
+  sacristain: 'autel',
+  boulier: 'arithmetique',
+  relecture: 'relecture',
+  labo: 'labo',
+  estrade: 'estrade',
+  inspection: 'inspection',
+});
+
+/**
+ * The workstation a seat belongs to: a station's reserved seat belongs to that station's post; any other
+ * seat (shared, wall, scatter) to the post whose furniture stands nearest to it, the first
+ * piece in the room's order winning a tie. Seat coordinates are relative to the room centre.
+ */
+export function postOfSeat(room: RoomDef, seat: Point, station?: StationId): PostId {
+  if (station) return STATION_POST[station];
+  let best: PostId | undefined;
+  let bestDist = Infinity;
+  for (const p of room.props) {
+    if (!p.post) continue;
+    const d = footprintDistance(p, seat.x, seat.z);
+    if (d < bestDist) {
+      bestDist = d;
+      best = p.post;
+    }
+  }
+  if (!best) throw new Error(`room ${room.id} has no workstation`);
+  return best;
+}
+
+/** Distance from (x, z) to the edge of a prop's footprint (0 inside it), both relative to the room centre. */
+function footprintDistance(prop: Prop, x: number, z: number): number {
+  const [hx, hz] = footprintHalf(prop);
+  const dx = Math.max(Math.abs(x - prop.x) - hx, 0);
+  const dz = Math.max(Math.abs(z - prop.z) - hz, 0);
+  return Math.hypot(dx, dz);
 }
 
 const WALL_SEAT_STEP = 1;
@@ -672,11 +721,16 @@ const FOOTPRINTS: Record<PropKind, [number, number]> = {
 
 /** True when (x, z), relative to the room centre, stands on the prop (plus a body's half width). */
 export function inFootprint(prop: Prop, x: number, z: number): boolean {
-  const [fx, fz] = FOOTPRINTS[prop.kind];
-  if (fx === 0 && fz === 0) return false;
-  const quarter = Math.abs(Math.sin(prop.rot ?? 0)) > 0.7;
-  const [hx, hz] = quarter ? [fz, fx] : [fx, fz];
+  const [hx, hz] = footprintHalf(prop);
+  if (hx === 0 && hz === 0) return false;
   return Math.abs(x - prop.x) < hx + 0.35 && Math.abs(z - prop.z) < hz + 0.35;
+}
+
+/** Half extents (x, z) of a prop's footprint once rotated (props turn by quarter turns). */
+function footprintHalf(prop: Prop): [number, number] {
+  const [fx, fz] = FOOTPRINTS[prop.kind];
+  const quarter = Math.abs(Math.sin(prop.rot ?? 0)) > 0.7;
+  return quarter ? [fz, fx] : [fx, fz];
 }
 
 /** Last resort when every seat is taken: a spot near the room centre, offset pseudo-randomly. */
@@ -688,7 +742,7 @@ function scatterSeat(room: RoomDef, n: number): Seat {
   return { x, z, facing: faceTo(x, z, 0, 0) };
 }
 
-// Agent types that have a dedicated post inside their room. Keys are lower case.
+// Agent types that have reserved seats (a station) inside their room. Keys are lower case.
 const STATIONS: Record<string, StationId> = {
   oracle: 'lunette',
   barbapapa: 'chevalet',
@@ -702,7 +756,7 @@ const STATIONS: Record<string, StationId> = {
   'claude-code-guide': 'sacristain',
 };
 
-/** A seat an agent may take, with its stable id and, for a dedicated post's seat, the post. */
+/** A seat an agent may take, with its stable id and, for a reserved seat, its station. */
 export interface Candidate {
   id: string;
   seat: Seat;
@@ -783,11 +837,22 @@ export function queueSpot(rank: number): Spot {
       const facing = rank === 0 ? NORTH : faceTo(x, z, a.x, a.z);
       const door = doorOf(ALTAR_ROOM);
       if (i === 0) {
-        return { id, x, z, facing, kneel: rank === 0, space: 'autel', anchor: door.outside, entry: [door.inside], room: 'autel' };
+        return {
+          id,
+          x,
+          z,
+          facing,
+          kneel: rank === 0,
+          space: 'autel',
+          anchor: door.outside,
+          entry: [door.inside],
+          room: 'autel',
+          post: 'autel',
+        };
       }
       // In the corridor: its own space, reached along the corridors. In the doorway: from the door.
       const anchor = onCorridor({ x, z }) ? { x, z } : door.outside;
-      return { id, x, z, facing, space: id, anchor, entry: [], room: 'autel' };
+      return { id, x, z, facing, space: id, anchor, entry: [], room: 'autel', post: 'autel' };
     }
     remaining -= len;
   }
@@ -868,7 +933,10 @@ export function assignSpots(agents: SeatRequest[], memory: SeatMemory): Map<stri
 
 // ---------------------------------------------------------------- routes
 
-/** Lockers at the back of the tavern, where new subagents come out from. */
+/**
+ * Lockers at the back of the tavern, where new subagents come out from. Built at module load
+ * through `toSpot`, so `FOOTPRINTS` and `STATION_POST` must be declared above this line.
+ */
 export const SPAWN: Spot = (() => {
   const tavern = ROOM_BY_ID.get('taverne')!;
   return toSpot(tavern, { x: 2.4, z: 9, facing: W }, 'spawn');

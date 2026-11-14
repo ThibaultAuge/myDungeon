@@ -529,6 +529,7 @@ describe('queueSpot', () => {
     const s = queueSpot(rank);
     expect(s.room).toBe('autel');
     expect(s).not.toHaveProperty('station');
+    expect(s.post).toBe('autel');
   });
 
   /**
@@ -748,7 +749,7 @@ describe('assignSpots: room and station', () => {
    */
   it('gives an oracle in the observatory the telescope station', () => {
     const s = spotIn('observatoire', 'oracle');
-    expect(s).toMatchObject({ id: 'observatoire:lunette:0', room: 'observatoire', station: 'lunette' });
+    expect(s).toMatchObject({ id: 'observatoire:lunette:0', room: 'observatoire', station: 'lunette', post: 'observatoire' });
   });
 
   /**
@@ -756,7 +757,7 @@ describe('assignSpots: room and station', () => {
    */
   it('gives a curator in the scriptorium room scriptorium and station ia', () => {
     const s = spotIn('scriptorium', 'curator');
-    expect(s).toMatchObject({ id: 'scriptorium:ia:0', room: 'scriptorium', station: 'ia', space: 'biblio' });
+    expect(s).toMatchObject({ id: 'scriptorium:ia:0', room: 'scriptorium', station: 'ia', space: 'biblio', post: 'scriptorium' });
   });
 
   /**
@@ -766,13 +767,14 @@ describe('assignSpots: room and station', () => {
     const s = spotIn('observatoire');
     expect(s.room).toBe('observatoire');
     expect(s).not.toHaveProperty('station');
+    expect(s.post).toBe('observatoire');
   });
 
   /**
    * Verifies that the station is matched case-insensitively, like the post seats
    */
   it('sets the station for a differently cased agent type', () => {
-    expect(spotIn('epreuves', 'DEXTER')).toMatchObject({ room: 'epreuves', station: 'labo' });
+    expect(spotIn('epreuves', 'DEXTER')).toMatchObject({ room: 'epreuves', station: 'labo', post: 'labo' });
   });
 
   /**
@@ -783,10 +785,15 @@ describe('assignSpots: room and station', () => {
     const reqs = Array.from({ length: post + 1 }, (_, i) => req(`o${i}`, 'observatoire', { agentType: 'oracle' }));
     const spots = assignSpots(reqs, new Map());
     for (let i = 0; i < post; i++) {
-      expect(spots.get(`o${i}`)).toMatchObject({ id: `observatoire:lunette:${i}`, room: 'observatoire', station: 'lunette' });
+      expect(spots.get(`o${i}`)).toMatchObject({
+        id: `observatoire:lunette:${i}`,
+        room: 'observatoire',
+        station: 'lunette',
+        post: 'observatoire',
+      });
     }
     const extra = spots.get(`o${post}`)!;
-    expect(extra).toMatchObject({ id: 'observatoire:seat:0', room: 'observatoire' });
+    expect(extra).toMatchObject({ id: 'observatoire:seat:0', room: 'observatoire', post: 'observatoire' });
     expect(extra).not.toHaveProperty('station');
   });
 
@@ -799,8 +806,8 @@ describe('assignSpots: room and station', () => {
     expect(first.get('t')).toMatchObject({ id: 'arithmetique:boulier:0', station: 'boulier' });
     // A newcomer listed first must not change the kept seat nor its station.
     const second = assignSpots([req('n', 'arithmetique', { agentType: 'turing' }), req('t', 'arithmetique', { agentType: 'turing' })], memory);
-    expect(second.get('t')).toMatchObject({ id: 'arithmetique:boulier:0', room: 'arithmetique', station: 'boulier' });
-    expect(second.get('n')).toMatchObject({ id: 'arithmetique:boulier:1', room: 'arithmetique', station: 'boulier' });
+    expect(second.get('t')).toMatchObject({ id: 'arithmetique:boulier:0', room: 'arithmetique', station: 'boulier', post: 'arithmetique' });
+    expect(second.get('n')).toMatchObject({ id: 'arithmetique:boulier:1', room: 'arithmetique', station: 'boulier', post: 'arithmetique' });
   });
 
   /**
@@ -811,8 +818,8 @@ describe('assignSpots: room and station', () => {
     const reqs = [req('a', 'autel', { agentType: 'claude-code-guide' }), req('b', 'autel', { agentType: 'claude-code-guide' })];
     assignSpots(reqs, memory);
     const again = assignSpots([...reqs].reverse(), memory);
-    expect(again.get('a')).toMatchObject({ id: 'autel:sacristain:0', station: 'sacristain', room: 'autel' });
-    expect(again.get('b')).toMatchObject({ id: 'autel:seat:0', room: 'autel' });
+    expect(again.get('a')).toMatchObject({ id: 'autel:sacristain:0', station: 'sacristain', room: 'autel', post: 'autel' });
+    expect(again.get('b')).toMatchObject({ id: 'autel:seat:0', room: 'autel', post: 'autel' });
     expect(again.get('b')).not.toHaveProperty('station');
   });
 
@@ -827,6 +834,7 @@ describe('assignSpots: room and station', () => {
     const s = spotIn(roomId, type);
     expect(s.room).toBe(roomId);
     expect(s).not.toHaveProperty('station');
+    expect(s.post).toBe(roomId);
   });
 
   /**
@@ -843,6 +851,7 @@ describe('assignSpots: room and station', () => {
       for (const s of scatter) {
         expect(s.room).toBe('arithmetique');
         expect(s).not.toHaveProperty('station');
+        expect(s.post).toBe('arithmetique');
       }
     }
   });
@@ -855,6 +864,7 @@ describe('assignSpots: room and station', () => {
     for (const s of spots.values()) {
       expect(s.room).toBe('autel');
       expect(s).not.toHaveProperty('station');
+      expect(s.post).toBe('autel');
     }
   });
 
@@ -864,6 +874,7 @@ describe('assignSpots: room and station', () => {
   it('names the altar as the room of an unknown room fallback', () => {
     const spots = assignSpots([req('a', 'accueil' as RoomId)], new Map());
     expect(spots.get('a')!.room).toBe('autel');
+    expect(spots.get('a')!.post).toBe('autel');
   });
 
   /**
@@ -877,6 +888,7 @@ describe('assignSpots: room and station', () => {
     for (const s of spots.values()) {
       expect(s.room).toBe(id);
       expect(s).not.toHaveProperty('station');
+      expect(POST_ROOM.get(s.post)).toBe(id);
     }
   });
 });
@@ -909,6 +921,7 @@ describe('ROOMS: stations', () => {
     const type = Object.keys(STATION_OF).find((t) => STATION_OF[t] === key)!;
     const s = spotIn(roomId, type);
     expect(s).toMatchObject({ id: `${roomId}:${key}:0`, room: roomId, station: key });
+    expect(POST_ROOM.get(s.post)).toBe(roomId);
   });
 
   /**
@@ -926,6 +939,7 @@ describe('SPAWN', () => {
   it('has room taverne and no station', () => {
     expect(SPAWN.room).toBe('taverne');
     expect(SPAWN).not.toHaveProperty('station');
+    expect(SPAWN.post).toBe('taverne');
   });
 
   /**
