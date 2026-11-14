@@ -9,7 +9,7 @@ import type {
   WaitReason,
 } from '@agent-office/shared';
 import { NO_ENV_ID } from '@agent-office/shared';
-import { AGENT_NAME, matchEnvironment, type DefinedAgents, type Environment, type Inventory, type LiveProcess } from './inventory.ts';
+import { AGENT_ID, AGENT_NAME, matchEnvironment, type DefinedAgents, type Environment, type Inventory, type LiveProcess } from './inventory.ts';
 
 // State machine of the office. No I/O here: every function takes the state and `now`,
 // so the whole behaviour is testable with fixtures.
@@ -57,13 +57,25 @@ export function createState(): OfficeState {
   };
 }
 
+/**
+ * A hook field that must match `pattern`: anything else (wrong type, crafted value) reads as
+ * absent instead of rejecting the whole event, so the rest of the payload still counts.
+ */
+function validOrAbsent(pattern: RegExp) {
+  return z
+    .unknown()
+    .transform((v) => (typeof v === 'string' && pattern.test(v) ? v : undefined))
+    .optional();
+}
+
 export const hookEventSchema = z
   .object({
     hook_event_name: z.string(),
     session_id: z.string().min(1),
     cwd: z.string().optional(),
-    agent_id: z.string().optional(),
-    agent_type: z.string().optional(),
+    // Both are broadcast to every client and become figure ids or roster entries.
+    agent_id: validOrAbsent(AGENT_ID),
+    agent_type: validOrAbsent(AGENT_NAME),
     tool_name: z.string().optional(),
     tool_input: z.unknown().optional(),
     prompt: z.string().optional(),
@@ -318,6 +330,9 @@ export function applyInventory(state: OfficeState, inv: Inventory, now: number):
       lastActivityAt: Math.max(ds.lastActivityAt, s.lastActivityAt),
       parent: ds.parent,
     });
+    // An absorbed `cli:` session noted its types under its own environment key, matched
+    // from its cwd: note them again under the desktop session's environment.
+    for (const a of s.subagents) noteSeenType(state, s, a.agentType);
     reconcileLive(state, s, hostLive ?? cliIds.map((c) => liveByCli.get(c)).find(Boolean), now);
   }
 
@@ -481,12 +496,16 @@ export function applyHook(state: OfficeState, ev: HookEvent, now: number): Sessi
       }
       if (target === s.main && (tool === 'Agent' || tool === 'Task')) {
         const input = (ev.tool_input ?? {}) as Record<string, unknown>;
-        const list = state.pendingSpawns.get(s.id) ?? [];
-        list.push({
-          agentType: typeof input.subagent_type === 'string' ? input.subagent_type : 'general-purpose',
-          description: truncate(typeof input.description === 'string' ? input.description : undefined),
-        });
-        state.pendingSpawns.set(s.id, list.slice(-MAX_PENDING_SPAWNS));
+        const agentType = input.subagent_type === undefined ? 'general-purpose' : input.subagent_type;
+        // An invalid type would never match a (validated) SubagentStart: nothing to remember.
+        if (typeof agentType === 'string' && AGENT_NAME.test(agentType)) {
+          const list = state.pendingSpawns.get(s.id) ?? [];
+          list.push({
+            agentType,
+            description: truncate(typeof input.description === 'string' ? input.description : undefined),
+          });
+          state.pendingSpawns.set(s.id, list.slice(-MAX_PENDING_SPAWNS));
+        }
       }
       patchAgent(
         target,

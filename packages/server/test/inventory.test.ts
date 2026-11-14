@@ -466,7 +466,9 @@ describe('agentNameFromDefinition', () => {
     ['---\r\ndescription: long\r\nname: dexter\r\n'],
     ['﻿---\ndescription: x\nname: "dexter"\nmodel: opus'],
   ])('reads the name of an unclosed frontmatter %j', (text) => {
-    expect(agentNameFromDefinition(text)).toBe('dexter');
+    expect(agentNameFromDefinition(text, true)).toBe('dexter');
+    // A complete text must close its frontmatter.
+    expect(agentNameFromDefinition(text)).toBeUndefined();
   });
 
   /**
@@ -632,11 +634,11 @@ describe('readAgentTypes', () => {
    */
   it('returns [] when listing the folder fails transiently', () => {
     const dir = agentsDir('busy', { 'neo.md': '---\nname: neo\n---\n' });
-    const realReaddir = fs.readdirSync;
-    vi.spyOn(fs, 'readdirSync').mockImplementation(((p: fs.PathLike, opts?: unknown) => {
+    const realReaddir = fs.opendirSync;
+    vi.spyOn(fs, 'opendirSync').mockImplementation(((p: fs.PathLike, opts?: unknown) => {
       if (String(p) === dir) throw Object.assign(new Error('EBUSY'), { code: 'EBUSY' });
       return (realReaddir as (p: fs.PathLike, o?: unknown) => unknown)(p, opts);
-    }) as unknown as typeof fs.readdirSync);
+    }) as unknown as typeof fs.opendirSync);
     expect(readAgentTypes(dir)).toEqual([]);
   });
 });
@@ -816,11 +818,11 @@ describe('readInventory: agents cache', () => {
     const cache: AgentsCache = new Map();
     expect(globalAt(paths, cache, 1000)).toEqual(['alpha']);
 
-    const realReaddir = fs.readdirSync;
-    vi.spyOn(fs, 'readdirSync').mockImplementation(((p: fs.PathLike, opts?: unknown) => {
+    const realReaddir = fs.opendirSync;
+    vi.spyOn(fs, 'opendirSync').mockImplementation(((p: fs.PathLike, opts?: unknown) => {
       if (String(p) === agents) throw Object.assign(new Error('EBUSY'), { code: 'EBUSY' });
       return (realReaddir as (p: fs.PathLike, o?: unknown) => unknown)(p, opts);
-    }) as unknown as typeof fs.readdirSync);
+    }) as unknown as typeof fs.opendirSync);
 
     expect(globalAt(paths, cache, 1000 + AGENTS_CACHE_MS)).toEqual(['alpha']);
     expect(cache.get(agents)?.types).toEqual(['alpha']);
@@ -831,11 +833,11 @@ describe('readInventory: agents cache', () => {
    */
   it('gives [] on a transient failure with an empty cache', () => {
     const { paths, agents } = home();
-    const realReaddir = fs.readdirSync;
-    vi.spyOn(fs, 'readdirSync').mockImplementation(((p: fs.PathLike, opts?: unknown) => {
+    const realReaddir = fs.opendirSync;
+    vi.spyOn(fs, 'opendirSync').mockImplementation(((p: fs.PathLike, opts?: unknown) => {
       if (String(p) === agents) throw Object.assign(new Error('EBUSY'), { code: 'EBUSY' });
       return (realReaddir as (p: fs.PathLike, o?: unknown) => unknown)(p, opts);
-    }) as unknown as typeof fs.readdirSync);
+    }) as unknown as typeof fs.opendirSync);
     expect(globalAt(paths, new Map(), 1000)).toEqual([]);
   });
 
