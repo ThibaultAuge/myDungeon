@@ -35,7 +35,7 @@ Un **donjon de fantasy coloré et joyeux**, pas sombre : proportions trapues, co
 - le pictogramme de destination au-dessus d'un agent qui marche ;
 - la boîte de dialogue en lecture seule, ouverte par un clic sur un personnage ou sur sa ligne, lisible sans connexion depuis la page servie en local ;
 - la fiche d'agent avec le contexte de la session et les serveurs web détectés ;
-- les postes de travail : survol et clic sur le mobilier (`packages/web/src/scene/Post.tsx`), carte du poste (`packages/web/src/ui/PostCard.tsx`), un poste par fonction dans les pièces à plusieurs fonctions, et la liste « Lieux du bureau » du panneau latéral ;
+- les postes de travail : survol et clic sur le mobilier (`packages/web/src/scene/Post.tsx`), carte du poste (`packages/web/src/ui/PostCard.tsx`), un poste par fonction dans les pièces à plusieurs fonctions, et la liste « Lieux du donjon » du panneau latéral ;
 - la forêt de nuit, avec les douves, le pont-levis et la porte du château ;
 - l'identité de chaque pièce : variantes de murs, objets accrochés, lumière d'ambiance et décor propre.
 

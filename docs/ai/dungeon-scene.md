@@ -92,7 +92,7 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cast
   and focus rule. Escape closes
   (ignores `defaultPrevented` / `isComposing`; moves focus to the list button only if focus
   was in the card); × focuses the post's list button (`preventScroll` on mouse).
-- `ui/PostList.tsx`: "Lieux du bureau" in the side panel, grouped by room, `aria-pressed`
+- `ui/PostList.tsx`: "Lieux du donjon" in the side panel, grouped by room, `aria-pressed`
   buttons with ids `postButtonId(post)`. It is the keyboard / screen-reader route to posts
   (WCAG 2.1.1; the accessibility gate blocked without it). The side panel is labelled
   "Agents et lieux" and the canvas label names both lists.

@@ -147,7 +147,7 @@ Le × de la fiche désélectionne l'agent. La fiche et la boîte de dialogue se 
 Le panneau latéral s'appelle « Agents et lieux ». Il est l'équivalent complet de la vue 3D au clavier et au lecteur d'écran.
 
 - **Sessions en cours.** Une ligne par agent, avec son icône d'état. Un clic ouvre la fiche et la boîte de dialogue.
-- **Lieux du bureau.** Les postes, groupés par pièce. Un clic ouvre la même carte que le clic sur un poste. Fermer la carte rend le focus au bouton choisi.
+- **Lieux du donjon.** Les postes, groupés par pièce. Un clic ouvre la même carte que le clic sur un poste. Fermer la carte rend le focus au bouton choisi.
 
 ## Dialogue avec un agent
 
