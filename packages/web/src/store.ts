@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { EnvironmentView, HookEventSummary, ServerMessage, SessionView } from '@agent-office/shared';
 import { initialLang, saveLang, type Lang } from './i18n/index.ts';
+import type { PostId } from './scene/layout.ts';
 
 export type Route = { page: 'home' } | { page: 'env'; envId: string } | { page: 'debug' };
 
@@ -45,11 +46,14 @@ interface OfficeStore {
   serverOffset: number;
   events: HookEventSummary[];
   selectedAgentId: string | null;
+  /** Workstation whose card is open. */
+  selectedPost: PostId | null;
   /** The conversation box of the selected agent. Selecting an agent opens it. */
   dialogOpen: boolean;
   lang: Lang;
   navigate(r: Route): void;
   select(agentId: string | null): void;
+  selectPost(post: PostId | null): void;
   closeDialog(): void;
   setLang(lang: Lang): void;
 }
@@ -64,11 +68,12 @@ export const useOffice = create<OfficeStore>((set) => ({
   serverOffset: 0,
   events: [],
   selectedAgentId: null,
+  selectedPost: null,
   dialogOpen: false,
   lang: startLang,
   navigate(r) {
     history.pushState(null, '', routePath(r));
-    set({ route: r, sessions: [], roster: [], snapshotReceived: false, selectedAgentId: null });
+    set({ route: r, sessions: [], roster: [], snapshotReceived: false, selectedAgentId: null, selectedPost: null });
     connect();
   },
   select(agentId) {
@@ -76,6 +81,9 @@ export const useOffice = create<OfficeStore>((set) => ({
   },
   closeDialog() {
     set({ dialogOpen: false });
+  },
+  selectPost(post) {
+    set({ selectedPost: post });
   },
   setLang(lang) {
     document.documentElement.lang = lang;
@@ -91,6 +99,7 @@ window.addEventListener('popstate', () => {
     roster: [],
     snapshotReceived: false,
     selectedAgentId: null,
+    selectedPost: null,
   });
   connect();
 });

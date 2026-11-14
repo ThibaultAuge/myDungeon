@@ -1,5 +1,5 @@
 ---
-description: Use when changing the 3D dungeon map — rooms, floors, walls, cutaway, props, lighting, KayKit models or their import — agent figures (walking motion, character models, role looks and held props, animations), or when previewing the web scene.
+description: Use when changing the 3D dungeon map — rooms, floors, walls, cutaway, props, lighting, KayKit models or their import — clickable workstations (posts, hover glow, post card and list), pointer/cursor handling of 3D targets, agent figures (walking motion, character models, role looks and held props, animations, destination badge), room or post icons, or when previewing the web scene.
 ---
 
 # 3D dungeon scene (KayKit assets)
@@ -25,6 +25,41 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cuta
   pointer starts at screen centre and keeps its last position.
 - Lighting: Canvas shadows, drei `SoftShadows`, `NeutralToneMapping`, one shadow-casting
   sun. Floors and small shapes/models (< 0.3 m, or scale < 0.6) cast no shadow.
+- Rooms have no title signs (removed at the user's request).
+
+### Workstations (posts)
+- `layout.ts`: `POST_IDS` (18), `PostId`, optional `Prop.post`, `postGroups(room)` →
+  `{ posts: { post, props }[], decor }`, `POST_ROOM` (`Map<PostId, RoomId>`). Every
+  functional prop carries a post; decoration kinds (`crates`, `barrels`, `chest`, `coins`,
+  `candle`, `rug`) never do (tested). A multi-function room has one post per function:
+  biblio / scriptorium, atelier / chevalet, epreuves → relecture / labo, heraut → estrade /
+  inspection.
+- `Post.tsx` wraps a post's pieces. In `useLayoutEffect` it computes, once, one padded
+  `Box3` hit box PER PIECE (furniture is already loaded: it sits inside the dungeon's single
+  Suspense). Hit boxes are `visible=false` but still raycast; only the hit-box group has
+  handlers, the furniture itself is never raycast.
+- Hover glow: `highlight.ts` `setHighlight(root, on)` swaps each `MeshStandardMaterial` for a
+  cached emissive clone, keeps `{ original, glow }` in `userData`, and restores only if the
+  mesh still holds the glow. Shared kit materials are never mutated. The post whose card is
+  open stays lit.
+- Pointer rules (`cursor.ts`): `setPointerHover(key, on)` is the single cursor owner (keys
+  `agent:<id>`, `post:<id>`). Clickable objects carry the frozen `TARGET_USER_DATA`;
+  `nearestTarget(e.intersections)` picks the nearest target along the ray, re-decided on
+  every pointer over/move and on click. Posts never `stopPropagation` on hover;
+  `AgentFigure` stops on pointerover and click. `CLICK_MAX_DRAG_PX = 2` (R3F's pointer-missed
+  limit) is shared by agents and posts: a release after a camera drag selects nothing.
+  Resting tavern figures have no handlers and no target flag.
+- Store: `selectedPost` / `selectPost`, reset on route change; Canvas `onPointerMissed`
+  clears both agent and post selection.
+- `ui/PostCard.tsx`: card at the top right of `.office__scene` (room eyebrow, title, role,
+  "who" line via `t.labelled`) inside a persistent `aria-live` wrapper. Escape closes
+  (ignores `defaultPrevented` / `isComposing`; moves focus to the list button only if focus
+  was in the card); × focuses the post's list button (`preventScroll` on mouse).
+- `ui/PostList.tsx`: "Lieux du bureau" in the side panel, grouped by room, `aria-pressed`
+  buttons with ids `postButtonId(post)`. It is the keyboard / screen-reader route to posts
+  (WCAG 2.1.1; the accessibility gate blocked without it). The side panel is labelled
+  "Agents et lieux" and the canvas label names both lists.
+- Post texts: `docs/ai/i18n.md`.
 
 ### Agent figures
 - Looks (`characters.ts`): a `Look` is a body plus optional `right` / `left` held props
@@ -67,6 +102,24 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cuta
   request bubble): `docs/ai/agent-lifecycle.md`; border = session colour via `--session-color`; selection = outline `#185fa5`
   offset 2px + bold (not colour alone); forced-colors rules in `styles.css`. A floor disc
   in the session colour sits inside the state ring.
+- Destination badge (user feature): a walking figure shows a round `DestinationBadge`
+  (`.destination-badge`, 28px, session-colour border) above its name, inside the tag
+  `<Html>`. Visible only while the path is non-empty: hidden at rest, during the spawn clip
+  and on arrival; follows reroutes. While shown it hides the altar request bubble (CSS
+  `.agent-tag-anchor[data-travelling] .request-bubble`). Icon = `destinationOf(spot)`:
+  the post when the assigned seat is one of that post's seats, else the room (post full,
+  shared/wall/scatter seat, altar queue). Bobs with `request-bob` (off under reduced
+  motion); forced-colors uses Canvas/CanvasText.
+- Icons (user decision: one per room AND per dedicated post): 25 hand-drawn 24×24 line SVGs
+  in `ICONS: Record<Destination, ReactNode>` (15 `RoomId`s + 10 `StationId`s), decorative
+  (`aria-hidden`, `focusable=false`, no i18n key; the side list and `StatusAnnouncer` stay
+  the accessible source). `DestinationIcon` is used only inside `DestinationBadge`: rooms
+  have no title signs, so no room-sign icon exists.
+- Spots (`layout.ts`): `Spot` carries `room: RoomId` and optional `station?: StationId`
+  (key absent, not `undefined`). `RoomDef.stations` is `Partial<Record<StationId, Seat[]>>`,
+  `STATIONS` maps agent type → `StationId`, `candidateSeats` returns
+  `Candidate {id, seat, station?}`, `toSpot(room, seat, id, station?)`. Every `queueSpot`
+  rank has room `autel`; `SPAWN` has room `taverne`.
 
 ## Relevant Files
 - `packages/web/src/scene/dungeon.ts` — pure geometry, no three scene: `KIT_SCALE`,
@@ -89,14 +142,24 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cuta
 - `packages/web/src/scene/characters.ts` — pure, no three.js: `MAIN_BODY`, `SUB_BODIES`,
   `LOOKS`, `lookFor`, `PROP_GRIP`, `gripFor`, `clipFor` and the clip constants.
 - `packages/web/src/scene/AgentFigure.tsx` — walk, `Character` (takes a `Look`), `Held`,
-  `CharacterBoundary`, tag.
+  `CharacterBoundary`, tag, destination badge toggle.
+- `packages/web/src/scene/destinations.ts` — pure: `Destination = RoomId | StationId`,
+  `destinationOf(spot)` (station ?? room).
+- `packages/web/src/scene/DestinationIcon.tsx` — `ICONS`, `DestinationIcon`,
+  `DestinationBadge`. Badge styles in `packages/web/src/styles.css`.
 - `packages/web/src/scene/walk.ts` — pure walking motion, no three.js: `remainingDistance`,
   `nextSpeed`, `advance` (mutates the position, shifts reached waypoints, carries leftover
   step past corners, lands exactly on the last waypoint), `turnToward`, `approach`.
 - `packages/web/src/scene/layout.ts`, `Room.tsx`, `Office.tsx`.
+- `packages/web/src/scene/Post.tsx`, `highlight.ts`, `cursor.ts` — posts, hover glow,
+  pointer rules.
+- `packages/web/src/ui/PostCard.tsx`, `PostList.tsx`; `packages/web/src/store.ts`
+  (`selectedPost`, `selectPost`); Canvas `onPointerMissed` is in `Office.tsx`.
 - `packages/web/test/dungeon.test.ts`, `walk.test.ts`, `characters.test.ts`,
   `layout.test.ts` (`layout.ts`: `ROOMS`, seats and `assignSpots`, altar `queueSpot`,
-  `SPAWN`, `corridorPath`, `routeBetween`, `reroute`).
+  `SPAWN`, `corridorPath`, `routeBetween`, `reroute`, post tagging, `postGroups`,
+  `POST_ROOM`, spot `room`/`station`), `highlight.test.ts`, `cursor.test.ts`,
+  `destinations.test.ts` (`destinationOf`; room ids and post names never overlap).
 
 ## Usage
 - New model: add it to `kit-manifest.json`, run `npm run kaykit:import`. Never hand-copy
@@ -116,14 +179,35 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cuta
 - Agent motion logic goes in `walk.ts`, clip choice in `clipFor` (both tested), never
   inline in `AgentFigure`'s `useFrame`, which only calls them.
 - New decor must not cover seats or a door entry (tested in `dungeon.test.ts`).
+- New `RoomId` or new seat post (`StationId`, not the clickable `PostId`): add an `ICONS` entry (the `Record` type fails
+  typecheck otherwise) and keep its name distinct from every room id (tested). Reuse
+  `DestinationIcon` for any other place icon; never add a translated label for it.
+- Scene gallery with walking figures from a worktree: Vite on 5174, Playwright,
+  `useOffice.getState().navigate({page:'env', envId:'demo'})` then
+  `useOffice.setState({sessions, roster: [], snapshotReceived: true})` with hand-built
+  sessions; changing an agent's `room` makes it walk. Without navigating to an env route
+  the home page shows and no scene renders.
+- A new functional prop needs a `post`; a new function in a room needs a new `PostId` plus
+  its texts in fr / de / en (typecheck and tests enforce both). Decoration kinds stay
+  post-less.
+- New clickable 3D object: give its hit object `TARGET_USER_DATA`, drive the cursor only
+  through `setPointerHover` (never write `document.body.style.cursor` elsewhere), choose
+  with `nearestTarget`, and reject drags with `CLICK_MAX_DRAG_PX`. Every clickable 3D thing
+  also needs a keyboard route in the side panel (as `PostList` does).
+- Visual states (hover, selection) go through `setHighlight`-style material swaps; never
+  mutate kit materials, which are shared per pack.
 - Preview: `.claude/launch.json` entry `agent-office-web` runs Vite dev on 5173, proxying to
   the test server on 4778. `agent-office` / `agent-office-test` serve `packages/web/dist`,
   which needs `npm run build` first. Previewing from a worktree with fake hooks:
   `docs/ai/agent-lifecycle.md`. The preview launcher reads the main folder's
   `.claude/launch.json`, so from a worktree run Vite on another port (5174 worked; the
-  WebSocket is refused there, which is fine for store-injected galleries). The in-app
-  Browser pane, when hidden, gives the Canvas size 0 and renders no frames; use Playwright
-  for visual verification.
+  WebSocket is refused there, which is fine for store-injected galleries). A worktree can
+  also serve its build on another port: `npm run build`, then
+  `AGENT_OFFICE_PORT=4790 AGENT_OFFICE_TOKEN=… npm run start`. The in-app Browser pane, when
+  hidden, gives the Canvas size 0 and renders no frames; use Playwright for visual
+  verification. Headless Playwright renders about 1–2 fps (software GL): wait about 2 s
+  before checking rAF-driven effects (focus return, highlight screenshots). Give Playwright
+  file outputs absolute paths inside the worktree; relative paths resolve elsewhere.
 - Where figures rest, wait, appear and leave (tavern, altar, roster):
   `docs/ai/agent-lifecycle.md`.
 
@@ -142,7 +226,8 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cuta
 - Wall footprint matches the pre-KayKit one, so seat positions are unaffected.
 - Orientation-based cutaway was tried and rejected; keep the cursor parabola.
 - Tests must not import `kit.ts` or any `.tsx` file (drei / `import.meta.env`); test
-  `dungeon.ts`, `layout.ts`, `walk.ts`, `characters.ts` and the manifest JSON.
+  `dungeon.ts`, `layout.ts`, `walk.ts`, `characters.ts`, `destinations.ts` and the manifest
+  JSON.
 - Walk speed was set so figures reach the room before short tasks finish (user request).
   The chibi legs walk naturally at 0.57 (`Walking_A`) and 1.4 u/s (`Running_A`) at
   `KIT_SCALE`, so feet slide at cruise speed by design. Accepted limits: a reroute to a
@@ -162,9 +247,19 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cuta
   while `Character`'s refs survive. `Character` restarts its clip when the current action
   is no longer `isScheduled()`. Keep this check.
 - drei `<Html>` loses its content if mounted before the canvas events connect. Agent tags
-  wait for `useThree(s => !!s.events.connected)`. `Room.tsx` signs still use the older
-  "mount one tick later" trick: switching them to the connected guard left one sign
-  consistently empty.
+  wait for `useThree(s => !!s.events.connected)`.
+- Posts must not `stopPropagation` on hover: R3F re-applies a stored stopped flag on later
+  moves, which made the target choice sticky (rejected earlier design). Keep the
+  `nearestTarget` decision instead.
+- Destination badge mechanism, keep it: `AgentFigure`'s `useFrame` toggles
+  `data-travelling` on the tag anchor (ref on drei `<Html>`, which lands on the
+  `agent-tag-anchor` div) only when the state changes, so no per-frame React render. It
+  also requires `badge.dataset.destination === destinationOf(spot)`: the `<Html>` content is
+  a separate React root rendered asynchronously, and without that check the previous icon
+  showed about 100 ms at departure. Accepted cost: a 1-2 frame badge flicker on a reroute.
+- Destination badge accepted limits (not done): an altar-queue shuffle (rank n → n-1)
+  shows the altar badge about 1 s and hides an urgent agent's request bubble meanwhile; the
+  visibility logic has no unit test (depends on drei ref placement; verified in Playwright).
 - Open items: about 700 draw calls per frame because props are not instanced (planned fix:
   drei `<Instances>` for shapes); the scene-wide Suspense hide/show also causes about 15
-  "synchronously unmount a root" warnings per load and the `Room.tsx` sign issue above.
+  "synchronously unmount a root" warnings per load.

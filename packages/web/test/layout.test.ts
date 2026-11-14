@@ -14,15 +14,23 @@ import {
   doorOf,
   inFootprint,
   MIN_SEAT_GAP,
+  POST_IDS,
+  POST_ROOM,
+  postGroups,
   reroute,
   queueSpot,
   routeBetween,
   wallSeats,
   type Point,
+  type PostId,
+  type Prop,
+  type PropKind,
   type RoomDef,
   type SeatMemory,
   type SeatRequest,
   type Spot,
+  type StationId,
+  type Candidate,
 } from '../src/scene/layout.ts';
 
 const TOL = 1e-3;
@@ -304,12 +312,12 @@ const STATION_OF: Record<string, string> = {
 };
 
 /** The documented candidate order: own post, shared seats, then wall seats, with their ids. */
-function expectedCandidates(r: RoomDef, type: string): { id: string; seat: unknown }[] {
+function expectedCandidates(r: RoomDef, type: string): Candidate[] {
   const key = type.toLowerCase();
   const station = Object.hasOwn(STATION_OF, key) ? STATION_OF[key] : undefined;
   const own = station ? (r.stations?.[station] ?? []) : [];
   return [
-    ...own.map((seat, i) => ({ id: `${r.id}:${station}:${i}`, seat })),
+    ...own.map((seat, i) => ({ id: `${r.id}:${station}:${i}`, seat, station })),
     ...r.seats.map((seat, i) => ({ id: `${r.id}:seat:${i}`, seat })),
     ...wallSeats(r).map((seat, i) => ({ id: `${r.id}:wall:${i}`, seat })),
   ];
@@ -513,6 +521,25 @@ describe('queueSpot', () => {
     const pts = Array.from({ length: 30 }, (_, r) => queueSpot(r));
     for (let i = 1; i < pts.length; i++) expect(samePoint(pts[i], pts[i - 1])).toBe(false);
   });
+
+  /**
+   * Verifies that every queue rank, in the nave or in the corridors, heads for the altar room
+   */
+  it.each([0, 1, 3, 5, 20, 1000])('rank %i has room autel and no station', (rank) => {
+    const s = queueSpot(rank);
+    expect(s.room).toBe('autel');
+    expect(s).not.toHaveProperty('station');
+  });
+
+  /**
+   * Verifies that the corridor ranks, whose space is their own, still name the altar room
+   */
+  it('keeps room autel for a rank standing in a corridor', () => {
+    const s = queueSpot(5);
+    expect(onAnyCorridor(s)).toBe(true);
+    expect(s.space).not.toBe('autel');
+    expect(s.room).toBe('autel');
+  });
 });
 
 describe('assignSpots', () => {
@@ -715,7 +742,192 @@ describe('assignSpots', () => {
   });
 });
 
+describe('assignSpots: room and station', () => {
+  /**
+   * Verifies that a station agent on its post gets the room and the post's station
+   */
+  it('gives an oracle in the observatory the telescope station', () => {
+    const s = spotIn('observatoire', 'oracle');
+    expect(s).toMatchObject({ id: 'observatoire:lunette:0', room: 'observatoire', station: 'lunette' });
+  });
+
+  /**
+   * Verifies that a scriptorium post spot names the scriptorium room, not the library space
+   */
+  it('gives a curator in the scriptorium room scriptorium and station ia', () => {
+    const s = spotIn('scriptorium', 'curator');
+    expect(s).toMatchObject({ id: 'scriptorium:ia:0', room: 'scriptorium', station: 'ia', space: 'biblio' });
+  });
+
+  /**
+   * Verifies that a generic agent gets its room and no station key at all
+   */
+  it('gives a generic agent a room and no station', () => {
+    const s = spotIn('observatoire');
+    expect(s.room).toBe('observatoire');
+    expect(s).not.toHaveProperty('station');
+  });
+
+  /**
+   * Verifies that the station is matched case-insensitively, like the post seats
+   */
+  it('sets the station for a differently cased agent type', () => {
+    expect(spotIn('epreuves', 'DEXTER')).toMatchObject({ room: 'epreuves', station: 'labo' });
+  });
+
+  /**
+   * Verifies that once the post seats are all taken, the next same-type agent has no station
+   */
+  it('gives no station to a same-type agent on a shared seat once the post is full', () => {
+    const post = room('observatoire').stations!.lunette!.length;
+    const reqs = Array.from({ length: post + 1 }, (_, i) => req(`o${i}`, 'observatoire', { agentType: 'oracle' }));
+    const spots = assignSpots(reqs, new Map());
+    for (let i = 0; i < post; i++) {
+      expect(spots.get(`o${i}`)).toMatchObject({ id: `observatoire:lunette:${i}`, room: 'observatoire', station: 'lunette' });
+    }
+    const extra = spots.get(`o${post}`)!;
+    expect(extra).toMatchObject({ id: 'observatoire:seat:0', room: 'observatoire' });
+    expect(extra).not.toHaveProperty('station');
+  });
+
+  /**
+   * Verifies that a kept post seat keeps its station on the next call with the same memory
+   */
+  it('keeps the station of a kept post seat', () => {
+    const memory: SeatMemory = new Map();
+    const first = assignSpots([req('t', 'arithmetique', { agentType: 'turing' })], memory);
+    expect(first.get('t')).toMatchObject({ id: 'arithmetique:boulier:0', station: 'boulier' });
+    // A newcomer listed first must not change the kept seat nor its station.
+    const second = assignSpots([req('n', 'arithmetique', { agentType: 'turing' }), req('t', 'arithmetique', { agentType: 'turing' })], memory);
+    expect(second.get('t')).toMatchObject({ id: 'arithmetique:boulier:0', room: 'arithmetique', station: 'boulier' });
+    expect(second.get('n')).toMatchObject({ id: 'arithmetique:boulier:1', room: 'arithmetique', station: 'boulier' });
+  });
+
+  /**
+   * Verifies that a kept shared seat of a station agent stays without a station
+   */
+  it('keeps no station on a kept shared seat', () => {
+    const memory: SeatMemory = new Map();
+    const reqs = [req('a', 'autel', { agentType: 'claude-code-guide' }), req('b', 'autel', { agentType: 'claude-code-guide' })];
+    assignSpots(reqs, memory);
+    const again = assignSpots([...reqs].reverse(), memory);
+    expect(again.get('a')).toMatchObject({ id: 'autel:sacristain:0', station: 'sacristain', room: 'autel' });
+    expect(again.get('b')).toMatchObject({ id: 'autel:seat:0', room: 'autel' });
+    expect(again.get('b')).not.toHaveProperty('station');
+  });
+
+  /**
+   * Verifies that a station agent outside its post's room gets that room and no station
+   */
+  it.each([
+    ['atelier', 'hermione'],
+    ['biblio', 'curator'],
+    ['taverne', 'oracle'],
+  ] as const)('in %s, %s has no station', (roomId, type) => {
+    const s = spotIn(roomId, type);
+    expect(s.room).toBe(roomId);
+    expect(s).not.toHaveProperty('station');
+  });
+
+  /**
+   * Verifies that scatter seats carry the room but no station, also when kept
+   */
+  it('gives scatter seats a room and no station, on first and later calls', () => {
+    const r = room('arithmetique');
+    const capacity = candidateSeats(r, 'turing').length;
+    const reqs = Array.from({ length: capacity + 2 }, (_, i) => req(`t${String(i).padStart(3, '0')}`, 'arithmetique', { agentType: 'turing' }));
+    const memory: SeatMemory = new Map();
+    for (const spots of [assignSpots(reqs, memory), assignSpots([...reqs].reverse(), memory)]) {
+      const scatter = [...spots.values()].filter((s) => s.id.startsWith('arithmetique:scatter:'));
+      expect(scatter).toHaveLength(2);
+      for (const s of scatter) {
+        expect(s.room).toBe('arithmetique');
+        expect(s).not.toHaveProperty('station');
+      }
+    }
+  });
+
+  /**
+   * Verifies that queued agents get the altar room and no station from assignSpots
+   */
+  it('gives queued agents room autel and no station', () => {
+    const spots = assignSpots([queued('a', 1), queued('b', 2), queued('c', 3)], new Map());
+    for (const s of spots.values()) {
+      expect(s.room).toBe('autel');
+      expect(s).not.toHaveProperty('station');
+    }
+  });
+
+  /**
+   * Verifies that an unknown room falls back to the altar room in the spot's room too
+   */
+  it('names the altar as the room of an unknown room fallback', () => {
+    const spots = assignSpots([req('a', 'accueil' as RoomId)], new Map());
+    expect(spots.get('a')!.room).toBe('autel');
+  });
+
+  /**
+   * Verifies that every spot of a full room, overflow included, carries that room's id
+   */
+  it.each(ROOMS.map((r) => [r.id, r] as const))('%s spots all carry their room', (id, r) => {
+    const count = candidateSeats(r, 'general-purpose').length + 1;
+    const reqs = Array.from({ length: count }, (_, i) => req(`g${i}`, id));
+    const spots = assignSpots(reqs, new Map());
+    expect(spots.size).toBe(count);
+    for (const s of spots.values()) {
+      expect(s.room).toBe(id);
+      expect(s).not.toHaveProperty('station');
+    }
+  });
+});
+
+describe('ROOMS: stations', () => {
+  /** Every station that some agent type is sent to. */
+  const REACHABLE = new Set(Object.values(STATION_OF));
+
+  const posts = ROOMS.flatMap((r) => Object.keys(r.stations ?? {}).map((k) => [r.id, k] as const));
+
+  /**
+   * Verifies that the floor plan defines at least one post, so the checks below are not vacuous
+   */
+  it('defines dedicated posts', () => {
+    expect(posts.length).toBeGreaterThan(0);
+  });
+
+  /**
+   * Verifies that every post of every room is reached by some agent type and has seats
+   */
+  it.each(posts)('%s post %s is used by an agent type and has seats', (roomId, key) => {
+    expect(REACHABLE.has(key)).toBe(true);
+    expect(room(roomId).stations![key as StationId]!.length).toBeGreaterThan(0);
+  });
+
+  /**
+   * Verifies that the agent type of every post lands on that post with its room and station
+   */
+  it.each(posts)('%s post %s gives its agent the room and station', (roomId, key) => {
+    const type = Object.keys(STATION_OF).find((t) => STATION_OF[t] === key)!;
+    const s = spotIn(roomId, type);
+    expect(s).toMatchObject({ id: `${roomId}:${key}:0`, room: roomId, station: key });
+  });
+
+  /**
+   * Verifies that each agent type's station is defined in exactly one room
+   */
+  it.each(Object.entries(STATION_OF))('%s station %s lives in exactly one room', (_type, key) => {
+    expect(posts.filter(([, k]) => k === key)).toHaveLength(1);
+  });
+});
+
 describe('SPAWN', () => {
+  /**
+   * Verifies that the spawn spot is in the tavern room, with no station
+   */
+  it('has room taverne and no station', () => {
+    expect(SPAWN.room).toBe('taverne');
+    expect(SPAWN).not.toHaveProperty('station');
+  });
+
   /**
    * Verifies that new subagents spawn inside the tavern, entering by its door
    */
@@ -935,5 +1147,260 @@ describe('standing places', () => {
     for (const s of wallSeats(r)) {
       expect(r.props.some((p) => inFootprint(p, s.x, s.z)), `${id} ${JSON.stringify(s)}`).toBe(false);
     }
+  });
+});
+
+// ---------------------------------------------------------------- workstations (posts)
+
+/** Decoration kinds: no workstation of their own. */
+const DECOR_KINDS: PropKind[] = ['crates', 'barrels', 'chest', 'coins', 'candle', 'rug'];
+
+/** The room every workstation is expected to stand in. */
+const EXPECTED_POST_ROOM: Record<PostId, RoomId> = {
+  autel: 'autel',
+  cartes: 'cartes',
+  atelier: 'atelier',
+  chevalet: 'atelier',
+  biblio: 'biblio',
+  scriptorium: 'scriptorium',
+  observatoire: 'observatoire',
+  pigeonnier: 'pigeonnier',
+  machines: 'machines',
+  arithmetique: 'arithmetique',
+  garde: 'garde',
+  relecture: 'epreuves',
+  labo: 'epreuves',
+  estrade: 'heraut',
+  inspection: 'heraut',
+  detente: 'detente',
+  concierge: 'concierge',
+  taverne: 'taverne',
+};
+
+/** All props of the dungeon tagged with a given post. */
+function propsOfPost(post: PostId): Prop[] {
+  return ROOMS.flatMap((r) => r.props.filter((p) => p.post === post));
+}
+
+describe('POST_IDS', () => {
+  /**
+   * Verifies that the workstation ids are unique and match the documented list of 18
+   */
+  it('lists 18 unique workstation ids', () => {
+    expect(POST_IDS).toHaveLength(18);
+    expect(new Set(POST_IDS).size).toBe(POST_IDS.length);
+    expect([...POST_IDS].sort()).toEqual(Object.keys(EXPECTED_POST_ROOM).sort());
+  });
+
+  /**
+   * Verifies that every workstation id is used by at least one piece of furniture
+   */
+  it.each([...POST_IDS])('%s has at least one prop', (post) => {
+    expect(propsOfPost(post).length).toBeGreaterThan(0);
+  });
+
+  /**
+   * Verifies that every post tag on a prop is a declared workstation id
+   */
+  it('tags props only with declared workstation ids', () => {
+    const known = new Set<string>(POST_IDS);
+    const unknown = ROOMS.flatMap((r) => r.props.filter((p) => p.post !== undefined && !known.has(p.post)).map((p) => `${r.id}:${p.kind}:${p.post}`));
+    expect(unknown).toEqual([]);
+  });
+});
+
+describe('ROOMS: post tags', () => {
+  /**
+   * Verifies that no decoration piece belongs to a workstation
+   */
+  it('never gives a post to decoration', () => {
+    const tagged = ROOMS.flatMap((r) => r.props.filter((p) => DECOR_KINDS.includes(p.kind) && p.post).map((p) => `${r.id}:${p.kind}`));
+    expect(tagged).toEqual([]);
+  });
+
+  /**
+   * Verifies that every functional (non-decoration) piece belongs to a workstation
+   */
+  it('gives a post to every functional prop', () => {
+    const untagged = ROOMS.flatMap((r) => r.props.filter((p) => !DECOR_KINDS.includes(p.kind) && !p.post).map((p) => `${r.id}:${p.kind}`));
+    expect(untagged).toEqual([]);
+  });
+
+  /**
+   * Verifies that each room has at least one workstation
+   */
+  it.each(ROOMS.map((r) => [r.id, r] as const))('%s has at least one post', (_id, r) => {
+    expect(postGroups(r).posts.length).toBeGreaterThan(0);
+  });
+
+  /**
+   * Verifies that rooms with two functions split their furniture into the documented posts
+   */
+  it.each([
+    ['biblio', 'biblio', ['bookcase', 'readingTable']],
+    ['scriptorium', 'scriptorium', ['lectern']],
+    ['atelier', 'atelier', ['bench', 'toolRack']],
+    ['atelier', 'chevalet', ['easel']],
+    ['epreuves', 'relecture', ['readingTable']],
+    ['epreuves', 'labo', ['alchemyBench']],
+    ['heraut', 'estrade', ['stage']],
+    ['heraut', 'inspection', ['inspectionDesk']],
+  ] as [RoomId, PostId, PropKind[]][])('in %s, post %s holds exactly %j', (roomId, post, kinds) => {
+    const group = postGroups(room(roomId)).posts.find((g) => g.post === post);
+    expect(group, `${post} missing from ${roomId}`).toBeDefined();
+    expect([...new Set(group!.props.map((p) => p.kind))].sort()).toEqual([...kinds].sort());
+    // The post is entirely in this room.
+    expect(propsOfPost(post)).toHaveLength(group!.props.length);
+  });
+
+  /**
+   * Verifies that the library holds all its bookcases and reading tables in one post
+   */
+  it('groups the four bookcases and two reading tables of the library', () => {
+    const biblio = postGroups(room('biblio')).posts;
+    expect(biblio.map((g) => g.post)).toEqual(['biblio']);
+    const kinds = biblio[0].props.map((p) => p.kind);
+    expect(kinds.filter((k) => k === 'bookcase')).toHaveLength(4);
+    expect(kinds.filter((k) => k === 'readingTable')).toHaveLength(2);
+  });
+
+  /**
+   * Verifies that single-function rooms have one post named like the room
+   */
+  it.each([
+    'autel',
+    'cartes',
+    'observatoire',
+    'pigeonnier',
+    'machines',
+    'arithmetique',
+    'garde',
+    'detente',
+    'concierge',
+    'taverne',
+  ] as const)('%s has a single post named like the room', (id) => {
+    expect(postGroups(room(id)).posts.map((g) => g.post)).toEqual([id]);
+  });
+});
+
+describe('postGroups', () => {
+  /**
+   * Verifies that posts plus decoration are exactly the room props, each once, same objects
+   */
+  it.each(ROOMS.map((r) => [r.id, r] as const))('%s partitions its props exactly', (_id, r) => {
+    const { posts, decor } = postGroups(r);
+    const all = [...posts.flatMap((g) => g.props), ...decor];
+    expect(all).toHaveLength(r.props.length);
+    expect(new Set(all).size).toBe(all.length);
+    for (const p of r.props) expect(all).toContain(p);
+    for (const p of decor) expect(p.post).toBeUndefined();
+    for (const g of posts) for (const p of g.props) expect(p.post).toBe(g.post);
+  });
+
+  /**
+   * Verifies that each post appears once per room, in the order of its first piece
+   */
+  it.each(ROOMS.map((r) => [r.id, r] as const))('%s lists posts once, in order of first piece', (_id, r) => {
+    const ids = postGroups(r).posts.map((g) => g.post);
+    const firstSeen = [...new Set(r.props.filter((p) => p.post).map((p) => p.post!))];
+    expect(ids).toEqual(firstSeen);
+  });
+
+  /**
+   * Verifies that the three two-post rooms list their posts in the documented order
+   */
+  it.each([
+    ['atelier', ['atelier', 'chevalet']],
+    ['epreuves', ['relecture', 'labo']],
+    ['heraut', ['estrade', 'inspection']],
+  ] as [RoomId, PostId[]][])('%s lists its posts as %j', (id, expected) => {
+    expect(postGroups(room(id)).posts.map((g) => g.post)).toEqual(expected);
+  });
+
+  /**
+   * Verifies that interleaved pieces are grouped by post, keeping their relative order
+   */
+  it('groups interleaved pieces and keeps piece order within a post', () => {
+    const a: Prop = { kind: 'bench', x: 0, z: 0, post: 'atelier' };
+    const d: Prop = { kind: 'crates', x: 1, z: 0 };
+    const b: Prop = { kind: 'easel', x: 2, z: 0, post: 'chevalet' };
+    const c: Prop = { kind: 'toolRack', x: 3, z: 0, post: 'atelier' };
+    const e: Prop = { kind: 'rug', x: 4, z: 0 };
+    const r: RoomDef = { ...room('atelier'), props: [a, d, b, c, e] };
+    const { posts, decor } = postGroups(r);
+    expect(posts).toHaveLength(2);
+    expect(posts[0].post).toBe('atelier');
+    expect(posts[0].props[0]).toBe(a);
+    expect(posts[0].props[1]).toBe(c);
+    expect(posts[1].post).toBe('chevalet');
+    expect(posts[1].props).toHaveLength(1);
+    expect(posts[1].props[0]).toBe(b);
+    expect(decor).toHaveLength(2);
+    expect(decor[0]).toBe(d);
+    expect(decor[1]).toBe(e);
+  });
+
+  /**
+   * Verifies that a room without props yields no posts and no decoration
+   */
+  it('returns empty lists for a room without props', () => {
+    expect(postGroups({ ...room('atelier'), props: [] })).toEqual({ posts: [], decor: [] });
+  });
+
+  /**
+   * Verifies that a room with only decoration yields no posts
+   */
+  it('returns only decoration when no piece has a post', () => {
+    const props: Prop[] = [
+      { kind: 'crates', x: 0, z: 0 },
+      { kind: 'candle', x: 1, z: 1 },
+    ];
+    const { posts, decor } = postGroups({ ...room('atelier'), props });
+    expect(posts).toEqual([]);
+    expect(decor).toEqual(props);
+  });
+
+  /**
+   * Verifies that grouping leaves the room's prop list untouched
+   */
+  it('does not mutate the room', () => {
+    const r = room('atelier');
+    const before = structuredClone(r.props);
+    postGroups(r);
+    postGroups(r);
+    expect(r.props).toEqual(before);
+  });
+});
+
+describe('POST_ROOM', () => {
+  /**
+   * Verifies that every workstation maps to its documented room, and nothing else is mapped
+   */
+  it('maps each post to its room', () => {
+    expect(POST_ROOM.size).toBe(POST_IDS.length);
+    for (const post of POST_IDS) expect(POST_ROOM.get(post), post).toBe(EXPECTED_POST_ROOM[post]);
+  });
+
+  /**
+   * Verifies that every workstation stands in exactly one room
+   */
+  it.each([...POST_IDS])('%s lives in exactly one room', (post) => {
+    const rooms = ROOMS.filter((r) => r.props.some((p) => p.post === post)).map((r) => r.id);
+    expect(rooms).toEqual([POST_ROOM.get(post)]);
+  });
+
+  /**
+   * Verifies that the library and its scriptorium are two posts in two different rooms
+   */
+  it('keeps the scriptorium apart from the library', () => {
+    expect(POST_ROOM.get('biblio')).toBe('biblio');
+    expect(POST_ROOM.get('scriptorium')).toBe('scriptorium');
+  });
+
+  /**
+   * Verifies that every mapped room is a known room of the floor plan
+   */
+  it('only points at rooms of the floor plan', () => {
+    for (const roomId of POST_ROOM.values()) expect(ROOM_BY_ID.has(roomId), roomId).toBe(true);
   });
 });

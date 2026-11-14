@@ -9,6 +9,8 @@ import { SessionList } from './ui/SessionList.tsx';
 import { Debug } from './ui/Debug.tsx';
 import { StatusAnnouncer } from './ui/StatusAnnouncer.tsx';
 import { LangSwitcher } from './ui/LangSwitcher.tsx';
+import { PostCard } from './ui/PostCard.tsx';
+import { PostList } from './ui/PostList.tsx';
 import { envName } from './format.ts';
 import { StatusIcon } from './ui/StatusIcon.tsx';
 import { useT } from './i18n/useT.ts';
@@ -119,6 +121,7 @@ function EnvPage({ envId }: { envId: string }) {
             <OfficeScene />
           </div>
           <Legend />
+          <PostCard />
           <AgentDialog sessions={sessions} />
         </div>
         {/* Focusable: the panel scrolls, and keyboard users must be able to scroll it. */}
@@ -126,6 +129,7 @@ function EnvPage({ envId }: { envId: string }) {
           <StatusAnnouncer sessions={sessions} />
           <AgentPanel sessions={sessions} />
           <SessionList sessions={sessions} />
+          <PostList />
           <History sessions={sessions} />
         </aside>
       </main>
