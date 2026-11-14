@@ -15,6 +15,7 @@ Un petit bureau en 3D où chaque agent Claude Code du poste local est un personn
   - **La taverne** : au repos, elle contient un exemplaire de chaque type d'agent connu de l'environnement affiché. Un appel fait sortir celui de la taverne, qui prend la couleur de sa session et va à son poste. Les appels simultanés sortent des casiers. Un sous-agent qui a fini reprend la couleur neutre, retourne à la taverne et disparaît à son arrivée. L'agent principal y attend ton prochain message, dans la couleur de sa session.
   - Chaque pièce a ses places. Un agent garde la sienne tant qu'il reste dans la pièce ; quand elle est pleine, les suivants se tiennent le long des murs.
 - **Une carte en vrais modèles 3D** : dalles de pierre, de bois ou de terre selon la pièce, murs avec fenêtres, arches, torches et bannières aux couleurs de la pièce, meubles et objets de décoration, ombres douces.
+  - **Une identité par pièce.** Chaque pièce a ses variantes de murs, des objets accrochés (cadres, boucliers, chaînes, clés), une lumière d'ambiance à sa couleur et son propre décor : coffre à cartes à l'observatoire, livre piège dans la bibliothèque, forge à l'atelier, poêle et chaînes à la salle des machines, lingots au cabinet de l'arithméticien, coin gamer (fauteuil, console portable, guitare) à la détente, toiles d'araignée chez le concierge, entraves et piège à ours au poste de garde, squelette d'essai à la salle des épreuves, provisions à la taverne. Le ton reste médiéval, avec quelques clins d'œil modernes : des poulets en peluche jouent les pigeons. Le détail par lieu est dans [docs/lieux-et-personnages.md](docs/lieux-et-personnages.md).
   - **Déplace la souris pour découvrir les salles.** Les murs situés devant le curseur s'enfoncent dans le sol, et il ne reste qu'un muret qui marque le contour des pièces. Ceux situés derrière restent debout.
   - **Les postes de travail.** Le mobilier de chaque pièce forme des postes. Survole un poste : ses meubles s'éclairent légèrement et le curseur devient une main. Clique dessus pour ouvrir une carte en haut à droite de la 3D, dans le même style que la fiche d'agent et la boîte de dialogue. Sa plaque porte le pictogramme du poste, celui qui s'affiche au-dessus d'un agent qui s'y rend, et son titre. Dessous, on lit le nom de la pièce, la fonction du poste en quelques mots et les agents qui y travaillent. À l'observatoire et au Scriptorium, la carte affiche le pictogramme de la pièce ; le télescope et les pupitres du Scriptorium ont chacun le leur. Le poste dont la carte est ouverte reste éclairé. Ferme la carte avec ×, avec Échap ou en cliquant dans le vide. Un clic après un glissement de caméra ne fait rien.
     - Les pièces à plusieurs fonctions ont un poste par fonction : la Bibliothèque (rayonnages et tables) et son Scriptorium (pupitres des copistes), l'Atelier (établis) et le chevalet de l'enlumineur, la Salle des épreuves (table de relecture et laboratoire d'alchimie), la Salle Accessibilité / SEO (estrade du héraut et pupitre d'inspection).
@@ -71,12 +72,14 @@ Pour le développement, `npm run dev` lance le serveur et Vite (http://127.0.0.1
 
 ### Modèles 3D
 
-La carte utilise les packs gratuits KayKit de Kay Lousberg (www.kaylousberg.com) : Dungeon Pack 1.1, RPG Tools Bits 1.0 et Fantasy Weapons Bits 1.0. Les personnages utilisent KayKit Adventurers 2.0. Ils sont sous licence CC0 : le crédit n'est pas obligatoire, on le donne quand même (voir `packages/web/public/kaykit/LICENSE.txt`). Les modèles utilisés sont déjà dans le dépôt.
+La carte utilise les packs gratuits KayKit de Kay Lousberg (www.kaylousberg.com) : Dungeon Pack 1.1, RPG Tools Bits 1.0, Fantasy Weapons Bits 1.0, Furniture Bits 1.0, Halloween Bits 1.0, Restaurant Bits 1.0, Resource Bits 1.0, Mixed Bag 1, Mixed Bag 2, Skeletons 1.1 et Forest Nature Pack 1.0. Les personnages utilisent KayKit Adventurers 2.0. Tous ces packs sont sous licence CC0 : le crédit n'est pas obligatoire, on le donne quand même (voir `packages/web/public/kaykit/LICENSE.txt`). Les modèles utilisés sont déjà dans le dépôt.
 
 Pour en ajouter un :
 
-1. Télécharge le pack sur https://kaylousberg.itch.io/ (prix libre, 0 € convient).
-2. Décompresse-le dans son propre dossier sous `assets-src/` (`dungeon/`, `rpg-tools/`, `weapons/` ou `adventurers/`). Ce dossier n'est pas versionné. Par exemple, `KayKit_Adventurers_2.0_FREE.zip` se décompresse dans `assets-src/adventurers/`.
+1. Télécharge le pack sur https://kaylousberg.itch.io/ (prix libre, 0 € convient). Les packs Furniture, Halloween et Restaurant sont sur GitHub, dans les dépôts `KayKit-Game-Assets/KayKit-<Nom>-Bits-1.0` : télécharge l'archive ZIP du dépôt. Les versions utilisées sont les commits `96d5930` (Furniture), `6dc69bf` (Halloween) et `153c8a7` (Restaurant).
+2. Décompresse-le dans son propre dossier sous `assets-src/` (`dungeon/`, `rpg-tools/`, `weapons/`, `adventurers/`, `resourcebits/`, `mixed_bag/`, `skeletons/` ou `forest/`). Ce dossier n'est pas versionné. Par exemple, `KayKit_Adventurers_2.0_FREE.zip` se décompresse dans `assets-src/adventurers/`.
+   - Les archives GitHub vont dans `gh-furniture/repo/`, `gh-halloween/repo/` ou `gh-restaurant/repo/`. Le contenu du dépôt (dossier `addons/` compris) doit être directement dans `repo/`. L'archive ne contient pas `LICENSE.txt` : copie-le dans ce même dossier `repo/`.
+   - Les deux zips Mixed Bag se décompressent tous deux dans `mixed_bag/`.
 3. Ajoute le nom du modèle dans `packages/web/src/scene/kit-manifest.json`.
 4. Lance la copie vers `packages/web/public/kaykit/` :
 
@@ -89,7 +92,7 @@ Un pack peut être en `"format": "glb"` : ses modèles sont alors des fichiers `
 Sous Windows, l'import peut faire apparaître des `.gltf` comme modifiés, à cause des fins de ligne seulement. Pour les restaurer :
 
 ```bash
-git checkout -- packages/web/public/kaykit/dungeon packages/web/public/kaykit/tools packages/web/public/kaykit/weapons
+git checkout -- packages/web/public/kaykit/dungeon packages/web/public/kaykit/tools packages/web/public/kaykit/weapons packages/web/public/kaykit/adventurers_props packages/web/public/kaykit/furniture packages/web/public/kaykit/halloween packages/web/public/kaykit/restaurant packages/web/public/kaykit/resources packages/web/public/kaykit/mixed1 packages/web/public/kaykit/mixed2 packages/web/public/kaykit/skeleton_props packages/web/public/kaykit/forest
 ```
 
 ## Comment ça marche
@@ -207,6 +210,6 @@ npm run typecheck
 
 ## Limites et suite
 
-- La scène fait environ 700 appels de dessin par image, ombres comprises : les meubles ne sont pas encore regroupés en instances. Des assets Unreal ne seraient utilisables que si leur licence Fab autorise un usage hors Unreal Engine.
+- La scène fait 443 appels de dessin par image avec la forêt, ombres comprises (368 sans elle). Le décor est dessiné par instances, et les pièces fixes de chaque poste sont regroupées par matériau : sans ces regroupements, la scène en faisait 618. Les 15 lumières des pièces ajoutent un coût GPU, non mesuré. Des assets Unreal ne seraient utilisables que si leur licence Fab autorise un usage hors Unreal Engine.
 - La boîte de dialogue est en lecture seule. Répondre aux agents depuis la 3D (permission, question) fera l'objet d'une phase distincte, avec sa propre protection d'accès. Envoyer un prompt libre à une session déjà ouverte n'a pas encore de solution officielle.
 - Le plan complet se trouve dans [plans/plan-agent-office-2026-11-13.md](plans/plan-agent-office-2026-11-13.md).
