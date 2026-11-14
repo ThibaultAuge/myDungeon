@@ -76,8 +76,6 @@ export const de: Messages = {
     start: 'Beginn der Unterhaltung',
     empty: 'Für diesen Agenten gibt es noch keine Unterhaltung.',
     error: 'Die Unterhaltung kann gerade nicht gelesen werden. Neuer Versuch läuft…',
-    signIn: 'Um Unterhaltungen zu lesen, öffne den Anmeldelink aus der Konsole des Servers.',
-    loginFailed: 'Dieser Anmeldelink ist ungültig oder abgelaufen. Öffne den neuesten Link aus der Konsole des Servers.',
     truncated: 'Nachricht gekürzt.',
   },
   sessionList: {

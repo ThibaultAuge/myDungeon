@@ -81,8 +81,6 @@ export const fr = {
     start: 'Début de la conversation',
     empty: 'Pas encore de conversation pour cet agent.',
     error: 'Impossible de lire la conversation pour l’instant. Nouvelle tentative en cours…',
-    signIn: 'Pour lire les conversations, ouvre le lien de connexion affiché dans la console du serveur.',
-    loginFailed: 'Ce lien de connexion est invalide ou expiré. Ouvre le dernier lien affiché dans la console du serveur.',
     truncated: 'Message raccourci.',
   },
   sessionList: {

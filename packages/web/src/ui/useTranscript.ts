@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { TranscriptPage } from '@agent-office/shared';
-import { useOffice } from '../store.ts';
 import { EMPTY_DIALOGUE, mergeLatest, prependOlder, type DialogueState } from './dialogue.ts';
 
 /** How often the open conversation is re-read. The server answers 304 when nothing changed. */
@@ -8,7 +7,7 @@ const POLL_MS = 2000;
 /** No transcript yet: the server then lists every project folder, so look less often. */
 const POLL_EMPTY_MS = 10_000;
 
-export type TranscriptStatus = 'loading' | 'ready' | 'empty' | 'signin' | 'error';
+export type TranscriptStatus = 'loading' | 'ready' | 'empty' | 'error';
 
 function transcriptUrl(sessionId: string, agentId: string, before?: number): string {
   const q = new URLSearchParams({ session: sessionId, agent: agentId });
@@ -50,12 +49,6 @@ export function useTranscript(sessionId: string, agentId: string) {
             etag.current = res.headers.get('ETag');
             setState((prev) => mergeLatest(prev, page));
             setStatus('ready');
-            if (useOffice.getState().loginFailed) useOffice.setState({ loginFailed: false });
-          } else if (res.status === 401) {
-            // Signed out (server restart, expiry): after signing in again, the page must be
-            // fetched in full, not answered 304 against the tag seen before.
-            etag.current = null;
-            setStatus('signin');
           } else if (res.status === 404) {
             etag.current = null;
             setStatus('empty');

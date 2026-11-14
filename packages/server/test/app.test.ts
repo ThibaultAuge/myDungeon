@@ -4,7 +4,6 @@ import path from 'node:path';
 import type { FastifyInstance } from 'fastify';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { TOKEN_HEADER, buildApp } from '../src/app.ts';
-import { AuthGate, SESSION_COOKIE, SESSION_TTL_MS } from '../src/auth.ts';
 import { OfficeStore } from '../src/store.ts';
 import { projectDirName } from '../src/transcript.ts';
 import { CLI_A, CLI_B, ENV_ALPHA, desk, hook, inventory, proc } from './fixtures/builders.ts';
@@ -291,19 +290,15 @@ describe('conversation routes', () => {
   let store: OfficeStore;
   let app: FastifyInstance;
   let projectsDir: string;
-  let codes: string[];
-  let now: number;
-  let auth: AuthGate;
 
-  async function start(opts: { withAuth?: boolean; withProjects?: boolean } = {}) {
-    const { withAuth = true, withProjects = true } = opts;
+  async function start(opts: { withProjects?: boolean } = {}) {
+    const { withProjects = true } = opts;
     store = new OfficeStore(() => 1000);
     app = await buildApp({
       store,
       port: PORT,
       token: TOKEN,
       logger: false,
-      auth: withAuth ? auth : undefined,
       projectsDir: withProjects ? projectsDir : undefined,
     });
     // A terminal session in C:/work/alpha with one Explore subagent.
@@ -311,7 +306,7 @@ describe('conversation routes', () => {
     store.ingestHook(hook('SubagentStart', { agent_id: SUB_ID, agent_type: 'Explore' }));
   }
 
-  async function restart(opts: { withAuth?: boolean; withProjects?: boolean }) {
+  async function restart(opts: { withProjects?: boolean }) {
     store.close();
     await app.close();
     await start(opts);
@@ -319,12 +314,6 @@ describe('conversation routes', () => {
 
   beforeEach(async () => {
     projectsDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-office-app-'));
-    codes = [];
-    now = 5_000_000;
-    auth = new AuthGate(
-      (c) => codes.push(c),
-      () => now,
-    );
     await start();
   });
 
@@ -333,21 +322,6 @@ describe('conversation routes', () => {
     await app.close();
     fs.rmSync(projectsDir, { recursive: true, force: true });
   });
-
-  const latestCode = () => codes[codes.length - 1]!;
-
-  function setCookieOf(res: { headers: Record<string, unknown> }): string | undefined {
-    const raw = res.headers['set-cookie'];
-    return Array.isArray(raw) ? (raw[0] as string) : (raw as string | undefined);
-  }
-
-  /** Signs in with the current code and returns the `Cookie` header value. */
-  async function login(): Promise<string> {
-    const res = await app.inject({ method: 'GET', url: `/login?code=${encodeURIComponent(latestCode())}`, headers: HOST });
-    const set = setCookieOf(res);
-    if (!set) throw new Error('login failed');
-    return set.split(';')[0]!;
-  }
 
   function getTranscript(query: Record<string, string> | string, headers: Record<string, string> = {}) {
     const qs = typeof query === 'string' ? query : new URLSearchParams(query).toString();
@@ -365,169 +339,49 @@ describe('conversation routes', () => {
     return file;
   }
 
-  describe('GET /login', () => {
-    /**
-     * Verifies that a valid code redirects home with a hardened session cookie
-     */
-    it('sets an HttpOnly SameSite=Strict cookie and redirects with 303', async () => {
-      const res = await app.inject({ method: 'GET', url: `/login?code=${latestCode()}`, headers: HOST });
-      expect(res.statusCode).toBe(303);
-      expect(res.headers.location).toBe('/');
-      const set = setCookieOf(res);
-      expect(set).toMatch(new RegExp(`^${SESSION_COOKIE}=[A-Za-z0-9_-]+;`));
-      expect(set).toContain('HttpOnly');
-      expect(set).toContain('SameSite=Strict');
-    });
-
-    /**
-     * Verifies that a wrong, missing or reused code redirects to the failure page without a cookie
-     */
-    it.each([['wrong code', '?code=nope'], ['missing code', ''], ['empty code', '?code=']])(
-      'redirects to /?login=failed for a %s',
-      async (_label, qs) => {
-        const res = await app.inject({ method: 'GET', url: `/login${qs}`, headers: HOST });
-        expect(res.statusCode).toBe(303);
-        expect(res.headers.location).toBe('/?login=failed');
-        expect(res.headers['set-cookie']).toBeUndefined();
-      },
-    );
-
-    /**
-     * Verifies that a code cannot be used twice
-     */
-    it('refuses a reused code', async () => {
-      const code = latestCode();
-      await app.inject({ method: 'GET', url: `/login?code=${code}`, headers: HOST });
-      const res = await app.inject({ method: 'GET', url: `/login?code=${code}`, headers: HOST });
-      expect(res.headers.location).toBe('/?login=failed');
-      expect(res.headers['set-cookie']).toBeUndefined();
-    });
-
-    /**
-     * Verifies that sign-in always fails when the server has no auth gate
-     */
-    it('always fails without an auth gate', async () => {
-      await restart({ withAuth: false });
-      const res = await app.inject({ method: 'GET', url: `/login?code=${latestCode()}`, headers: HOST });
-      expect(res.statusCode).toBe(303);
-      expect(res.headers.location).toBe('/?login=failed');
-      expect(res.headers['set-cookie']).toBeUndefined();
-    });
-
-    /**
-     * Verifies that the host guard also protects the sign-in route
-     */
-    it('returns 403 for a foreign host', async () => {
-      const res = await app.inject({ method: 'GET', url: `/login?code=${latestCode()}`, headers: { host: 'evil.example:4777' } });
-      expect(res.statusCode).toBe(403);
-      expect(res.headers['set-cookie']).toBeUndefined();
-      // The code was not consumed.
-      expect(codes).toHaveLength(1);
-    });
-  });
-
-  describe('POST /logout', () => {
-    /**
-     * Verifies that logout answers 204, clears the cookie and revokes the session
-     */
-    it('clears the cookie and revokes the session', async () => {
-      writeTranscript(`${CLI_A}.jsonl`, [userLine('hello')]);
-      const cookie = await login();
-      expect((await getTranscript({ session: SESSION_ID, agent: MAIN_ID }, { cookie })).statusCode).toBe(200);
-
-      const res = await app.inject({ method: 'POST', url: '/logout', headers: { ...HOST, cookie } });
-      expect(res.statusCode).toBe(204);
-      const set = setCookieOf(res);
-      expect(set).toMatch(new RegExp(`^${SESSION_COOKIE}=;`));
-      expect(set).toContain('Max-Age=0');
-
-      expect((await getTranscript({ session: SESSION_ID, agent: MAIN_ID }, { cookie })).statusCode).toBe(401);
-    });
-
-    /**
-     * Verifies that logout without a session still answers 204 with a cleared cookie
-     */
-    it('answers 204 without a cookie', async () => {
-      const res = await app.inject({ method: 'POST', url: '/logout', headers: HOST });
-      expect(res.statusCode).toBe(204);
-      expect(setCookieOf(res)).toContain('Max-Age=0');
-    });
-
-    /**
-     * Verifies that logging out one browser leaves another signed in
-     */
-    it('revokes only the presented session', async () => {
-      writeTranscript(`${CLI_A}.jsonl`, [userLine('hello')]);
-      const a = await login();
-      const b = await login();
-      await app.inject({ method: 'POST', url: '/logout', headers: { ...HOST, cookie: a } });
-      expect((await getTranscript({ session: SESSION_ID, agent: MAIN_ID }, { cookie: b })).statusCode).toBe(200);
-    });
-
-    /**
-     * Verifies that a foreign origin cannot log a browser out
-     */
-    it('returns 403 for a foreign origin', async () => {
-      const res = await app.inject({ method: 'POST', url: '/logout', headers: { ...HOST, origin: 'http://evil.example' } });
-      expect(res.statusCode).toBe(403);
-    });
-  });
-
   describe('GET /api/transcript', () => {
     /**
-     * Verifies that the route refuses requests without a valid session cookie
+     * Verifies that the conversation is readable without any sign-in or cookie
+     */
+    it('answers 200 without a cookie', async () => {
+      writeTranscript(`${CLI_A}.jsonl`, [userLine('hello')]);
+      const res = await getTranscript({ session: SESSION_ID, agent: MAIN_ID });
+      expect(res.statusCode).toBe(200);
+      expect(res.body).toContain('hello');
+    });
+
+    /**
+     * Verifies that the former sign-in routes no longer exist (API-only app, no webDist:
+     * with a build, the SPA fallback serves index.html for GET /login, without a cookie)
      */
     it.each([
-      ['no cookie', {}],
-      ['unknown session', { cookie: `${SESSION_COOKIE}=forged` }],
-      ['empty session', { cookie: `${SESSION_COOKIE}=` }],
-      ['other cookie name', { cookie: 'other=1' }],
-    ])('returns 401 with %s', async (_label, headers) => {
+      ['GET', '/login?code=x'],
+      ['POST', '/logout'],
+    ] as const)('%s %s is a 404 without webDist', async (method, url) => {
+      const res = await app.inject({ method, url, headers: HOST });
+      expect(res.statusCode).toBe(404);
+      expect(res.headers['set-cookie']).toBeUndefined();
+    });
+
+    /**
+     * Verifies that a foreign origin cannot read a conversation (cross-site fetch)
+     */
+    it('returns 403 for a foreign origin', async () => {
       writeTranscript(`${CLI_A}.jsonl`, [userLine('secret')]);
-      const res = await getTranscript({ session: SESSION_ID, agent: MAIN_ID }, headers as Record<string, string>);
-      expect(res.statusCode).toBe(401);
+      const res = await getTranscript({ session: SESSION_ID, agent: MAIN_ID }, { origin: 'http://evil.example' });
+      expect(res.statusCode).toBe(403);
       expect(res.body).not.toContain('secret');
     });
 
     /**
-     * Verifies that authentication is checked before the query is validated
+     * Verifies that the host guard refuses a foreign host (DNS rebinding)
      */
-    it('returns 401 rather than 400 for an invalid query without cookie', async () => {
-      const res = await getTranscript('');
-      expect(res.statusCode).toBe(401);
-    });
-
-    /**
-     * Verifies that the route always answers 401 when the server has no auth gate
-     */
-    it('returns 401 for every request without an auth gate', async () => {
-      const cookie = await login(); // issued by a gate the new app does not use
-      await restart({ withAuth: false });
+    it('returns 403 for a foreign host', async () => {
       writeTranscript(`${CLI_A}.jsonl`, [userLine('secret')]);
-      const res = await getTranscript({ session: SESSION_ID, agent: MAIN_ID }, { cookie });
-      expect(res.statusCode).toBe(401);
-    });
-
-    /**
-     * Verifies that a session cookie stops working once its lifetime has elapsed
-     */
-    it('returns 401 once the browser session expired', async () => {
-      writeTranscript(`${CLI_A}.jsonl`, [userLine('hello')]);
-      const cookie = await login();
-      now += SESSION_TTL_MS;
-      expect((await getTranscript({ session: SESSION_ID, agent: MAIN_ID }, { cookie })).statusCode).toBe(401);
-    });
-
-    /**
-     * Verifies that the host guard applies even to a signed-in browser
-     */
-    it('returns 403 for a foreign host even with a cookie', async () => {
-      writeTranscript(`${CLI_A}.jsonl`, [userLine('secret')]);
-      const cookie = await login();
       const res = await app.inject({
         method: 'GET',
         url: `/api/transcript?${new URLSearchParams({ session: SESSION_ID, agent: MAIN_ID })}`,
-        headers: { host: 'evil.example:4777', cookie },
+        headers: { host: 'evil.example:4777' },
       });
       expect(res.statusCode).toBe(403);
       expect(res.body).not.toContain('secret');
@@ -541,8 +395,7 @@ describe('conversation routes', () => {
         userLine('hello'),
         JSON.stringify({ type: 'assistant', message: { content: [{ type: 'text', text: 'hi!' }, { type: 'tool_use', name: 'Read', input: { file_path: 'a.ts' } }] } }),
       ]);
-      const cookie = await login();
-      const res = await getTranscript({ session: SESSION_ID, agent: MAIN_ID }, { cookie });
+      const res = await getTranscript({ session: SESSION_ID, agent: MAIN_ID });
       expect(res.statusCode).toBe(200);
       expect(res.headers['content-type']).toMatch(/application\/json/);
       expect(res.headers['cache-control']).toBe('no-store');
@@ -564,16 +417,15 @@ describe('conversation routes', () => {
      */
     it('answers 304 for an unchanged transcript and 200 once it grows', async () => {
       const file = writeTranscript(`${CLI_A}.jsonl`, [userLine('one')]);
-      const cookie = await login();
-      const first = await getTranscript({ session: SESSION_ID, agent: MAIN_ID }, { cookie });
+      const first = await getTranscript({ session: SESSION_ID, agent: MAIN_ID });
       const etag = first.headers.etag as string;
 
-      const same = await getTranscript({ session: SESSION_ID, agent: MAIN_ID }, { cookie, 'if-none-match': etag });
+      const same = await getTranscript({ session: SESSION_ID, agent: MAIN_ID }, { 'if-none-match': etag });
       expect(same.statusCode).toBe(304);
       expect(same.body).toBe('');
 
       fs.appendFileSync(file, userLine('two') + '\n');
-      const grown = await getTranscript({ session: SESSION_ID, agent: MAIN_ID }, { cookie, 'if-none-match': etag });
+      const grown = await getTranscript({ session: SESSION_ID, agent: MAIN_ID }, { 'if-none-match': etag });
       expect(grown.statusCode).toBe(200);
       expect(grown.headers.etag).not.toBe(etag);
       expect((grown.json() as { entries: { text: string }[] }).entries.map((e) => e.text)).toEqual(['one', 'two']);
@@ -584,8 +436,7 @@ describe('conversation routes', () => {
      */
     it('answers 200 for a non-matching If-None-Match', async () => {
       writeTranscript(`${CLI_A}.jsonl`, [userLine('one')]);
-      const cookie = await login();
-      const res = await getTranscript({ session: SESSION_ID, agent: MAIN_ID }, { cookie, 'if-none-match': '"other"' });
+      const res = await getTranscript({ session: SESSION_ID, agent: MAIN_ID }, { 'if-none-match': '"other"' });
       expect(res.statusCode).toBe(200);
     });
 
@@ -595,14 +446,13 @@ describe('conversation routes', () => {
     it('pages back with the before cursor', async () => {
       const texts = Array.from({ length: 60 }, (_, i) => `m${i}`);
       writeTranscript(`${CLI_A}.jsonl`, texts.map(userLine));
-      const cookie = await login();
 
-      const latest = await getTranscript({ session: SESSION_ID, agent: MAIN_ID }, { cookie });
+      const latest = await getTranscript({ session: SESSION_ID, agent: MAIN_ID });
       const page = latest.json() as { entries: { text: string }[]; before: number | null };
       expect(page.entries.map((e) => e.text)).toEqual(texts.slice(10));
       expect(typeof page.before).toBe('number');
 
-      const older = await getTranscript({ session: SESSION_ID, agent: MAIN_ID, before: String(page.before) }, { cookie });
+      const older = await getTranscript({ session: SESSION_ID, agent: MAIN_ID, before: String(page.before) });
       expect(older.statusCode).toBe(200);
       expect(older.headers.etag).toBeUndefined();
       expect(older.headers['cache-control']).toBe('no-store');
@@ -615,9 +465,8 @@ describe('conversation routes', () => {
      */
     it('never answers 304 for an older page', async () => {
       writeTranscript(`${CLI_A}.jsonl`, [userLine('one')]);
-      const cookie = await login();
-      const etag = (await getTranscript({ session: SESSION_ID, agent: MAIN_ID }, { cookie })).headers.etag as string;
-      const res = await getTranscript({ session: SESSION_ID, agent: MAIN_ID, before: '0' }, { cookie, 'if-none-match': etag });
+      const etag = (await getTranscript({ session: SESSION_ID, agent: MAIN_ID })).headers.etag as string;
+      const res = await getTranscript({ session: SESSION_ID, agent: MAIN_ID, before: '0' }, { 'if-none-match': etag });
       expect(res.statusCode).toBe(200);
       expect(res.json()).toEqual({ file: CLI_A, entries: [], before: null });
     });
@@ -627,8 +476,7 @@ describe('conversation routes', () => {
      */
     it("returns a subagent's transcript", async () => {
       writeTranscript(path.join(CLI_A, 'subagents', `agent-${SUB_ID}.jsonl`), [userLine('explore the repo')]);
-      const cookie = await login();
-      const res = await getTranscript({ session: SESSION_ID, agent: SUB_ID }, { cookie });
+      const res = await getTranscript({ session: SESSION_ID, agent: SUB_ID });
       expect(res.statusCode).toBe(200);
       expect(res.json()).toMatchObject({ file: `agent-${SUB_ID}`, entries: [{ role: 'user', text: 'explore the repo' }] });
     });
@@ -638,8 +486,7 @@ describe('conversation routes', () => {
      */
     it('accepts a 15-digit cursor', async () => {
       writeTranscript(`${CLI_A}.jsonl`, [userLine('one')]);
-      const cookie = await login();
-      const res = await getTranscript({ session: SESSION_ID, agent: MAIN_ID, before: '999999999999999' }, { cookie });
+      const res = await getTranscript({ session: SESSION_ID, agent: MAIN_ID, before: '999999999999999' });
       expect(res.statusCode).toBe(200);
       expect((res.json() as { entries: unknown[] }).entries).toHaveLength(1);
     });
@@ -659,8 +506,7 @@ describe('conversation routes', () => {
       ['empty before', `session=x&agent=y&before=`],
       ['16-digit before', `session=x&agent=y&before=1234567890123456`],
     ])('returns 400 for %s', async (_label, qs) => {
-      const cookie = await login();
-      const res = await getTranscript(qs, { cookie });
+      const res = await getTranscript(qs);
       expect(res.statusCode).toBe(400);
       expect(res.json()).toHaveProperty('error');
     });
@@ -669,8 +515,7 @@ describe('conversation routes', () => {
      * Verifies that 256-character ids pass validation and reach the session lookup
      */
     it('accepts 256-character ids (then 404 for an unknown session)', async () => {
-      const cookie = await login();
-      const res = await getTranscript({ session: 's'.repeat(256), agent: 'a'.repeat(256) }, { cookie });
+      const res = await getTranscript({ session: 's'.repeat(256), agent: 'a'.repeat(256) });
       expect(res.statusCode).toBe(404);
     });
 
@@ -685,8 +530,7 @@ describe('conversation routes', () => {
     ])('returns 404 for %s', async (_label, query) => {
       writeTranscript(`${CLI_A}.jsonl`, [userLine('hello')]);
       writeTranscript(path.join(CLI_A, 'subagents', 'agent-intruder.jsonl'), [userLine('hidden')]);
-      const cookie = await login();
-      const res = await getTranscript(query, { cookie });
+      const res = await getTranscript(query);
       expect(res.statusCode).toBe(404);
       expect(res.headers['cache-control']).toBe('no-store');
       expect(res.body).not.toContain('hidden');
@@ -696,8 +540,7 @@ describe('conversation routes', () => {
      * Verifies that a known session without a transcript file yet answers 404
      */
     it('returns 404 when the transcript does not exist yet', async () => {
-      const cookie = await login();
-      const res = await getTranscript({ session: SESSION_ID, agent: MAIN_ID }, { cookie });
+      const res = await getTranscript({ session: SESSION_ID, agent: MAIN_ID });
       expect(res.statusCode).toBe(404);
     });
 
@@ -707,8 +550,7 @@ describe('conversation routes', () => {
     it('returns 404 when no projects folder is configured', async () => {
       writeTranscript(`${CLI_A}.jsonl`, [userLine('hello')]);
       await restart({ withProjects: false });
-      const cookie = await login();
-      const res = await getTranscript({ session: SESSION_ID, agent: MAIN_ID }, { cookie });
+      const res = await getTranscript({ session: SESSION_ID, agent: MAIN_ID });
       expect(res.statusCode).toBe(404);
     });
   });

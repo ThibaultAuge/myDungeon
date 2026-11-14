@@ -272,12 +272,12 @@ Fait :
   l'attente d'un prompt ;
 - la bulle de requête à l'autel (« … », « ? », « ! ») et le losange ambre de l'attente d'un prompt ;
 - la boîte de dialogue en lecture seule, ouverte par un clic sur un personnage ou sur sa ligne,
-  avec la connexion par lien à usage unique qui protège la lecture de la conversation.
+  lisible sans connexion depuis la page servie en local.
 
 Reste à faire :
 
-- la zone de saisie dans la boîte de dialogue, pour répondre depuis la 3D. La connexion posée
-  aujourd'hui servira à cette phase ;
+- la zone de saisie dans la boîte de dialogue, pour répondre depuis la 3D. Cette phase aura sa
+  propre protection d'accès ;
 - rapprocher les tenues du cliché visuel quand des modèles plus proches existent (lunettes, plume, pinceau, pigeon…) ;
 - la tenue de l'agent principal selon le mode plan (`permission_mode`, toujours à vérifier) ;
 - les badges de skills.
