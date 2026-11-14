@@ -13,6 +13,7 @@ Un petit bureau en 3D où chaque agent Claude Code du poste local est un personn
   - **Les sous-agents spécialisés** restent à leur poste quel que soit l'outil : Hermione et Dexter en salle des épreuves, Oracle à l'observatoire, Turing au cabinet de l'arithméticien, Curator et Otis au Scriptorium, etc. Hancock quitte son réduit pour l'atelier quand il modifie du code.
   - **L'autel des requêtes**, au centre : tout agent qui a besoin de toi (permission, question, erreur) y fait la queue, le plus ancien en tête, à genoux. La file avance quand il repart, et contourne la nef par les couloirs si elle s'allonge. Un agent qui attend seulement ton prochain message reste à la taverne.
   - **La taverne** : au repos, elle contient un exemplaire de chaque type d'agent connu de l'environnement affiché. Un appel fait sortir celui de la taverne, qui prend la couleur de sa session et va à son poste. Les appels simultanés sortent des casiers. Un sous-agent qui a fini reprend la couleur neutre, retourne à la taverne et disparaît à son arrivée. L'agent principal y attend ton prochain message, dans la couleur de sa session.
+  - **Entrées et sorties.** Seul l'agent principal de chaque session entre au château, sous la forme d'un chevalier. Il arrive à pied par le chemin de la forêt, puis passe le pont-levis et la porte. Une session arrêtée, mais reprenable, garde son chevalier endormi à la taverne : il ne se sélectionne pas en 3D. Quand une session disparaît, son chevalier sort par la porte et meurt sous les coups de squelettes, qui retournent ensuite dans les arbres ou sous terre. Les sous-agents suivent toujours le cycle de la taverne. Le détail est dans [docs/lieux-et-personnages.md](docs/lieux-et-personnages.md).
   - Chaque pièce a ses places. Un agent garde la sienne tant qu'il reste dans la pièce ; quand elle est pleine, les suivants se tiennent le long des murs.
 - **Une carte en vrais modèles 3D** : dalles de pierre, de bois ou de terre selon la pièce, murs avec fenêtres, arches, torches et bannières aux couleurs de la pièce, meubles et objets de décoration, ombres douces.
   - **Déplace la souris pour découvrir les salles.** Les murs situés devant le curseur s'enfoncent dans le sol, et il ne reste qu'un muret qui marque le contour des pièces. Ceux situés derrière restent debout.
@@ -31,7 +32,7 @@ Un petit bureau en 3D où chaque agent Claude Code du poste local est un personn
   - Ils marchent ou courent entre les pièces, et font une animation de travail quand ils travaillent.
   - En attente, ils regardent autour d'eux, le losange ambre restant affiché. Le premier de la file s'agenouille devant l'autel.
   - Chaque personnage a un disque au sol de la couleur de sa session, et le bord de son étiquette porte cette même couleur. L'étiquette du personnage sélectionné a un contour bleu et du texte en gras.
-  - Si la réduction des animations est activée dans le système, les personnages gardent une pose fixe et n'effectuent pas de surgissement, mais ils se déplacent toujours d'une pièce à l'autre.
+  - Si la réduction des animations est activée dans le système, les personnages gardent une pose fixe et n'effectuent pas de surgissement, mais ils se déplacent toujours d'une pièce à l'autre. Le chevalier d'une session supprimée disparaît sans marche ni combat, et les squelettes ne s'affichent pas.
 - **Un clic sur un personnage**, ou sur sa ligne dans la liste, ouvre sa **fiche** en haut à droite de la scène, dans le même style que la [boîte de dialogue](#dialogue-avec-un-agent) en bas. La fiche affiche :
   - son état et depuis quand, sa tâche ou sa dernière requête, son outil, la session qui l'a lancé (« lancée depuis »), et son dernier message ;
   - le contexte de sa session : origine (app Claude ou terminal, en cours ou terminée), worktree (oui ou non) et son nom, dossier, branche et branche d'origine, modèle, effort, mode de permission, heure de début (sessions de l'app), nombre de tours, sous-agents actifs, version de Claude Code ;
@@ -71,12 +72,12 @@ Pour le développement, `npm run dev` lance le serveur et Vite (http://127.0.0.1
 
 ### Modèles 3D
 
-La carte utilise les packs gratuits KayKit de Kay Lousberg (www.kaylousberg.com) : Dungeon Pack 1.1, RPG Tools Bits 1.0 et Fantasy Weapons Bits 1.0. Les personnages utilisent KayKit Adventurers 2.0. Ils sont sous licence CC0 : le crédit n'est pas obligatoire, on le donne quand même (voir `packages/web/public/kaykit/LICENSE.txt`). Les modèles utilisés sont déjà dans le dépôt.
+La carte utilise les packs gratuits KayKit de Kay Lousberg (www.kaylousberg.com) : Dungeon Pack 1.1, RPG Tools Bits 1.0 et Fantasy Weapons Bits 1.0. Les personnages utilisent KayKit Adventurers 2.0, les squelettes de l'embuscade KayKit Skeletons 1.1 et la forêt KayKit Forest Nature Pack 1.0. Tous sont sous licence CC0 : le crédit n'est pas obligatoire, on le donne quand même (voir `packages/web/public/kaykit/LICENSE.txt`). Les modèles utilisés sont déjà dans le dépôt.
 
 Pour en ajouter un :
 
 1. Télécharge le pack sur https://kaylousberg.itch.io/ (prix libre, 0 € convient).
-2. Décompresse-le dans son propre dossier sous `assets-src/` (`dungeon/`, `rpg-tools/`, `weapons/` ou `adventurers/`). Ce dossier n'est pas versionné. Par exemple, `KayKit_Adventurers_2.0_FREE.zip` se décompresse dans `assets-src/adventurers/`.
+2. Décompresse-le dans son propre dossier sous `assets-src/` (`dungeon/`, `rpg-tools/`, `weapons/`, `adventurers/`, `forest/` ou `skeletons/`). Ce dossier n'est pas versionné. Par exemple, `KayKit_Adventurers_2.0_FREE.zip` se décompresse dans `assets-src/adventurers/`.
 3. Ajoute le nom du modèle dans `packages/web/src/scene/kit-manifest.json`.
 4. Lance la copie vers `packages/web/public/kaykit/` :
 

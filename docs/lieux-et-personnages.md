@@ -102,7 +102,7 @@ et mène au chemin qui s'enfonce dans la forêt de nuit.
 | **Coin détente** | Coin brainstorming | Banquettes, jeu de dés, mur d'affiches | Idées décalées | Butt Stallion |
 | **Scriptorium** (dans la Bibliothèque) | Salle de rédaction | Pupitres de copistes | Documentation | Curator (pour les IA), Otis (pour les humains) |
 | **Réduit du concierge** | Local d'entretien | Balais, seaux, chariot | Base de Hancock, qui fait des tournées dans l'Atelier | Hancock |
-| **Taverne** | Salle de repos | Grandes tables, cheminée, tonneaux, casiers | Agents disponibles, sans tâche | Un exemplaire de chaque type d'agent, et l'agent principal en attente de ton prochain prompt |
+| **Taverne** | Salle de repos | Grandes tables, cheminée, tonneaux, casiers | Agents disponibles, sans tâche | Un exemplaire de chaque type d'agent, l'agent principal en attente de ton prochain prompt, et le chevalier endormi d'une session arrêtée |
 
 ### L'autel et la file d'attente
 
@@ -176,8 +176,74 @@ Les dossiers sont relus au plus une fois par minute.
 
 **L'agent principal fait exception.** Il représente la session elle-même. Quand elle
 attend ton prochain prompt, il se repose à la taverne, dans la couleur de sa session, avec
-un losange ambre au-dessus de son étiquette. Il ne fait la queue à l'autel que pour une permission, une question ou une
-erreur.
+un losange ambre au-dessus de son étiquette. Il ne fait la queue à l'autel que pour une
+permission, une question ou une erreur. Il entre dans le château et en sort, comme décrit
+dans la section suivante.
+
+### Entrée et sortie du chevalier
+
+Seul l'agent principal de chaque session entre et sort du château, sous la forme d'un
+chevalier. Les sous-agents suivent toujours le cycle de la taverne.
+
+- **Arrivée.** Quand une nouvelle session apparaît, son chevalier arrive à pied par le
+  chemin de la forêt, juste au-delà de la zone visible. Il traverse le pont-levis, passe la
+  porte du château, puis marche jusqu'à son poste. Au chargement de la page, ou quand on
+  change d'environnement, les agents déjà présents restent à leur place.
+- **Session arrêtée.** Une session dont le processus Claude est fermé, mais qui peut encore
+  être reprise, garde son chevalier endormi à la taverne, dans la couleur de la session. Ce
+  chevalier ne se sélectionne pas en 3D : la liste latérale ne montre que les sessions
+  actives.
+- **Départ.** Quand une session disparaît (supprimée, archivée, purgée au bout de 60 minutes
+  une fois terminée, ou repoussée hors de l'historique des 30 dernières sessions), son
+  chevalier quitte le château par la porte et marche jusqu'à un point du chemin, en dehors
+  du donjon.
+- **Embuscade.** Trois squelettes au plus sortent du sol autour du chevalier et le frappent.
+  Il tombe, puis son corps s'enfonce dans le sol. Chaque squelette marche ensuite vers
+  l'arbre le plus proche, s'il est assez près, et s'y fond. Sinon, il retourne sous terre.
+- **Plusieurs départs à la fois.** Les squelettes sont partagés : chaque chevalier en a au
+  moins un. Les autres victimes attendent debout sur le chemin.
+- **Retour pendant une mort.** Si la session revient pendant que son chevalier meurt, la
+  mort se termine d'abord. Un nouveau chevalier arrive ensuite par le chemin.
+- **Réduction des animations.** Le chevalier d'une session supprimée disparaît sans marche
+  ni combat, et les squelettes ne s'affichent pas.
+
+Le schéma suivant montre le départ d'un chevalier, de la suppression de la session à la
+disparition des squelettes.
+
+```mermaid
+sequenceDiagram
+    participant Session
+    participant Chevalier
+    participant Squelettes
+    participant Arbre
+
+    Session->>Chevalier: session disparue
+    Note over Chevalier: sort par la porte jusqu'au chemin
+    Squelettes->>Chevalier: surgissent du sol et frappent
+    Note over Chevalier: tombe, puis s'enfonce dans le sol
+    Squelettes->>Arbre: marchent vers l'arbre le plus proche
+    Note over Squelettes: s'y fondent, ou retournent sous terre
+```
+*Figure: Départ d'un chevalier après la suppression de sa session.*
+
+Le schéma suivant résume les états du chevalier de l'agent principal.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Entree
+    Entree --> Poste : arrive à son poste
+    Entree --> Taverne : attend un prompt
+    Poste --> Taverne : attend un prompt
+    Taverne --> Poste : nouveau prompt
+    Poste --> Taverne : session arrêtée
+    Poste --> Sortie : session disparue
+    Taverne --> Sortie : session disparue
+    Sortie --> Mort : squelettes
+    Mort --> Disparu : corps enfoui
+    Disparu --> Entree : session revenue
+    Disparu --> [*]
+```
+*Figure: États du chevalier de l'agent principal, de l'entrée à la disparition.*
 
 ## Les personnages
 
@@ -243,6 +309,10 @@ dans son `.claude/agents/`, et les plugins en ajoutent.
 ## Décisions
 
 - **L'humain n'est pas représenté.** La bulle et la file à l'autel suffisent.
+- **Seul l'agent principal entre et sort du château.** Les sous-agents restent dans le cycle
+  de la taverne. Une session arrêtée n'a pas de cible cliquable en 3D, seulement sa ligne dans
+  la liste latérale : une cible réservée à la 3D ne serait accessible ni au clavier ni au
+  lecteur d'écran.
 - **Sessions lancées par une autre session** (`spawnedFrom`). Chacune est un agent
   principal à part entière, avec sa propre couleur. En général elle travaille dans son
   propre worktree et ne dépend pas de la session qui l'a lancée. Le lien est donc
@@ -263,6 +333,7 @@ dans son `.claude/agents/`, et les plugins en ajoutent.
 Fait :
 
 - les personnages animés KayKit Adventurers 2.0 : un chevalier pour l'agent principal, et une tenue par type de sous-agent (table `LOOKS`), identique pour la figure au repos de la taverne. Marche, course, travail, attente, agenouillement à l'autel et pose calme, et une couleur de session sur le disque au sol et l'étiquette ;
+- l'entrée et la sortie du chevalier de l'agent principal : arrivée à pied par le chemin, pont-levis et porte ; chevalier endormi à la taverne pour une session arrêtée ; à la suppression d'une session, embuscade de squelettes (pack KayKit Skeletons 1.1, CC0), avec les départs multiples et le retour pendant une mort ;
 - le plan du donjon, ses 14 lieux et ses couloirs (`packages/web/src/scene/layout.ts`, rendu dans
   `Room.tsx`) ;
 - les déplacements par les portes et les couloirs, y compris quand un agent change de destination en

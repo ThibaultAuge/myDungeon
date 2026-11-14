@@ -50,7 +50,18 @@ import {
   type RoomDef,
   type Side,
 } from '../src/scene/layout.ts';
-import { CLIPS, LOOKS, MAIN_BODY, SUB_BODIES, type PropRef } from '../src/scene/characters.ts';
+import {
+  CLIPS,
+  DEATH_CLIP_TIME,
+  HIT_CLIP_TIME,
+  LOOKS,
+  MAIN_BODY,
+  SKELETON_LOOKS,
+  SPAWN_CLIP_TIME,
+  SUB_BODIES,
+  USE_ITEM_CLIP_TIME,
+  type PropRef,
+} from '../src/scene/characters.ts';
 
 // kit.ts and the .tsx files need drei and import.meta.env: they are not imported here. The
 // manifest is read as plain JSON and the geometry is tested through dungeon.ts directly.
@@ -343,13 +354,15 @@ describe('kit manifest', () => {
   /**
    * Verifies that the manifest declares every pack the scene loads from, forest included
    */
-  it('declares the dungeon, tools, weapons and adventurers packs with safe names', () => {
+  it('declares the dungeon, tools, weapons, adventurers and skeletons packs with safe names', () => {
     expect(Object.keys(MANIFEST).sort()).toEqual([
       'adventurers',
       'adventurers_anim',
       'adventurers_props',
       'dungeon',
       'forest',
+      'skeletons',
+      'skeletons_props',
       'tools',
       'weapons',
     ]);
@@ -361,12 +374,12 @@ describe('kit manifest', () => {
   const glbPacks = packs.filter(([, spec]) => formatOf(spec) === 'glb');
 
   /**
-   * Verifies that every pack has a known format, and the adventurers packs are binary glTF
+   * Verifies that every pack has a known format, and the character packs are binary glTF
    */
   it('gives every pack the gltf (default) or glb format', () => {
     for (const [pack, spec] of packs) expect(['gltf', 'glb'], pack).toContain(formatOf(spec));
-    expect(glbPacks.map(([p]) => p).sort()).toEqual(['adventurers', 'adventurers_anim']);
-    expect(gltfPacks.map(([p]) => p).sort()).toEqual(['adventurers_props', 'dungeon', 'forest', 'tools', 'weapons']);
+    expect(glbPacks.map(([p]) => p).sort()).toEqual(['adventurers', 'adventurers_anim', 'skeletons']);
+    expect(gltfPacks.map(([p]) => p).sort()).toEqual(['adventurers_props', 'dungeon', 'forest', 'skeletons_props', 'tools', 'weapons']);
   });
 
   /**
@@ -525,6 +538,94 @@ describe('kit manifest', () => {
     }
     expect(names.size).toBeGreaterThan(0);
     expect(CLIPS.filter((c) => !names.has(c))).toEqual([]);
+  });
+
+  // ---- skeletons and the scripted clips
+
+  /** The parts of a glTF JSON chunk the rig and clip checks read. */
+  interface RigJson {
+    nodes?: { name?: string }[];
+    skins?: { joints: number[] }[];
+    accessors?: { max?: number[] }[];
+    animations?: { name?: string; samplers: { input: number }[] }[];
+  }
+
+  const glbJson = (pack: string, name: string): RigJson =>
+    readGlb(fs.readFileSync(path.join(PUBLIC_KAYKIT, pack, `${name}.glb`))).json as RigJson;
+  /** Node names as GLTFLoader renames them (PropertyBinding.sanitizeNodeName): `handslot.r` → `handslotr`. */
+  const sanitize = (n: string) => n.replace(/\s/g, '_').replace(/[[\]\.:\/]/g, '');
+  const jointNames = (json: RigJson) => (json.skins?.[0]?.joints ?? []).map((i) => sanitize(json.nodes?.[i]?.name ?? ''));
+
+  /**
+   * Verifies that each one-shot clip constant matches the clip length in the animation file
+   */
+  it.each([
+    ['Spawn_Ground', SPAWN_CLIP_TIME],
+    ['Hit_A', HIT_CLIP_TIME],
+    ['Death_A', DEATH_CLIP_TIME],
+    ['Use_Item', USE_ITEM_CLIP_TIME],
+  ])('times %s as long as the clip in Rig_Medium', (clip, time) => {
+    let length: number | undefined;
+    for (const file of MANIFEST.adventurers_anim.models) {
+      const json = glbJson('adventurers_anim', file);
+      const anim = json.animations?.find((a) => a.name === clip);
+      if (!anim) continue;
+      // A clip lasts until its last keyframe: the largest time of all its sampler inputs.
+      length = Math.max(...anim.samplers.map((s) => json.accessors?.[s.input]?.max?.[0] ?? 0));
+      break;
+    }
+    expect(length, `${clip} found`).toBeDefined();
+    expect(length!).toBeCloseTo(time, 2);
+  });
+
+  /**
+   * Verifies that the skeleton bodies share the Knight's rig, so the Rig_Medium clips drive them
+   */
+  it.each(MANIFEST.skeletons.models)('rigs %s with the same joints as the Knight', (name) => {
+    const knight = jointNames(glbJson('adventurers', 'Knight'));
+    expect(knight).toHaveLength(23);
+    const joints = jointNames(glbJson('skeletons', name));
+    expect([...joints].sort()).toEqual([...knight].sort());
+  });
+
+  /**
+   * Verifies that every skeleton body has both hand slots for its weapon
+   */
+  it.each(MANIFEST.skeletons.models)('gives %s both hand slots', (name) => {
+    const nodes = new Set((glbJson('skeletons', name).nodes ?? []).map((n) => sanitize(n.name ?? '')));
+    expect(nodes.has('handslotr')).toBe(true);
+    expect(nodes.has('handslotl')).toBe(true);
+  });
+
+  /**
+   * Verifies that every skeleton look uses a body and a weapon of the packs it names
+   */
+  it('contains every skeleton body and weapon, in the pack each look names', () => {
+    const missing = SKELETON_LOOKS.flatMap((l) => {
+      const out: string[] = [];
+      if (!MANIFEST[l.pack ?? 'adventurers']?.models.includes(l.body)) out.push(`${l.pack}/${l.body}`);
+      for (const ref of [l.right, l.left]) if (ref && !MANIFEST[ref.pack]?.models.includes(ref.model)) out.push(`${ref.pack}/${ref.model}`);
+      return out;
+    });
+    expect(missing).toEqual([]);
+  });
+
+  /**
+   * Verifies that the skeletons packs ship no body or weapon that no skeleton uses
+   */
+  it('ships only skeleton bodies and weapons that a look uses', () => {
+    const bodies = new Set<string>(SKELETON_LOOKS.map((l) => l.body));
+    const weapons = new Set(SKELETON_LOOKS.flatMap((l) => [l.right, l.left]).filter((p): p is PropRef => !!p).map((p) => p.model));
+    expect(MANIFEST.skeletons.models.filter((m) => !bodies.has(m))).toEqual([]);
+    expect(MANIFEST.skeletons_props.models.filter((m) => !weapons.has(m))).toEqual([]);
+  });
+
+  /**
+   * Verifies that the skeleton weapons share the single skeleton texture
+   */
+  it('declares skeletons_props with the skeleton texture only', () => {
+    expect(MANIFEST.skeletons_props.textures).toEqual(['skeleton_texture.png']);
+    expect(MANIFEST.skeletons.textures).toEqual([]);
   });
 
   /**

@@ -86,5 +86,18 @@
       "Rock_1_H_Color1",
       "Rock_3_G_Color1"
     ]
+  },
+  "skeletons": {
+    "source": "skeletons/KayKit_Skeletons_1.1_FREE/characters/gltf",
+    "license": "skeletons/KayKit_Skeletons_1.1_FREE/License.txt",
+    "format": "glb",
+    "textures": [],
+    "models": ["Skeleton_Warrior", "Skeleton_Minion", "Skeleton_Rogue"]
+  },
+  "skeletons_props": {
+    "source": "skeletons/KayKit_Skeletons_1.1_FREE/assets/gltf",
+    "license": "skeletons/KayKit_Skeletons_1.1_FREE/License.txt",
+    "textures": ["skeleton_texture.png"],
+    "models": ["Skeleton_Blade", "Skeleton_Axe"]
   }
 }

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import type { AgentView } from '@agent-office/shared';
+import type { AgentView, SessionView } from '@agent-office/shared';
 import type { SeatMemory } from '../src/scene/layout.ts';
-import { NEUTRAL_COLOR, inheritSeats, restId, restingAgent, restingTypes, startOrigins } from '../src/scene/tavern.ts';
+import { NEUTRAL_COLOR, inheritSeats, restId, restingAgent, restingTypes, sessionChanges, startOrigins } from '../src/scene/tavern.ts';
 
 /** A subagent on stage, working by default. */
 function sub(id: string, agentType: string, overrides: Partial<AgentView> = {}): AgentView {
@@ -256,6 +256,201 @@ describe('startOrigins', () => {
     const newcomers = [sub('late', 'neo', { since: 300 }), sub('early', 'neo', { since: 100 })];
     startOrigins(newcomers, new Set(['neo']));
     expect(newcomers.map((a) => a.id)).toEqual(['late', 'early']);
+  });
+
+  // ---- from the forest
+
+  /**
+   * Verifies that the main agent of a session that just appeared walks in from the forest
+   */
+  it('starts the main agent of a new session in the forest', () => {
+    expect(startOrigins([main('m', { sessionId: 's1' })], new Set(), new Set(['s1']))).toEqual(new Map([['m', 'forest']]));
+  });
+
+  /**
+   * Verifies that main agents of other sessions stay at their seat
+   */
+  it('keeps main agents of sessions not in fromForest at their seat', () => {
+    const origins = startOrigins([main('m1', { sessionId: 's1' }), main('m2', { sessionId: 's2' })], new Set(), new Set(['s2']));
+    expect(origins).toEqual(
+      new Map([
+        ['m1', 'seat'],
+        ['m2', 'forest'],
+      ]),
+    );
+  });
+
+  /**
+   * Verifies that fromForest defaults to empty: every main agent starts at its seat
+   */
+  it('starts main agents at their seat when fromForest is omitted', () => {
+    expect(startOrigins([main('m', { sessionId: 's1' })], new Set()).get('m')).toBe('seat');
+  });
+
+  /**
+   * Verifies that a done main agent of a new session (stopped session) still comes from the forest
+   */
+  it('brings a done main agent of a new session from the forest', () => {
+    expect(startOrigins([main('m', { sessionId: 's1', state: 'done' })], new Set(), new Set(['s1'])).get('m')).toBe('forest');
+  });
+
+  /**
+   * Verifies that subagents of a new session keep their usual origins, never the forest
+   */
+  it('never sends subagents through the forest', () => {
+    const origins = startOrigins(
+      [
+        main('m', { sessionId: 's1', since: 0 }),
+        sub('a', 'neo', { sessionId: 's1', since: 1 }),
+        sub('b', 'neo', { sessionId: 's1', since: 2 }),
+        sub('d', 'oracle', { sessionId: 's1', state: 'done', since: 3 }),
+      ],
+      new Set(['neo']),
+      new Set(['s1']),
+    );
+    expect(origins).toEqual(
+      new Map([
+        ['m', 'forest'],
+        ['a', 'rest'],
+        ['b', 'lockers'],
+        ['d', 'seat'],
+      ]),
+    );
+  });
+
+  /**
+   * Verifies that a main agent from the forest does not claim a resting figure of its type
+   */
+  it('does not let a forest main agent claim the rest', () => {
+    const origins = startOrigins(
+      [main('m', { sessionId: 's1', agentType: 'neo', since: 0 }), sub('a', 'neo', { sessionId: 's1', since: 5 })],
+      new Set(['neo']),
+      new Set(['s1']),
+    );
+    expect(origins.get('m')).toBe('forest');
+    expect(origins.get('a')).toBe('rest');
+  });
+});
+
+describe('sessionChanges', () => {
+  /** A session with only the fields sessionChanges reads that matter here. */
+  function session(id: string, cliSessionIds: string[] = []): SessionView {
+    return { id, cliSessionIds } as unknown as SessionView;
+  }
+
+  /**
+   * Verifies that two identical snapshots report no change
+   */
+  it('reports nothing for identical lists', () => {
+    const list = [session('local_1'), session('cli:abc')];
+    expect(sessionChanges(list, list)).toEqual({ appeared: [], departed: [] });
+    expect(sessionChanges(list, [session('local_1'), session('cli:abc')])).toEqual({ appeared: [], departed: [] });
+  });
+
+  /**
+   * Verifies that two empty snapshots report no change
+   */
+  it('reports nothing for empty lists', () => {
+    expect(sessionChanges([], [])).toEqual({ appeared: [], departed: [] });
+  });
+
+  /**
+   * Verifies that new sessions are reported as appeared, in snapshot order
+   */
+  it('lists the sessions that appeared', () => {
+    expect(sessionChanges([session('a')], [session('c'), session('a'), session('b')])).toEqual({ appeared: ['c', 'b'], departed: [] });
+  });
+
+  /**
+   * Verifies that removed sessions are reported as departed, as they last were
+   */
+  it('lists the sessions that departed, with their last state', () => {
+    const gone = session('b');
+    const result = sessionChanges([session('a'), gone], [session('a')]);
+    expect(result.appeared).toEqual([]);
+    expect(result.departed).toHaveLength(1);
+    expect(result.departed[0]).toBe(gone);
+  });
+
+  /**
+   * Verifies that every session of the first snapshot departs when the second is empty
+   */
+  it('departs everything when the new list is empty', () => {
+    expect(sessionChanges([session('a'), session('cli:x')], []).departed.map((s) => s.id)).toEqual(['a', 'cli:x']);
+  });
+
+  /**
+   * Verifies that a terminal session merged into a new desktop session is neither departed nor appeared
+   */
+  it('treats a cli session absorbed by a new desktop session as the same session', () => {
+    expect(sessionChanges([session('cli:abc')], [session('local_1', ['abc'])])).toEqual({ appeared: [], departed: [] });
+  });
+
+  /**
+   * Verifies that a terminal session merged into an existing desktop session does not depart
+   */
+  it('does not depart a cli session absorbed by a desktop session already shown', () => {
+    expect(sessionChanges([session('local_1'), session('cli:abc')], [session('local_1', ['abc'])])).toEqual({
+      appeared: [],
+      departed: [],
+    });
+  });
+
+  /**
+   * Verifies that a desktop session listing a cli id that was never shown appears normally
+   */
+  it('makes a desktop session appear when its cli id was not shown before', () => {
+    expect(sessionChanges([], [session('local_1', ['abc'])])).toEqual({ appeared: ['local_1'], departed: [] });
+  });
+
+  /**
+   * Verifies that a desktop session appears when the cli session it lists is still shown
+   */
+  it('makes a desktop session appear when its cli session is still there', () => {
+    expect(sessionChanges([session('cli:abc')], [session('cli:abc'), session('local_1', ['abc'])])).toEqual({
+      appeared: ['local_1'],
+      departed: [],
+    });
+  });
+
+  /**
+   * Verifies that a terminal session gone without any session listing it departs
+   */
+  it('departs a cli session that nobody absorbed', () => {
+    const result = sessionChanges([session('cli:abc')], [session('local_1', ['other'])]);
+    expect(result.departed.map((s) => s.id)).toEqual(['cli:abc']);
+    expect(result.appeared).toEqual(['local_1']);
+  });
+
+  /**
+   * Verifies that only cli-prefixed sessions can be absorbed: a desktop id listed elsewhere still departs
+   */
+  it('departs a desktop session even if another lists its id', () => {
+    const result = sessionChanges([session('local_x')], [session('local_y', ['local_x'])]);
+    expect(result.departed.map((s) => s.id)).toEqual(['local_x']);
+    expect(result.appeared).toEqual(['local_y']);
+  });
+
+  /**
+   * Verifies that absorption, a real arrival and a real departure are told apart in one diff
+   */
+  it('separates absorbed, appeared and departed sessions in one diff', () => {
+    const prev = [session('cli:abc'), session('local_old'), session('local_keep')];
+    const next = [session('local_keep'), session('local_1', ['abc']), session('local_new')];
+    const result = sessionChanges(prev, next);
+    expect(result.appeared).toEqual(['local_new']);
+    expect(result.departed.map((s) => s.id)).toEqual(['local_old']);
+  });
+
+  /**
+   * Verifies that the inputs are left untouched
+   */
+  it('does not mutate its inputs', () => {
+    const prev = [session('cli:abc'), session('a')];
+    const next = [session('local_1', ['abc'])];
+    const copy = JSON.stringify([prev, next]);
+    sessionChanges(prev, next);
+    expect(JSON.stringify([prev, next])).toBe(copy);
   });
 });
 

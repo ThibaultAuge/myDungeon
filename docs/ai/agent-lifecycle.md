@@ -1,8 +1,8 @@
 ---
-description: Use when changing where agents rest or wait (tavern, altar queue), how subagent figures appear, leave or return, the agent roster (snapshot.roster, agent definitions, seen types), or when testing the scene with fake hooks.
+description: Use when changing where agents rest or wait (tavern, altar queue), how agent figures appear, leave or return (subagent tavern cycle, main agents walking in from the forest, the skeleton ambush when a session ends, stopped sessions), the agent roster (snapshot.roster, agent definitions, seen types), or when testing the scene with fake hooks.
 ---
 
-# Agent life cycle: tavern, altar, roster
+# Agent life cycle: tavern, altar, forest entry, ambush, roster
 
 ## Current State
 - Design (user-defined, French): `docs/lieux-et-personnages.md`, section "La taverne et le
@@ -25,6 +25,53 @@ description: Use when changing where agents rest or wait (tavern, altar queue), 
 - Main agent: waiting for a prompt (Stop, SessionStart, idle notification) rests in the
   tavern. The altar queue is only for `permission`, `question` and `error`
   (`setWaiting` in `reducer.ts`). User decision.
+- Stopped sessions (`live: false`, not archived) keep their main agent visible, resting in
+  the tavern in the session colour, but NOT selectable: the side panel lists live sessions
+  only (accessibility decision: no 3D-only clickable target).
+
+### Main agents entering and leaving the castle
+User design: `plans/plan-entree-sortie-session-2026-11-14.md` (French). Only MAIN agents
+do this; subagents keep the tavern cycle above.
+- Bookkeeping: `Stage` (`stage.ts`, pure) compares each snapshot of the route with the
+  previous one through `sessionChanges` (`tavern.ts`). The route's first snapshot
+  (`snapshotReceived` false → true) makes no arrival and no death. A `cli:X` session
+  absorbed into a desktop session whose `cliSessionIds` holds X is neither.
+- Arrival: a session that appears later goes into `Stage.fromForest`; its main agent gets
+  start origin `'forest'` (`startOrigins`) at `ENTRY_SPOT` (path index `ENTRY_INDEX` 48,
+  beyond the pan clamp) and walks the path, drawbridge, `GATE_DOOR`, then the corridor end
+  `GATE_SPOT` (5, 9.5) to its spot (`routeFrom`). `GATE_SPOT` is a corridor point, so a
+  reroute keeps the forest leg. `Stage.shown` consumes the arrival.
+- Departure: a session that leaves the snapshot (deleted, archived, pruned after 60 min,
+  evicted past `HISTORY_LIMIT` 30, or missing after a WebSocket reconnect — accepted) puts
+  its main agent in `Stage.leaving` (only if it had a spot in the previous render). Its
+  figure stays mounted (single children array, same React key) with `exit` = the shared
+  `Ambush`, walks out by `exitRoute` (through the gate if inside, along the path if
+  already outside: `isOutside` is z > `BOUNDS.z1`) to `killPoint(slot)` (path index
+  `KILL_INDEX` 18 + slot × `SLOT_STEP` 3).
+- Ambush (`ambush.ts`, pure state machine, `Ambush` class): victim phases
+  `walking → waiting → struck → hit → dying → lying → sinking → gone`. At most
+  `SKELETON_COUNT` 3 skeletons, split by `assignSkeletons` (a lone victim gets all 3, other
+  victims wait). Skeletons rise (`Spawn_Ground`), strike (`Use_Item` looping; the free pack
+  has no attack clip), then walk into the nearest near tree within `TREE_REACH` and shrink,
+  or burrow (`Spawn_Ground` held backwards + y descent). The body sinks `SINK_DEPTH`, then
+  `onGone` → `Stage.gone`. Timings use the measured clip lengths in `characters.ts`.
+- React keys: `stage.key(id)` is the id, then `${id}~${n}` after n deaths, so a session that
+  reappears while its old figure dies mounts a NEW figure from the forest once the old one
+  is gone (`Stage.hidden` holds it back meanwhile). Generations are never cleared, on
+  purpose (a reused key would revive a dead figure).
+- `Office.tsx` holds `Stage` and `Ambush` in `useState` (not `useMemo`) and runs
+  `Stage.update` inside a `useMemo` during render, not an effect, so a departed figure is
+  never unmounted for a frame; `update` is idempotent for the same sessions array.
+- Doomed figures: no tag, disc, ring or gem; not selectable; `victimClip` gives `Idle_B`
+  while `waiting` / `struck`. Skeletons are `SkeletonFigure`s in `Ambush.tsx`, reusing
+  `Character` with `SKELETON_LOOKS`; keyed `${i}:${sortie}` so each outing remounts, with
+  `scripted` seeded at mount (no standing flash).
+- Height outside: `groundY(p)` (`outside.ts`) is 0 inside `OUTER`, a linear slope on the
+  drawbridge, `GROUND_Y` beyond; `AgentFigure` and skeletons apply it every frame.
+- Reduced motion: a doomed figure is removed at once (also when switched on mid-death) and
+  skeletons are hidden.
+
+### Markers, roster, hook boundary
 - Waiting markers (`AgentFigure`): an agent waiting for a prompt shows the amber
   octahedron. An agent at the altar (`permission`, `question`, `error`) shows an HTML/SVG
   speech bubble (`RequestBubble`, glyph … / ? / !, fill `#b3261e` for contrast,
@@ -62,12 +109,22 @@ description: Use when changing where agents rest or wait (tavern, altar queue), 
 
 ## Relevant Files
 - `packages/web/src/scene/tavern.ts` — pure, no three.js: `NEUTRAL_COLOR`, `restId`,
-  `restingAgent`, `restingTypes`, `startOrigins` (`rest` / `lockers` / `seat`),
-  `inheritSeats`.
+  `restingAgent`, `restingTypes`, `startOrigins` (`rest` / `lockers` / `seat` / `forest`),
+  `sessionChanges`, `inheritSeats`.
+- `packages/web/src/scene/stage.ts` — pure: `Stage` (`update`, `leaving`, `fromForest`,
+  `hidden`, `key`, `gone`, `shown`), `Leaving`.
+- `packages/web/src/scene/outside.ts` — pure: `PAN_MARGIN`, `groundY`, `PATH`,
+  `ENTRY_INDEX`, `KILL_INDEX`, `SLOT_STEP`, `GATE_SPOT`, `ENTRY_SPOT`, `routeFrom`,
+  `killIndex`, `killPoint`, `nearestPathIndex`, `isOutside`, `exitRoute`.
+- `packages/web/src/scene/ambush.ts` — pure: `Ambush` state machine, `assignSkeletons`,
+  `skeletonSpawns`, `nearestTree`, `victimClip`, `victimSink`, `skeletonClip`,
+  `skeletonDepth`, `skeletonScale`, timing constants.
+- `packages/web/src/scene/Ambush.tsx` — skeleton rendering (`SkeletonFigure`).
 - `packages/web/src/scene/Office.tsx` — `useStarts`, `arrived` set, memoised resting
-  figures.
+  figures, `Stage` / `Ambush` instances, doomed figures in the children array.
 - `packages/web/src/scene/AgentFigure.tsx` — `React.memo`; `onArrive` when a done subagent
-  reaches its tavern spot.
+  reaches its tavern spot; `exit` prop (doomed figure), `groundY` per frame; exports
+  `Character` and `Motion` (`Motion.scripted`).
 - `packages/web/src/scene/RequestBubble.tsx` — altar speech bubble.
 - `packages/web/src/scene/layout.ts` — `wallSeats` / `candidateSeats` (cached per room).
 - `packages/web/src/store.ts` — `snapshotReceived`; `packages/shared/src/index.ts` —
@@ -79,11 +136,21 @@ description: Use when changing where agents rest or wait (tavern, altar queue), 
   `pendingSpawns`, `noteSeenType`, `absorb`, `applyInventory`, `seenTypes`, `rosterView`,
   `setWaiting`.
 - `packages/server/src/store.ts`, `packages/server/src/index.ts`.
-- Tests: `packages/web/test/{tavern,layout}.test.ts`,
+- Tests: `packages/web/test/{tavern,layout,stage,outside,ambush}.test.ts`,
   `packages/server/test/{reducer,inventory}.test.ts`.
 
 ## Usage
-- Put life-cycle logic in `tavern.ts` (tested), never inline in `Office` or `AgentFigure`.
+- Put life-cycle logic in `tavern.ts`, `stage.ts`, `outside.ts` or `ambush.ts` (pure,
+  tested), never inline in `Office`, `AgentFigure` or `Ambush.tsx`. Any new route outside
+  the castle goes through `routeFrom` / `exitRoute`; any figure standing outside applies
+  `groundY`. A new scripted creature reuses `Character` with a `Look` and `Motion.scripted`
+  (clip packs and `ClipInput.scripted`: `docs/ai/dungeon-scene.md`).
+- Watching an ambush in a store-injected gallery (general preview setup:
+  `docs/ai/dungeon-scene.md`, Usage): remove a session from `sessions` after a first
+  snapshot; at headless 1–2 fps the walk out takes minutes. Read `agentPositions` from the
+  `AgentFigure.tsx` URL found in `performance.getEntriesByType('resource')` (after HMR the
+  modules carry `?t=`, so a plain `import('/src/scene/AgentFigure.tsx')` gives a different
+  map). Pan with synthetic right-button pointer events to see the kill point (z ≈ 23–30).
 - Reuse `setWaiting` for any new waiting reason, and keep the tavern/altar split above.
 - Test the scene without real sessions: the server only accepts the Vite origin on port
   5173, so from a worktree build the web client and run a second server on another port
@@ -118,3 +185,7 @@ description: Use when changing where agents rest or wait (tavern, altar queue), 
   own presets point there); subagent ids are unique per session only, so `agentHookAt` and
   React keys could clash across sessions with a crafted payload; above the 64-file cap the
   kept definitions depend on OS listing order.
+- Accepted limits of the ambush: with many simultaneous deaths, kill slots past the path
+  end stack there and go beyond the pan limit; a skeleton walks to its tree in a straight
+  line; after a server restart, a reconnect may kill sessions missing from the first
+  snapshot.

@@ -9,8 +9,10 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cast
   Weapons Bits 1.0, free tiers), grouped in three packs: `dungeon`, `tools`, `weapons`.
   Agents use KayKit Adventurers 2.0 (CC0): packs `adventurers` (character bodies),
   `adventurers_anim` (shared `Rig_Medium_General`, `Rig_Medium_MovementBasic` clips) and
-  `adventurers_props` (8 held props, gltf + 4 textures). Pack `forest` (trees around the
-  castle): `docs/ai/night-forest.md`.
+  `adventurers_props` (8 held props, gltf + 4 textures). KayKit Skeletons 1.1 (free tier):
+  packs `skeletons` (glb bodies) and `skeletons_props` (gltf weapons), used by the ambush
+  (`docs/ai/agent-lifecycle.md`). Pack `forest` (trees around the castle):
+  `docs/ai/night-forest.md`.
 - KayKit is about 1.33x our scene: every model is scaled by `KIT_SCALE = 0.75`. After
   scaling: small floor tile 1.5 m, wall 3 m high per 3 m chunk, table 0.75 m.
 - Rooms (`RoomDef` in `layout.ts`) carry `floorKind` (`stone`, `stoneFancy`, `grate`, `wood`,
@@ -92,8 +94,10 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cast
 - Post texts: `docs/ai/i18n.md`.
 
 ### Agent figures
-- Looks (`characters.ts`): a `Look` is a body plus optional `right` / `left` held props
-  (`PropRef { pack: 'adventurers_props' | 'tools'; model }`). Main agents use `MAIN_BODY`
+- Looks (`characters.ts`): a `Look` is a body (`pack`: `'adventurers'` by default, or
+  `'skeletons'`) plus optional `right` / `left` held props
+  (`PropRef { pack: 'adventurers_props' | 'tools' | 'skeletons_props'; model }`).
+  `SKELETON_LOOKS`: Warrior + Blade, Minion + Axe, Rogue + Blade. Main agents use `MAIN_BODY`
   (`Knight`). Every subagent figure, whatever its look, is scaled 0.85 by kind in
   `AgentFigure` (whole group: model, tag, ring, disc). Subagents get a role look from `LOOKS`, keyed by the
   lower-case agent TYPE (18 entries: the user's agents plus `Explore`, `Plan`,
@@ -114,15 +118,19 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cast
   remaining distance, so no stop at corners). Speed lives in a ref in `AgentFigure`, reset
   to 0 when the path empties; a reroute keeps the current speed. Facing uses `turnToward`
   with exponential rates (`WALK_TURN_RATE` 14, `REST_TURN_RATE` 6).
-- Clips: `clipFor` (pure, in `characters.ts`) picks, in priority order: spawn
+- Clips: `clipFor` (pure, in `characters.ts`) picks, in priority order: `ClipInput.scripted`
+  (a clip imposed by a scripted scene such as the ambush; ignored under reduced motion) > spawn
   (`Spawn_Ground`, once, ×1.5, only for a figure whose `start` is the lockers `SPAWN` and not
   done; one coming from a resting seat just walks) > moving (`Walking_A`, or `Running_A` above
   `RUN_THRESHOLD`; rate = speed / measured clip speed, capped at `MAX_CLIP_RATE`, with a
   0.5 floor for `Walking_A` only) >
   kneeling at the altar (`PickUp` frozen at `KNEEL_POSE_TIME`) > done (`Idle_A` frozen, no
   transparency) > working (`Interact`) > waiting (`Idle_B`). Reduced motion: still poses,
-  turns snap, no spawn; position still moves.
-- `AgentFigure` structure: the parent runs the walk and writes a `Motion` ref; the
+  turns snap, no spawn; position still moves. `CLIPS` also lists `Hit_A`, `Death_A` and
+  `Use_Item` (scripted only); their measured lengths (`SPAWN_CLIP_TIME`, `HIT_CLIP_TIME`,
+  `DEATH_CLIP_TIME`, `USE_ITEM_CLIP_TIME`) are checked against the GLB by a test.
+- `AgentFigure` structure: the parent runs the walk and writes a `Motion` ref (exported,
+  with `scripted`); the exported
   `Character` child (own `Suspense` + `CharacterBoundary` error boundary with a capsule
   fallback) clones the model with `SkeletonUtils`, animates through drei `useAnimations`
   with manual weight blending (`FADE` 0.2 s), hides the model until the first clip is
@@ -174,9 +182,11 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cast
   `assets-src/<pack>/` (gitignored, unzipped by the user) to `packages/web/public/kaykit/<pack>/`
   (committed).
 - `packages/web/src/scene/characters.ts` — pure, no three.js: `MAIN_BODY`, `SUB_BODIES`,
-  `LOOKS`, `lookFor`, `PROP_GRIP`, `gripFor`, `clipFor` and the clip constants.
-- `packages/web/src/scene/AgentFigure.tsx` — walk, `Character` (takes a `Look`), `Held`,
-  `CharacterBoundary`, tag, destination badge toggle.
+  `LOOKS`, `SKELETON_LOOKS`, `lookFor`, `PROP_GRIP`, `gripFor`, `clipFor`, `CLIPS` and the
+  clip constants / measured clip times.
+- `packages/web/src/scene/AgentFigure.tsx` — walk, `Motion`, `Character` (takes a `Look`;
+  both exported, reused by `Ambush.tsx`), `Held`, `CharacterBoundary`, tag, destination
+  badge toggle.
 - `packages/web/src/scene/destinations.ts` — pure: `Destination = RoomId | StationId`,
   `destinationOf(spot)` (station ?? room), `postDestination(post: PostId)` (identity; it
   compiles only because every `PostId` is a `RoomId` or a `StationId`).
@@ -201,6 +211,9 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cast
 ## Usage
 - New model: add it to `kit-manifest.json`, run `npm run kaykit:import`. Never hand-copy
   files into `public/kaykit/`. Load every model through `useKitGLTF`, never `useGLTF` directly.
+  The import needs every listed pack folder present in `assets-src/` (gitignored, so absent
+  from a worktree): copy the main checkout's `assets-src` folders into the worktree first.
+  Skeleton sources: `assets-src/skeletons/KayKit_Skeletons_1.1_FREE`.
 - New or changed role look: edit `LOOKS` (lower-case type key) and, for a new prop, the
   manifest models of its pack. A `tools` prop also needs a `PROP_GRIP` entry calibrated by
   eye (tested: every `tools` prop in `LOOKS` has a grip, every `adventurers_props` model is
@@ -254,7 +267,7 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cast
   before checking rAF-driven effects (focus return, highlight screenshots). Give Playwright
   file outputs absolute paths inside the worktree; relative paths resolve elsewhere.
   `.playwright-mcp/` is gitignored because captures may show real session names; keep it so.
-- Where figures rest, wait, appear and leave (tavern, altar, roster):
+- Where figures rest, wait, appear and leave (tavern, altar, forest entry, ambush, roster):
   `docs/ai/agent-lifecycle.md`.
 
 ## Notes
@@ -276,8 +289,8 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cast
   to 0.1 m inside the room edge.
 - Orientation-based cutaway was tried and rejected; keep the cursor parabola.
 - Tests must not import `kit.ts` or any `.tsx` file (drei / `import.meta.env`); test
-  `dungeon.ts`, `layout.ts`, `walk.ts`, `characters.ts`, `destinations.ts`, `forest.ts` and
-  the manifest JSON.
+  `dungeon.ts`, `layout.ts`, `walk.ts`, `characters.ts`, `destinations.ts`, `forest.ts`,
+  `outside.ts`, `stage.ts`, `ambush.ts`, `tavern.ts` and the manifest JSON.
 - Walk speed was set so figures reach the room before short tasks finish (user request).
   The chibi legs walk naturally at 0.57 (`Walking_A`) and 1.4 u/s (`Running_A`) at
   `KIT_SCALE`, so feet slide at cruise speed by design. Accepted limits: a reroute to a

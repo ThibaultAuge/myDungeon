@@ -6,13 +6,15 @@ import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js
 import type { AgentState, AgentView } from '@agent-office/shared';
 import { STATE_COLORS, statusKind } from '../format.ts';
 import { reducedMotion } from '../motion.ts';
-import { clipFor, CLIPS, gripFor, lookFor, SPAWN_TIME_SCALE, type ClipName, type Look, type PropRef } from './characters.ts';
+import { victimClip, victimSink, type Ambush } from './ambush.ts';
+import { clipFor, CLIPS, gripFor, lookFor, SPAWN_TIME_SCALE, type ClipChoice, type ClipName, type Look, type PropRef } from './characters.ts';
 import { CLICK_MAX_DRAG_PX, setPointerHover, TARGET_USER_DATA } from './cursor.ts';
 import { DestinationBadge } from './DestinationIcon.tsx';
 import { destinationOf } from './destinations.ts';
 import { KIT_SCALE } from './dungeon.ts';
 import { useKitGLTF } from './kit.ts';
-import { reroute, routeBetween, SPAWN, type Point, type Spot } from './layout.ts';
+import { reroute, SPAWN, type Point, type Spot } from './layout.ts';
+import { exitRoute, groundY, routeFrom } from './outside.ts';
 import { RequestBubble } from './RequestBubble.tsx';
 import { advance, approach, nextSpeed, remainingDistance, turnToward } from './walk.ts';
 
@@ -29,12 +31,14 @@ const TAG_Y = 2.45;
 const BUBBLE_Y = 2.1;
 
 /** What the figure does this frame, written by the walk and read by the character. */
-interface Motion {
+export interface Motion {
   moving: boolean;
   speed: number;
   kneeling: boolean;
   /** Seconds of spawn clip left; -1 until the character has loaded and set it. */
   spawnLeft: number;
+  /** A clip imposed by a scripted scene (the death outside), or null. */
+  scripted: ClipChoice | null;
 }
 
 /** Share of the gap to close this frame for an exponential turn; all of it under reduced motion. */
@@ -82,9 +86,9 @@ function Held({ prop, bone }: { prop: PropRef; bone: Object3D }) {
  * The animated KayKit character. It suspends while its files load, so it sits in its own
  * Suspense and error boundary: the tag, ring and disc next to it never wait for it.
  */
-function Character({ look, state, motion }: { look: Look; state: AgentState; motion: RefObject<Motion> }) {
+export function Character({ look, state, motion }: { look: Look; state: AgentState; motion: RefObject<Motion> }) {
   // One skinned clone per figure: the skeleton is its own, geometry and materials are shared.
-  const { scene } = useKitGLTF('adventurers', look.body);
+  const { scene } = useKitGLTF(look.pack ?? 'adventurers', look.body);
   const model = useMemo(() => {
     const m = cloneSkinned(scene) as Object3D;
     m.traverse((o) => {
@@ -129,6 +133,7 @@ function Character({ look, state, motion }: { look: Look; state: AgentState; mot
       spawning: m.spawnLeft > 0,
       kneeling: m.kneeling,
       reducedMotion: still,
+      scripted: m.scripted,
     });
     // When Suspense hides and shows the scene again (while the kit loads), React runs the
     // effect cleanups: drei's useAnimations then stops every action, but these refs survive.
@@ -228,6 +233,13 @@ interface Props {
   onSelect?(id: string): void;
   /** Called once when a finished agent reaches its spot in the tavern. */
   onArrive?(id: string): void;
+  /**
+   * Set when the agent's session was deleted: the figure walks out of the castle to be
+   * killed by the skeletons of this ambush. Stays the same object once set.
+   */
+  exit?: Ambush;
+  /** Called once when a doomed figure has sunk out of sight. */
+  onGone?(id: string): void;
 }
 
 /**
@@ -236,7 +248,7 @@ interface Props {
  */
 export const AgentFigure = memo(AgentFigureImpl);
 
-function AgentFigureImpl({ agent, name, color, spot, start, selected, onSelect, onArrive }: Props) {
+function AgentFigureImpl({ agent, name, color, spot, start, selected, onSelect, onArrive, exit, onGone }: Props) {
   const group = useRef<Group>(null);
   const ring = useRef<Mesh>(null);
   const bubble = useRef<Mesh>(null);
@@ -248,9 +260,10 @@ function AgentFigureImpl({ agent, name, color, spot, start, selected, onSelect, 
   // events (its target changes and the new root is never rendered): wait for the connection.
   const connected = useThree((s) => !!s.events.connected);
   const pos = useMemo(() => new Vector3(start.x, 0, start.z), []); // eslint-disable-line react-hooks/exhaustive-deps
-  const path = useRef<Point[]>(start.id === spot.id ? [] : routeBetween(start, spot));
+  const path = useRef<Point[]>(start.id === spot.id ? [] : routeFrom(start, spot));
   const last = useRef<Spot>(spot);
   const arrived = useRef(false);
+  const gone = useRef(false);
   // A figure coming out of the lockers rises from the ground before it walks; one coming
   // from a resting seat just walks, and one already finished does not rise.
   const motion = useRef<Motion>({
@@ -258,10 +271,24 @@ function AgentFigureImpl({ agent, name, color, spot, start, selected, onSelect, 
     speed: 0,
     kneeling: false,
     spawnLeft: start.id === SPAWN.id && agent.state !== 'done' ? -1 : 0,
+    scripted: null,
   });
 
+  // Doomed: out of the castle to the kill point. Under reduced motion, no walk and no fight.
   useEffect(() => {
-    if (last.current.id === spot.id) return;
+    if (!exit) return;
+    if (reducedMotion()) {
+      gone.current = true;
+      onGone?.(agent.id);
+      return;
+    }
+    exit.add(agent.id);
+    const slot = exit.victim(agent.id)?.slot ?? 0;
+    path.current = exitRoute(pos, path.current, last.current, slot);
+  }, [exit]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (exit || last.current.id === spot.id) return;
     // From where the agent is, not from where it was going: never through a wall.
     path.current = reroute(path.current, last.current, spot);
     last.current = spot;
@@ -277,6 +304,11 @@ function AgentFigureImpl({ agent, name, color, spot, start, selected, onSelect, 
   // A figure that leaves the scene while hovered gets no pointer-out: give the cursor back.
   const cursorKey = `agent:${agent.id}`;
   useEffect(() => () => setPointerHover(cursorKey, false), [cursorKey]);
+  // Same when the figure stops being selectable under the pointer (its session stopped).
+  const selectable = !!onSelect;
+  useEffect(() => {
+    if (!selectable) setPointerHover(cursorKey, false);
+  }, [selectable, cursorKey]);
 
   useFrame(({ clock }, delta) => {
     const g = group.current;
@@ -294,6 +326,13 @@ function AgentFigureImpl({ agent, name, color, spot, start, selected, onSelect, 
     const spawning = m.spawnLeft !== 0;
 
     m.moving = false;
+    const doomed = exit?.victim(agent.id);
+    // Reduced motion switched on during a death: it ends now, as if it had started that way.
+    if (exit && still && !gone.current) {
+      gone.current = true;
+      onGone?.(agent.id);
+      return;
+    }
     if (!spawning && path.current.length > 0) {
       // A reroute keeps the current speed: the agent changes course without stopping.
       // Accepted limit: if the new destination is within the braking distance, the speed
@@ -302,6 +341,16 @@ function AgentFigureImpl({ agent, name, color, spot, start, selected, onSelect, 
       const heading = advance(pos, path.current, m.speed * dt);
       if (heading !== null) g.rotation.y = turnToward(g.rotation.y, heading, turnFraction(WALK_TURN_RATE, dt, still));
       m.moving = path.current.length > 0;
+    } else if (doomed) {
+      m.speed = 0;
+      if (doomed.phase === 'walking') exit!.arrived(agent.id);
+      if (doomed.phase !== 'walking' && doomed.phase !== 'waiting') {
+        g.rotation.y = turnToward(g.rotation.y, doomed.facing, turnFraction(REST_TURN_RATE, dt, still));
+      }
+      if (doomed.phase === 'gone' && !gone.current) {
+        gone.current = true;
+        onGone?.(agent.id);
+      }
     } else if (!spawning) {
       m.speed = 0;
       // `last` catches up with `spot` in an effect: until then the agent has not set off yet.
@@ -311,7 +360,8 @@ function AgentFigureImpl({ agent, name, color, spot, start, selected, onSelect, 
       }
       g.rotation.y = turnToward(g.rotation.y, spot.facing, turnFraction(REST_TURN_RATE, dt, still));
     }
-    m.kneeling = path.current.length === 0 && !!spot.kneel;
+    m.kneeling = !exit && path.current.length === 0 && !!spot.kneel;
+    m.scripted = doomed && path.current.length === 0 ? victimClip(doomed.phase) : null;
     // Touch the DOM only when walking starts or stops: no React render per frame. The tag
     // is a separate React root that renders a little later: until it shows the new
     // destination's icon, show none rather than the previous one.
@@ -319,6 +369,7 @@ function AgentFigureImpl({ agent, name, color, spot, start, selected, onSelect, 
     const travelling = m.moving && badge.current?.dataset.destination === destination;
     if (tag && tag.hasAttribute('data-travelling') !== travelling) tag.toggleAttribute('data-travelling', travelling);
     g.position.copy(pos);
+    g.position.y = groundY(pos) - (doomed ? victimSink(doomed) : 0);
 
     if (bubble.current) {
       bubble.current.rotation.y = t * 2;
@@ -366,23 +417,28 @@ function AgentFigureImpl({ agent, name, color, spot, start, selected, onSelect, 
           <Character look={lookFor(agent.kind, agent.agentType)} state={agent.state} motion={motion} />
         </Suspense>
       </CharacterBoundary>
-      {/* Session colour on the floor, inside the state ring: links the figure to its card. */}
-      <mesh position={[0, 0.03, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-        <circleGeometry args={[0.42, 32]} />
-        <meshBasicMaterial color={color} transparent opacity={0.85} />
-      </mesh>
-      <mesh ref={ring} position={[0, 0.06, 0]} rotation={[Math.PI / 2, 0, 0]}>
-        <torusGeometry args={[0.5, 0.06, 8, 32]} />
-        <meshBasicMaterial color={STATE_COLORS[agent.state]} />
-      </mesh>
+      {/* Session colour on the floor, inside the state ring: links the figure to its card.
+          A doomed figure no longer belongs to a session: no disc, ring, gem nor tag. */}
+      {!exit && (
+        <>
+          <mesh position={[0, 0.03, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+            <circleGeometry args={[0.42, 32]} />
+            <meshBasicMaterial color={color} transparent opacity={0.85} />
+          </mesh>
+          <mesh ref={ring} position={[0, 0.06, 0]} rotation={[Math.PI / 2, 0, 0]}>
+            <torusGeometry args={[0.5, 0.06, 8, 32]} />
+            <meshBasicMaterial color={STATE_COLORS[agent.state]} />
+          </mesh>
+        </>
+      )}
       {/* Waiting for a prompt: the small amber gem. At the altar, a speech bubble rides on the name tag. */}
-      {waiting && !urgent && (
+      {waiting && !urgent && !exit && (
         <mesh ref={bubble} position={[0, BUBBLE_Y, 0]}>
           <octahedronGeometry args={[0.16]} />
           <meshBasicMaterial color={STATE_COLORS.waiting} />
         </mesh>
       )}
-      {connected && (
+      {connected && !exit && (
         <Html
           ref={anchor}
           position={[0, TAG_Y, 0]}
