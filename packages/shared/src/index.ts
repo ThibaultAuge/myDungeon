@@ -86,5 +86,13 @@ export interface HookEventSummary {
 export const NO_ENV_ID = 'hors-environnement';
 
 export type ServerMessage =
-  | { type: 'snapshot'; envId: string; sessions: SessionView[]; environments: EnvironmentView[]; at: number }
+  | {
+      type: 'snapshot';
+      envId: string;
+      sessions: SessionView[];
+      environments: EnvironmentView[];
+      /** Agent types resting in the tavern, one figure each when none of them works. */
+      roster: string[];
+      at: number;
+    }
   | { type: 'event'; event: HookEventSummary };

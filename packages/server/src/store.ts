@@ -6,6 +6,7 @@ import {
   createState,
   environmentsView,
   prune,
+  rosterView,
   sessionsView,
   summarize,
   type HookEvent,
@@ -62,6 +63,7 @@ export class OfficeStore {
       envId,
       sessions: sessionsView(this.state, envId),
       environments: environmentsView(this.state),
+      roster: rosterView(this.state, envId),
       at: this.clock(),
     };
   }

@@ -3,12 +3,16 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import {
+  AGENTS_CACHE_MS,
+  agentNameFromDefinition,
+  type AgentsCache,
   isWithin,
   matchEnvironment,
   normPath,
   parseDesktopSession,
   parseLiveProcess,
   parsePresets,
+  readAgentTypes,
   readInventory,
 } from '../src/inventory.ts';
 import type { ClaudePaths } from '../src/paths.ts';
@@ -373,7 +377,7 @@ describe('readInventory', () => {
         { claudeHome: missing, liveDir: path.join(missing, 'sessions'), desktopData: null, presetsFile: null, sessionDirs: [missing] },
         () => true,
       ),
-    ).toEqual({ environments: [], desktopSessions: [], live: [], presentIds: new Set(), complete: false, presetsOk: false });
+    ).toEqual({ environments: [], desktopSessions: [], live: [], presentIds: new Set(), complete: false, presetsOk: false, definedAgents: { global: [], byEnv: new Map() } });
   });
 
   /**
@@ -381,5 +385,483 @@ describe('readInventory', () => {
    */
   it('tolerates a missing presets file path', () => {
     expect(readInventory({ ...paths, presetsFile: path.join(root, 'absent.json') }, isAlive).environments).toEqual([]);
+  });
+});
+
+describe('agentNameFromDefinition', () => {
+  /**
+   * Verifies that the name of a plain LF frontmatter is returned
+   */
+  it('reads the name from an LF frontmatter', () => {
+    expect(agentNameFromDefinition('---\nname: dexter\ndescription: Writes tests\n---\nBody')).toBe('dexter');
+  });
+
+  /**
+   * Verifies that a CRLF frontmatter is read like an LF one
+   */
+  it('reads the name from a CRLF frontmatter', () => {
+    expect(agentNameFromDefinition('---\r\ndescription: x\r\nname: hermione\r\n---\r\nBody')).toBe('hermione');
+  });
+
+  /**
+   * Verifies that a leading UTF-8 byte order mark does not hide the frontmatter
+   */
+  it('accepts a leading BOM', () => {
+    expect(agentNameFromDefinition('﻿---\nname: neo\n---\n')).toBe('neo');
+  });
+
+  /**
+   * Verifies that double or single quotes around the name are stripped
+   */
+  it.each([['"oracle"'], ["'oracle'"], ['oracle   '], ['  "oracle"  ']])('strips quotes and blanks from name: %s', (value) => {
+    expect(agentNameFromDefinition(`---\nname: ${value}\n---\n`)).toBe('oracle');
+  });
+
+  /**
+   * Verifies that names made of letters, digits, dots, dashes and underscores are kept as written
+   */
+  it.each([['Samuel-Morse'], ['agent_2'], ['v1.2'], ['A'], ['a'.repeat(64)]])('accepts valid name %s', (name) => {
+    expect(agentNameFromDefinition(`---\nname: ${name}\n---\n`)).toBe(name);
+  });
+
+  /**
+   * Verifies that names Claude Code would reject, or longer than 64 characters, give undefined
+   */
+  it.each([['my agent'], ['-lead'], ['.hidden'], ['_x'], ['a'.repeat(65)], ['a/b'], ['é'], ['']])(
+    'rejects invalid name %j',
+    (name) => {
+      expect(agentNameFromDefinition(`---\nname: ${name}\n---\n`)).toBeUndefined();
+    },
+  );
+
+  /**
+   * Verifies that a text without a frontmatter at its very start gives undefined
+   */
+  it.each([
+    ['name: dexter'],
+    ['Intro\n---\nname: dexter\n---\n'],
+    [' ---\nname: dexter\n---\n'],
+    ['---name: dexter\n'],
+    ['---'],
+    [''],
+  ])('returns undefined without a leading frontmatter: %j', (text) => {
+    expect(agentNameFromDefinition(text)).toBeUndefined();
+  });
+
+  /**
+   * Verifies that an unclosed frontmatter (truncated head) runs to the end of the text
+   */
+  it.each([
+    ['---\nname: dexter\n'],
+    ['---\nname: dexter'],
+    ['---\r\ndescription: long\r\nname: dexter\r\n'],
+    ['﻿---\ndescription: x\nname: "dexter"\nmodel: opus'],
+  ])('reads the name of an unclosed frontmatter %j', (text) => {
+    expect(agentNameFromDefinition(text)).toBe('dexter');
+  });
+
+  /**
+   * Verifies that an unclosed frontmatter without a name line still gives undefined
+   */
+  it('returns undefined for an unclosed frontmatter without a name', () => {
+    expect(agentNameFromDefinition('---\ndescription: x\n')).toBeUndefined();
+    expect(agentNameFromDefinition('---\n')).toBeUndefined();
+  });
+
+  /**
+   * Verifies that only the frontmatter before the first closing fence is searched
+   */
+  it('stops at the first closing fence when one exists', () => {
+    expect(agentNameFromDefinition('---\ndescription: x\n---\nBody\n---\nname: late\n---\n')).toBeUndefined();
+  });
+
+  /**
+   * Verifies that a name outside the frontmatter, or a key merely ending in name, is ignored
+   */
+  it('ignores names outside the frontmatter and other keys', () => {
+    expect(agentNameFromDefinition('---\ndescription: x\n---\nname: dexter\n')).toBeUndefined();
+    expect(agentNameFromDefinition('---\ndisplay_name: dexter\n---\n')).toBeUndefined();
+    expect(agentNameFromDefinition('---\n  name: dexter\n---\n')).toBeUndefined();
+  });
+});
+
+describe('readAgentTypes', () => {
+  let root: string;
+
+  beforeAll(() => {
+    root = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-office-agents-'));
+  });
+
+  afterAll(() => {
+    fs.rmSync(root, { recursive: true, force: true });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  /** Creates a fresh agents folder under the temporary root with the given files. */
+  function agentsDir(name: string, files: Record<string, string>): string {
+    const dir = path.join(root, name);
+    fs.mkdirSync(dir, { recursive: true });
+    for (const [file, content] of Object.entries(files)) fs.writeFileSync(path.join(dir, file), content, 'utf8');
+    return dir;
+  }
+
+  const sorted = (list: string[]) => [...list].sort((a, b) => a.localeCompare(b));
+
+  /**
+   * Verifies that each .md file gives its frontmatter name, whatever its file name
+   */
+  it('uses the frontmatter name, not the file name', () => {
+    const dir = agentsDir('mixed', {
+      'dexter.md': '---\nname: Dexter\n---\nWrites tests',
+      'my agent.md': '---\nname: good-one\n---\n',
+    });
+    expect(sorted(readAgentTypes(dir))).toEqual(['Dexter', 'good-one']);
+  });
+
+  /**
+   * Verifies that a file without a valid frontmatter name defines no agent, with no file-name fallback
+   */
+  it.each([
+    ['no frontmatter', 'No frontmatter here'],
+    ['no name key', '---\ndescription: x\n---\n'],
+    ['invalid name', '---\nname: not valid!\n---\n'],
+    ['empty file', ''],
+    ['name in the body', '# Title\n---\nname: curator\n---\n'],
+  ])('skips a definition with %s', (_label, content) => {
+    const dir = agentsDir(`skip-${_label.replace(/\s+/g, '-')}`, { 'curator.md': content, 'neo.md': '---\nname: neo\n---\n' });
+    expect(readAgentTypes(dir)).toEqual(['neo']);
+  });
+
+  /**
+   * Verifies that a long definition whose closing fence is past the head is still read
+   */
+  it('reads the name of a definition truncated before its closing fence', () => {
+    const dir = agentsDir('unclosed', { 'long.md': `---\nname: LongOne\ndescription: ${'x'.repeat(6000)}\n---\nBody` });
+    expect(readAgentTypes(dir)).toEqual(['LongOne']);
+  });
+
+  /**
+   * Verifies that non-.md files and a subdirectory named like a definition are ignored
+   */
+  it('ignores non-md files and directories', () => {
+    const dir = agentsDir('filtering', {
+      'neo.md': '---\nname: neo\n---\n',
+      'notes.txt': '---\nname: from-txt\n---\n',
+      'neo.md.bak': '---\nname: from-bak\n---\n',
+    });
+    fs.mkdirSync(path.join(dir, 'x.md'));
+    fs.writeFileSync(path.join(dir, 'x.md', 'inner.md'), '---\nname: nested\n---\n', 'utf8');
+    expect(readAgentTypes(dir)).toEqual(['neo']);
+  });
+
+  /**
+   * Verifies that two definitions differing only in case yield a single type
+   */
+  it('dedupes types case-insensitively', () => {
+    const dir = agentsDir('dupes', {
+      'first.md': '---\nname: Alpha\n---\n',
+      'second.md': '---\nname: ALPHA\n---\n',
+      'beta.md': '---\nname: beta\n---\n',
+    });
+    const types = readAgentTypes(dir);
+    expect(types.filter((t) => t.toLowerCase() === 'alpha')).toHaveLength(1);
+    expect(types.filter((t) => t.toLowerCase() !== 'alpha')).toEqual(['beta']);
+  });
+
+  /**
+   * Verifies that a name placed beyond the first 4096 bytes is not found, so the file is skipped
+   */
+  it('reads only the head of each file', () => {
+    const dir = agentsDir('head', {
+      'far.md': `---\ndescription: ${'x'.repeat(5000)}\nname: Far\n---\n`,
+      'near.md': `---\nname: Near\n---\n${'body '.repeat(3000)}`,
+    });
+    expect(readAgentTypes(dir)).toEqual(['Near']);
+  });
+
+  /**
+   * Verifies that at most 64 definitions are read per folder
+   */
+  it('caps the number of definitions at 64', () => {
+    const files: Record<string, string> = {};
+    for (let i = 0; i < 70; i++) {
+      const n = `t${String(i).padStart(2, '0')}`;
+      files[`${n}.md`] = `---\nname: ${n}\n---\n`;
+    }
+    expect(readAgentTypes(agentsDir('many', files))).toHaveLength(64);
+  });
+
+  /**
+   * Verifies that an unreadable definition is skipped without dropping the others
+   */
+  it('skips a file that cannot be opened', () => {
+    const dir = agentsDir('locked', { 'locked.md': '---\nname: Hidden\n---\n', 'open.md': '---\nname: Open\n---\n' });
+    const realOpen = fs.openSync;
+    vi.spyOn(fs, 'openSync').mockImplementation(((file: fs.PathLike, flags?: fs.OpenMode) => {
+      if (String(file).endsWith('locked.md')) throw Object.assign(new Error('EACCES'), { code: 'EACCES' });
+      return realOpen(file, flags ?? 'r');
+    }) as typeof fs.openSync);
+    expect(readAgentTypes(dir)).toEqual(['Open']);
+  });
+
+  /**
+   * Verifies that a missing folder, a file path and an empty folder give no type
+   */
+  it('returns [] for a missing, non-directory or empty folder', () => {
+    expect(readAgentTypes(path.join(root, 'does-not-exist'))).toEqual([]);
+    const file = path.join(root, 'plain-file.md');
+    fs.writeFileSync(file, '---\nname: x\n---\n', 'utf8');
+    expect(readAgentTypes(file)).toEqual([]);
+    expect(readAgentTypes(agentsDir('empty', {}))).toEqual([]);
+  });
+
+  /**
+   * Verifies that a folder that cannot be listed for a transient reason gives no type
+   */
+  it('returns [] when listing the folder fails transiently', () => {
+    const dir = agentsDir('busy', { 'neo.md': '---\nname: neo\n---\n' });
+    const realReaddir = fs.readdirSync;
+    vi.spyOn(fs, 'readdirSync').mockImplementation(((p: fs.PathLike, opts?: unknown) => {
+      if (String(p) === dir) throw Object.assign(new Error('EBUSY'), { code: 'EBUSY' });
+      return (realReaddir as (p: fs.PathLike, o?: unknown) => unknown)(p, opts);
+    }) as unknown as typeof fs.readdirSync);
+    expect(readAgentTypes(dir)).toEqual([]);
+  });
+});
+
+describe('readInventory: definedAgents', () => {
+  let root: string;
+  let folderA: string;
+  let folderB: string;
+  let bare: string;
+  let presetsFile: string;
+
+  /** Writes a definition in `<dir>/<file>`, creating the folder. */
+  function define(dir: string, file: string, content: string) {
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, file), content, 'utf8');
+  }
+
+  beforeAll(() => {
+    root = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-office-defs-'));
+    folderA = path.join(root, 'proj-a');
+    folderB = path.join(root, 'proj-b');
+    bare = path.join(root, 'proj-bare');
+    fs.mkdirSync(bare, { recursive: true });
+
+    define(path.join(root, 'agents'), 'dexter.md', '---\nname: dexter\n---\n');
+    define(path.join(root, 'agents'), 'oracle.md', '---\nname: oracle\n---\n');
+    // No frontmatter name: defines no agent.
+    define(path.join(root, 'agents'), 'notes.md', 'no frontmatter');
+    define(path.join(folderA, '.claude', 'agents'), 'a.md', '---\nname: alpha-agent\n---\n');
+    define(path.join(folderB, '.claude', 'agents'), 'b.md', '---\nname: beta-agent\n---\n');
+
+    presetsFile = path.join(root, 'ccd-session-presets.json');
+    fs.writeFileSync(
+      presetsFile,
+      JSON.stringify({
+        byAccount: {
+          acct: {
+            presets: [
+              { id: 'env-x', name: 'X', target: { cwd: folderA, additionalFolders: [folderB] } },
+              { id: 'env-bare', name: 'Bare', target: { cwd: bare } },
+              { id: 'env-none', name: 'None' },
+            ],
+          },
+        },
+      }),
+      'utf8',
+    );
+  });
+
+  afterAll(() => {
+    fs.rmSync(root, { recursive: true, force: true });
+  });
+
+  const pathsFor = (presets: string | null): ClaudePaths => ({
+    claudeHome: root,
+    liveDir: path.join(root, 'sessions'),
+    desktopData: null,
+    presetsFile: presets,
+    sessionDirs: [],
+  });
+
+  /**
+   * Verifies that global definitions come from <claudeHome>/agents
+   */
+  it('reads the global definitions from the claude home', () => {
+    const inv = readInventory(pathsFor(presetsFile), () => true);
+    expect([...inv.definedAgents!.global].sort()).toEqual(['dexter', 'oracle']);
+  });
+
+  /**
+   * Verifies that each environment lists the definitions of all its folders, main folder first
+   */
+  it('reads definitions per environment from every folder', () => {
+    const byEnv = readInventory(pathsFor(presetsFile), () => true).definedAgents!.byEnv;
+    expect(byEnv).toEqual(
+      new Map([
+        ['env-x', ['alpha-agent', 'beta-agent']],
+        ['env-bare', []],
+        ['env-none', []],
+      ]),
+    );
+  });
+
+  /**
+   * Verifies that without presets the global definitions are still read and no env is listed
+   */
+  it('reads global definitions even without presets', () => {
+    const defs = readInventory(pathsFor(null), () => true).definedAgents!;
+    expect([...defs.global].sort()).toEqual(['dexter', 'oracle']);
+    expect(defs.byEnv.size).toBe(0);
+  });
+});
+
+describe('readInventory: agents cache', () => {
+  let root: string;
+  let counter = 0;
+
+  beforeAll(() => {
+    root = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-office-cache-'));
+  });
+
+  afterAll(() => {
+    fs.rmSync(root, { recursive: true, force: true });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  /** A fresh claude home whose `agents` folder defines `alpha`. */
+  function home() {
+    const claudeHome = path.join(root, `home-${counter++}`);
+    const agents = path.join(claudeHome, 'agents');
+    fs.mkdirSync(agents, { recursive: true });
+    fs.writeFileSync(path.join(agents, 'a.md'), '---\nname: alpha\n---\n', 'utf8');
+    const paths: ClaudePaths = {
+      claudeHome,
+      liveDir: path.join(claudeHome, 'sessions'),
+      desktopData: null,
+      presetsFile: null,
+      sessionDirs: [],
+    };
+    const addBeta = () => fs.writeFileSync(path.join(agents, 'b.md'), '---\nname: beta\n---\n', 'utf8');
+    return { paths, agents, addBeta };
+  }
+
+  const globalAt = (paths: ClaudePaths, cache: AgentsCache | undefined, now: number) =>
+    [...readInventory(paths, () => true, cache, now).definedAgents!.global].sort();
+
+  /**
+   * Verifies that the cache lifetime is one minute
+   */
+  it('exposes a one-minute cache lifetime', () => {
+    expect(AGENTS_CACHE_MS).toBe(60_000);
+  });
+
+  /**
+   * Verifies that without a cache the folders are read on every inventory
+   */
+  it('reads folders every time without a cache', () => {
+    const { paths, addBeta } = home();
+    expect(globalAt(paths, undefined, 1000)).toEqual(['alpha']);
+    addBeta();
+    expect(globalAt(paths, undefined, 1000)).toEqual(['alpha', 'beta']);
+  });
+
+  /**
+   * Verifies that within the cache lifetime a changed folder still gives the cached list
+   */
+  it('reuses the cached list within AGENTS_CACHE_MS', () => {
+    const { paths, agents, addBeta } = home();
+    const cache: AgentsCache = new Map();
+    expect(globalAt(paths, cache, 1000)).toEqual(['alpha']);
+    expect(cache.get(agents)).toEqual({ at: 1000, types: ['alpha'] });
+    addBeta();
+    expect(globalAt(paths, cache, 1000 + 59_000)).toEqual(['alpha']);
+    expect(globalAt(paths, cache, 1000 + AGENTS_CACHE_MS - 1)).toEqual(['alpha']);
+  });
+
+  /**
+   * Verifies that the folder is read again once the cache lifetime has elapsed
+   */
+  it('refreshes the list at AGENTS_CACHE_MS', () => {
+    const { paths, agents, addBeta } = home();
+    const cache: AgentsCache = new Map();
+    globalAt(paths, cache, 1000);
+    addBeta();
+    expect(globalAt(paths, cache, 1000 + AGENTS_CACHE_MS)).toEqual(['alpha', 'beta']);
+    expect(cache.get(agents)?.at).toBe(1000 + AGENTS_CACHE_MS);
+  });
+
+  /**
+   * Verifies that a transient listing failure keeps the previously cached list
+   */
+  it('keeps the previous list when the folder cannot be listed transiently', () => {
+    const { paths, agents } = home();
+    const cache: AgentsCache = new Map();
+    expect(globalAt(paths, cache, 1000)).toEqual(['alpha']);
+
+    const realReaddir = fs.readdirSync;
+    vi.spyOn(fs, 'readdirSync').mockImplementation(((p: fs.PathLike, opts?: unknown) => {
+      if (String(p) === agents) throw Object.assign(new Error('EBUSY'), { code: 'EBUSY' });
+      return (realReaddir as (p: fs.PathLike, o?: unknown) => unknown)(p, opts);
+    }) as unknown as typeof fs.readdirSync);
+
+    expect(globalAt(paths, cache, 1000 + AGENTS_CACHE_MS)).toEqual(['alpha']);
+    expect(cache.get(agents)?.types).toEqual(['alpha']);
+  });
+
+  /**
+   * Verifies that a transient failure with nothing cached yet gives no type
+   */
+  it('gives [] on a transient failure with an empty cache', () => {
+    const { paths, agents } = home();
+    const realReaddir = fs.readdirSync;
+    vi.spyOn(fs, 'readdirSync').mockImplementation(((p: fs.PathLike, opts?: unknown) => {
+      if (String(p) === agents) throw Object.assign(new Error('EBUSY'), { code: 'EBUSY' });
+      return (realReaddir as (p: fs.PathLike, o?: unknown) => unknown)(p, opts);
+    }) as unknown as typeof fs.readdirSync);
+    expect(globalAt(paths, new Map(), 1000)).toEqual([]);
+  });
+
+  /**
+   * Verifies that a deleted folder empties the list even when a list was cached
+   */
+  it('gives [] when the folder was removed, despite a cached list', () => {
+    const { paths, agents } = home();
+    const cache: AgentsCache = new Map();
+    expect(globalAt(paths, cache, 1000)).toEqual(['alpha']);
+    fs.rmSync(agents, { recursive: true, force: true });
+    expect(globalAt(paths, cache, 1000 + AGENTS_CACHE_MS)).toEqual([]);
+    expect(cache.get(agents)?.types).toEqual([]);
+  });
+
+  /**
+   * Verifies that environment folders are cached too, one entry per agents folder
+   */
+  it('caches environment folders by their agents path', () => {
+    const { paths } = home();
+    const proj = path.join(root, `proj-${counter++}`);
+    const projAgents = path.join(proj, '.claude', 'agents');
+    fs.mkdirSync(projAgents, { recursive: true });
+    fs.writeFileSync(path.join(projAgents, 'p.md'), '---\nname: proj-agent\n---\n', 'utf8');
+    const presetsFile = path.join(paths.claudeHome, 'presets.json');
+    fs.writeFileSync(
+      presetsFile,
+      JSON.stringify({ byAccount: { acct: { presets: [{ id: 'env-p', name: 'P', target: { cwd: proj } }] } } }),
+      'utf8',
+    );
+    const withEnv = { ...paths, presetsFile };
+    const cache: AgentsCache = new Map();
+    expect(readInventory(withEnv, () => true, cache, 1000).definedAgents!.byEnv.get('env-p')).toEqual(['proj-agent']);
+    fs.writeFileSync(path.join(projAgents, 'q.md'), '---\nname: other\n---\n', 'utf8');
+    expect(readInventory(withEnv, () => true, cache, 2000).definedAgents!.byEnv.get('env-p')).toEqual(['proj-agent']);
+    expect(cache.has(projAgents)).toBe(true);
   });
 });

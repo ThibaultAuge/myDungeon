@@ -9,7 +9,7 @@ import type {
   WaitReason,
 } from '@agent-office/shared';
 import { NO_ENV_ID } from '@agent-office/shared';
-import { matchEnvironment, type Environment, type Inventory, type LiveProcess } from './inventory.ts';
+import { matchEnvironment, type DefinedAgents, type Environment, type Inventory, type LiveProcess } from './inventory.ts';
 
 // State machine of the office. No I/O here: every function takes the state and `now`,
 // so the whole behaviour is testable with fixtures.
@@ -34,6 +34,10 @@ export interface OfficeState {
   agentHookAt: Map<string, number>;
   /** Agent tool calls of a session not yet matched to a SubagentStart. */
   pendingSpawns: Map<string, { agentType: string; description?: string }[]>;
+  /** Agent types defined in `agents` folders, resting in the tavern. */
+  definedAgents: DefinedAgents;
+  /** Agent types seen at work, by environment key: built-in types rest in the tavern after their first call. */
+  seenTypes: Map<string, string[]>;
 }
 
 /** A subagent silent for this long is considered finished (its SubagentStop was missed). */
@@ -48,6 +52,8 @@ export function createState(): OfficeState {
     lastHookAt: new Map(),
     agentHookAt: new Map(),
     pendingSpawns: new Map(),
+    definedAgents: { global: [], byEnv: new Map() },
+    seenTypes: new Map(),
   };
 }
 
@@ -181,8 +187,13 @@ function patchAgent(a: AgentView, patch: Partial<AgentView>, now: number): void 
   if (changed) a.since = now;
 }
 
+/**
+ * Sets an agent waiting. Only an agent with something to tell the human (a permission, a
+ * question, an error) queues at the altar; one that merely waits for the next prompt rests
+ * in the tavern.
+ */
 function setWaiting(a: AgentView, reason: WaitReason, now: number, extra: Partial<AgentView> = {}): void {
-  patchAgent(a, { state: 'waiting', waitReason: reason, room: 'autel', ...extra }, now);
+  patchAgent(a, { state: 'waiting', waitReason: reason, room: reason === 'prompt' ? 'taverne' : 'autel', ...extra }, now);
 }
 
 function setDone(a: AgentView, now: number): void {
@@ -270,6 +281,11 @@ function absorb(state: OfficeState, target: SessionView, cliId: string): void {
 export function applyInventory(state: OfficeState, inv: Inventory, now: number): void {
   // An unreadable presets file (mid-write) keeps the previous environments.
   if (inv.presetsOk !== false || state.environments.length === 0) state.environments = inv.environments;
+  if (inv.definedAgents) {
+    // Without the presets, the environments' folders are unknown: keep their agents.
+    const byEnv = inv.presetsOk === false ? state.definedAgents.byEnv : inv.definedAgents.byEnv;
+    state.definedAgents = { global: inv.definedAgents.global, byEnv };
+  }
   const environments = state.environments;
   const envIds = new Set(environments.map((e) => e.id));
   const present = inv.presentIds ?? new Set(inv.desktopSessions.map((d) => d.localId));
@@ -390,9 +406,38 @@ function findOrCreateSub(state: OfficeState, s: SessionView, ev: HookEvent, now:
     sub = newAgent(ev.agent_id, s.id, 'sub', ev.agent_type, now);
     sub.description = takeSpawn(state, s.id, ev.agent_type)?.description;
     s.subagents.push(sub);
+    noteSeenType(state, s, ev.agent_type);
   }
   if (sub) state.agentHookAt.set(sub.id, now);
   return sub;
+}
+
+/** Seen types kept per environment, beyond which the oldest is forgotten. */
+const MAX_SEEN_TYPES = 32;
+
+/** Remembers that an agent type worked in this session's environment. */
+function noteSeenType(state: OfficeState, s: SessionView, agentType: string): void {
+  const key = envKey(s);
+  const list = state.seenTypes.get(key) ?? [];
+  if (list.some((t) => t.toLowerCase() === agentType.toLowerCase())) return;
+  list.push(agentType);
+  state.seenTypes.set(key, list.slice(-MAX_SEEN_TYPES));
+}
+
+/**
+ * Agent types resting in the tavern of an environment: the global definitions, the ones of
+ * the environment's folders, and the types already seen at work there. One entry per type,
+ * case-insensitively, sorted so each keeps its seat.
+ */
+export function rosterView(state: OfficeState, envId: string): string[] {
+  const out = new Map<string, string>();
+  const all = [
+    ...state.definedAgents.global,
+    ...(state.definedAgents.byEnv.get(envId) ?? []),
+    ...(state.seenTypes.get(envId) ?? []),
+  ];
+  for (const t of all) if (!out.has(t.toLowerCase())) out.set(t.toLowerCase(), t);
+  return [...out.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([, t]) => t);
 }
 
 function takeSpawn(state: OfficeState, sessionId: string, agentType: string) {
@@ -419,7 +464,7 @@ export function applyHook(state: OfficeState, ev: HookEvent, now: number): Sessi
       if (s.main.state !== 'working') setWaiting(s.main, 'prompt', now);
       break;
     case 'UserPromptSubmit':
-      // A new prompt: the main agent leaves the altar for the map room to study the request.
+      // A new prompt: the main agent leaves the tavern (or the altar) for the map room to study the request.
       patchAgent(
         s.main,
         { state: 'working', room: 'cartes', tool: undefined, toolDetail: truncate(ev.prompt), description: truncate(ev.prompt) },
@@ -472,6 +517,7 @@ export function applyHook(state: OfficeState, ev: HookEvent, now: number): Sessi
       created.description = takeSpawn(state, s.id, ev.agent_type)?.description;
       s.subagents.push(created);
       state.agentHookAt.set(created.id, now);
+      noteSeenType(state, s, ev.agent_type);
       break;
     }
     case 'SubagentStop': {

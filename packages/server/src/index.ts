@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import chokidar from 'chokidar';
 import { buildApp } from './app.ts';
 import { loadConfig, WEB_DIST } from './config.ts';
-import { readInventory } from './inventory.ts';
+import { readInventory, type AgentsCache } from './inventory.ts';
 import { resolvePaths, type ClaudePaths } from './paths.ts';
 import { OfficeStore } from './store.ts';
 
@@ -13,10 +13,12 @@ const DEBOUNCE_MS = 300;
 const config = loadConfig();
 const store = new OfficeStore();
 let paths: ClaudePaths = resolvePaths();
+/** Agent definitions change rarely: their folders are read at most once a minute. */
+const agentsCache: AgentsCache = new Map();
 
 function rescan(): void {
   try {
-    store.ingestInventory(readInventory(paths));
+    store.ingestInventory(readInventory(paths, undefined, agentsCache));
   } catch (err) {
     console.error('[inventaire] lecture impossible :', (err as Error).message);
   }

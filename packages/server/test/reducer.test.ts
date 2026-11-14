@@ -13,6 +13,7 @@ import {
   environmentsView,
   hookEventSchema,
   prune,
+  rosterView,
   sessionsView,
   summarize,
   toolDetail,
@@ -208,7 +209,7 @@ describe('applyInventory', () => {
   it('marks main waiting for a prompt for an idle process', () => {
     const state = createState();
     applyInventory(state, inventory({ desktopSessions: [desk()], live: [proc({ status: 'idle' })] }), 1000);
-    expect(state.sessions.get(LOCAL_A)?.main).toMatchObject({ state: 'waiting', waitReason: 'prompt', room: 'autel' });
+    expect(state.sessions.get(LOCAL_A)?.main).toMatchObject({ state: 'waiting', waitReason: 'prompt', room: 'taverne' });
   });
 
   /**
@@ -268,7 +269,7 @@ describe('applyInventory', () => {
     applyInventory(state, inventory({ desktopSessions: [desk()], live: [proc({ status: 'idle' })] }), 20_000);
     expect(state.sessions.get(LOCAL_A)?.main.state).toBe('working');
     applyInventory(state, inventory({ desktopSessions: [desk()], live: [proc({ status: 'idle' })] }), 10_000 + HOOK_AUTHORITY_MS + 1);
-    expect(state.sessions.get(LOCAL_A)?.main).toMatchObject({ state: 'waiting', waitReason: 'prompt', room: 'autel' });
+    expect(state.sessions.get(LOCAL_A)?.main).toMatchObject({ state: 'waiting', waitReason: 'prompt', room: 'taverne' });
   });
 
   /**
@@ -529,7 +530,7 @@ describe('applyHook: main agent', () => {
       [1, hook('PreToolUse', { tool_name: 'Edit', tool_input: { file_path: 'a' } })],
       [2, hook('Stop', { last_assistant_message: 'All  done.' })],
     ]);
-    expect(s.main).toMatchObject({ state: 'waiting', waitReason: 'prompt', room: 'autel', lastMessage: 'All done.' });
+    expect(s.main).toMatchObject({ state: 'waiting', waitReason: 'prompt', room: 'taverne', lastMessage: 'All done.' });
     expect(s.main.tool).toBeUndefined();
     expect(s.main.toolDetail).toBeUndefined();
   });
@@ -1513,11 +1514,263 @@ describe('dungeon rooms: applyHook', () => {
   /**
    * Verifies that a busy process moves an idle main agent out of the altar to the map room
    */
-  it('moves main out of the altar when the inventory reports busy', () => {
+  it('moves main out of the tavern when the inventory reports busy', () => {
     const state = createState();
     applyInventory(state, inventory({ desktopSessions: [desk()], live: [proc({ status: 'idle' })] }), 1000);
-    expect(state.sessions.get(LOCAL_A)!.main).toMatchObject({ state: 'waiting', room: 'autel' });
+    expect(state.sessions.get(LOCAL_A)!.main).toMatchObject({ state: 'waiting', room: 'taverne' });
     applyInventory(state, inventory({ desktopSessions: [desk()], live: [proc({ status: 'busy' })] }), 100_000);
     expect(state.sessions.get(LOCAL_A)!.main).toMatchObject({ state: 'working', room: 'cartes' });
+  });
+});
+
+describe('tavern cycle: wait rooms', () => {
+  /**
+   * Verifies that waiting for a prompt rests in the tavern, and any other wait queues at the altar
+   */
+  it.each([
+    ['Stop', {}, 'prompt', 'taverne'],
+    ['SessionStart', {}, 'prompt', 'taverne'],
+    ['Notification', { notification_type: 'idle_prompt' }, 'prompt', 'taverne'],
+    ['PermissionRequest', { tool_name: 'Bash' }, 'permission', 'autel'],
+    ['Notification', { notification_type: 'permission_prompt', message: 'Allow?' }, 'permission', 'autel'],
+    ['PreToolUse', { tool_name: 'AskUserQuestion', tool_input: { questions: [{ question: 'Q?' }] } }, 'question', 'autel'],
+    ['StopFailure', { error: 'rate_limit' }, 'error', 'autel'],
+  ] as const)('%s %j waits on %s in %s', (event, extra, reason, room) => {
+    const s = run(stateWithEnvs(), [[1, hook(event, extra)]]);
+    expect(s.main).toMatchObject({ state: 'waiting', waitReason: reason, room });
+  });
+
+  /**
+   * Verifies that a failure after a finished turn moves main from the tavern to the altar
+   */
+  it('moves main from the tavern to the altar on StopFailure', () => {
+    const state = stateWithEnvs();
+    expect(run(state, [[1, hook('Stop')]]).main.room).toBe('taverne');
+    expect(run(state, [[2, hook('StopFailure', { error: 'overloaded' })]]).main).toMatchObject({
+      waitReason: 'error',
+      room: 'autel',
+    });
+  });
+
+  /**
+   * Verifies that a turn ending after a permission wait sends main from the altar to the tavern
+   */
+  it('moves main from the altar to the tavern on Stop', () => {
+    const state = stateWithEnvs();
+    expect(run(state, [[1, hook('PermissionRequest', { tool_name: 'Bash' })]]).main.room).toBe('autel');
+    expect(run(state, [[2, hook('Stop')]]).main).toMatchObject({ waitReason: 'prompt', room: 'taverne' });
+  });
+
+  /**
+   * Verifies that a specialist subagent asking a question queues at the altar, not at its post
+   */
+  it('sends a subagent asking a question to the altar', () => {
+    const s = run(stateWithEnvs(), [
+      [1, hook('SubagentStart', { agent_id: 'ag-n', agent_type: 'neo' })],
+      [2, hook('PreToolUse', { agent_id: 'ag-n', tool_name: 'AskUserQuestion', tool_input: {} })],
+    ]);
+    expect(s.subagents[0]).toMatchObject({ state: 'waiting', waitReason: 'question', room: 'autel' });
+  });
+
+  /**
+   * Verifies that a new prompt takes main out of the tavern to the map room
+   */
+  it('takes main out of the tavern on a new prompt', () => {
+    const state = stateWithEnvs();
+    run(state, [[1, hook('Stop')]]);
+    expect(run(state, [[2, hook('UserPromptSubmit', { prompt: 'next' })]]).main).toMatchObject({ state: 'working', room: 'cartes' });
+  });
+});
+
+describe('tavern cycle: seen types and rosterView', () => {
+  /**
+   * Verifies that an empty state has an empty roster for any environment
+   */
+  it('returns [] for an empty state', () => {
+    expect(rosterView(createState(), 'env-alpha')).toEqual([]);
+    expect(rosterView(createState(), NO_ENV)).toEqual([]);
+  });
+
+  /**
+   * Verifies that a started subagent's type joins the roster of its session's environment only
+   */
+  it('records the type of a started subagent in its environment', () => {
+    const state = stateWithEnvs();
+    run(state, [[1, hook('SubagentStart', { agent_id: 'ag-1', agent_type: 'Explore' })]]);
+    expect(rosterView(state, 'env-alpha')).toEqual(['Explore']);
+    expect(rosterView(state, 'env-beta')).toEqual([]);
+  });
+
+  /**
+   * Verifies that a subagent created from its first tool call also joins the roster
+   */
+  it('records the type when SubagentStart was missed', () => {
+    const state = stateWithEnvs();
+    run(state, [[1, hook('PreToolUse', { agent_id: 'ag-x', agent_type: 'dexter', tool_name: 'Read' })]]);
+    expect(rosterView(state, 'env-alpha')).toEqual(['dexter']);
+  });
+
+  /**
+   * Verifies that internal agents without a type never join the roster
+   */
+  it('ignores agents without a type', () => {
+    const state = stateWithEnvs();
+    run(state, [
+      [1, hook('SubagentStart', { agent_id: 'ag-i', agent_type: '' })],
+      [2, hook('PreToolUse', { agent_id: 'ag-j', tool_name: 'Read' })],
+      [3, hook('SubagentStart', { agent_id: 'ag-k' })],
+    ]);
+    expect(rosterView(state, 'env-alpha')).toEqual([]);
+  });
+
+  /**
+   * Verifies that the main agent's tool calls never add a roster entry
+   */
+  it('does not record the main agent', () => {
+    const state = stateWithEnvs();
+    run(state, [
+      [1, hook('UserPromptSubmit', { prompt: 'go' })],
+      [2, hook('PreToolUse', { tool_name: 'Agent', tool_input: { subagent_type: 'Plan' } })],
+    ]);
+    expect(rosterView(state, 'env-alpha')).toEqual([]);
+  });
+
+  /**
+   * Verifies that a type seen twice in different cases is kept once, in its first spelling
+   */
+  it('dedupes seen types case-insensitively, first spelling wins', () => {
+    const state = stateWithEnvs();
+    run(state, [
+      [1, hook('SubagentStart', { agent_id: 'ag-1', agent_type: 'Explore' })],
+      [2, hook('SubagentStart', { agent_id: 'ag-2', agent_type: 'EXPLORE' })],
+      [3, hook('SubagentStart', { agent_id: 'ag-3', agent_type: 'explore' })],
+    ]);
+    expect(rosterView(state, 'env-alpha')).toEqual(['Explore']);
+  });
+
+  /**
+   * Verifies that each environment, the virtual one included, keeps its own seen types
+   */
+  it('keeps seen types per environment', () => {
+    const state = stateWithEnvs();
+    applyHook(state, hook('SubagentStart', { agent_id: 'ag-a', agent_type: 'neo' }), 1);
+    applyHook(state, hook('SubagentStart', { session_id: CLI_B, cwd: 'C:/work/beta', agent_id: 'ag-b', agent_type: 'oracle' }), 2);
+    applyHook(state, hook('SubagentStart', { session_id: 'cli-orphan', cwd: 'D:/elsewhere', agent_id: 'ag-o', agent_type: 'turing' }), 3);
+    expect(rosterView(state, 'env-alpha')).toEqual(['neo']);
+    expect(rosterView(state, 'env-beta')).toEqual(['oracle']);
+    expect(rosterView(state, NO_ENV)).toEqual(['turing']);
+    expect(rosterView(state, 'env-alpha-api')).toEqual([]);
+  });
+
+  /**
+   * Verifies that at most 32 types are remembered per environment, the oldest forgotten first
+   */
+  it('caps seen types at 32 per environment, dropping the oldest', () => {
+    const state = stateWithEnvs();
+    const type = (i: number) => `t${String(i).padStart(2, '0')}`;
+    for (let i = 0; i < 40; i++) applyHook(state, hook('SubagentStart', { agent_id: `ag-${i}`, agent_type: type(i) }), i + 1);
+    expect(rosterView(state, 'env-alpha')).toEqual(Array.from({ length: 32 }, (_, k) => type(k + 8)));
+
+    // A forgotten type seen again comes back as the newest, pushing out the next oldest.
+    applyHook(state, hook('SubagentStart', { agent_id: 'ag-again', agent_type: type(0) }), 100);
+    const roster = rosterView(state, 'env-alpha');
+    expect(roster).toHaveLength(32);
+    expect(roster).toContain(type(0));
+    expect(roster).not.toContain(type(8));
+    expect(roster).toContain(type(9));
+  });
+
+  /**
+   * Verifies that the roster merges global, environment and seen types, deduped and sorted
+   */
+  it('merges defined and seen types, first spelling wins, sorted by lower-case name', () => {
+    const state = createState();
+    applyInventory(
+      state,
+      inventory({
+        definedAgents: {
+          global: ['zeta', 'Dexter'],
+          byEnv: new Map([
+            ['env-alpha', ['dexter', 'beta']],
+            ['env-beta', ['onlyBeta']],
+          ]),
+        },
+      }),
+      0,
+    );
+    run(state, [
+      [1, hook('SubagentStart', { agent_id: 'ag-1', agent_type: 'Explore' })],
+      [2, hook('SubagentStart', { agent_id: 'ag-2', agent_type: 'BETA' })],
+      [3, hook('SubagentStart', { agent_id: 'ag-3', agent_type: 'DEXTER' })],
+    ]);
+    expect(rosterView(state, 'env-alpha')).toEqual(['beta', 'Dexter', 'Explore', 'zeta']);
+    expect(rosterView(state, 'env-beta')).toEqual(['Dexter', 'onlyBeta', 'zeta']);
+    expect(rosterView(state, 'env-unknown')).toEqual(['Dexter', 'zeta']);
+  });
+
+  /**
+   * Verifies that duplicates inside a single source are also collapsed
+   */
+  it('dedupes within the global definitions', () => {
+    const state = createState();
+    applyInventory(state, inventory({ definedAgents: { global: ['Neo', 'neo', 'NEO'], byEnv: new Map() } }), 0);
+    expect(rosterView(state, 'env-alpha')).toEqual(['Neo']);
+  });
+});
+
+describe('tavern cycle: applyInventory definedAgents', () => {
+  const defs = (global: string[], byEnv: [string, string[]][]) => ({ global, byEnv: new Map(byEnv) });
+
+  /**
+   * Verifies that a fresh state starts with no defined agents
+   */
+  it('starts with empty definitions', () => {
+    expect(createState().definedAgents).toEqual({ global: [], byEnv: new Map() });
+  });
+
+  /**
+   * Verifies that each inventory read replaces both global and per-environment definitions
+   */
+  it('replaces the definitions on each read', () => {
+    const state = createState();
+    applyInventory(state, inventory({ definedAgents: defs(['g1'], [['env-alpha', ['a1']]]) }), 1);
+    expect(rosterView(state, 'env-alpha')).toEqual(['a1', 'g1']);
+    applyInventory(state, inventory({ definedAgents: defs(['g2'], []) }), 2);
+    expect(rosterView(state, 'env-alpha')).toEqual(['g2']);
+  });
+
+  /**
+   * Verifies that an inventory without definitions keeps the previous ones
+   */
+  it('keeps the previous definitions when the inventory has none', () => {
+    const state = createState();
+    applyInventory(state, inventory({ definedAgents: defs(['g1'], [['env-alpha', ['a1']]]) }), 1);
+    applyInventory(state, inventory(), 2);
+    expect(rosterView(state, 'env-alpha')).toEqual(['a1', 'g1']);
+  });
+
+  /**
+   * Verifies that an unreadable presets file keeps per-env definitions but updates global ones
+   */
+  it('keeps byEnv but updates global when presetsOk is false', () => {
+    const state = createState();
+    applyInventory(state, inventory({ definedAgents: defs(['g1'], [['env-alpha', ['a1']]]) }), 1);
+    applyInventory(state, inventory({ environments: [], presetsOk: false, definedAgents: defs(['g2'], []) }), 2);
+    expect(rosterView(state, 'env-alpha')).toEqual(['a1', 'g2']);
+    expect(state.definedAgents.global).toEqual(['g2']);
+
+    // Once the presets read again, the fresh per-env definitions apply.
+    applyInventory(state, inventory({ presetsOk: true, definedAgents: defs(['g2'], [['env-alpha', ['a2']]]) }), 3);
+    expect(rosterView(state, 'env-alpha')).toEqual(['a2', 'g2']);
+  });
+
+  /**
+   * Verifies that inventory reads never erase the types seen at work
+   */
+  it('keeps seen types across inventory reads', () => {
+    const state = stateWithEnvs();
+    run(state, [[1, hook('SubagentStart', { agent_id: 'ag-1', agent_type: 'Explore' })]]);
+    applyInventory(state, inventory({ definedAgents: defs([], []) }), 2);
+    expect(rosterView(state, 'env-alpha')).toEqual(['Explore']);
   });
 });
