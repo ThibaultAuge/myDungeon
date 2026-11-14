@@ -4,7 +4,7 @@ import { useT } from '../i18n/useT.ts';
 import { useOffice } from '../store.ts';
 import { useNow } from '../useNow.ts';
 
-/** DOM id of an agent's row, used to give focus back after the detail panel closes. */
+/** DOM id of an agent's row, used to give focus back after the agent info card closes. */
 export function rowId(agentId: string): string {
   return `agent-row-${agentId.replace(/[^\w-]/g, '_')}`;
 }

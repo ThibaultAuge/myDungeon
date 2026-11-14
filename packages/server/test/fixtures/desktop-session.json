@@ -14,5 +14,11 @@
     "taskId": "task-0001",
     "title": "Parent task"
   },
-  "model": "fake-model"
+  "model": "fake-model",
+  "worktreeName": "wt-1",
+  "branch": "claude/wt-1",
+  "sourceBranch": "main",
+  "effort": "medium",
+  "permissionMode": "auto",
+  "completedTurns": 6
 }

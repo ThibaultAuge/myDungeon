@@ -246,11 +246,11 @@ dans son `.claude/agents/`, et les plugins en ajoutent.
 - **Sessions lancées par une autre session** (`spawnedFrom`). Chacune est un agent
   principal à part entière, avec sa propre couleur. En général elle travaille dans son
   propre worktree et ne dépend pas de la session qui l'a lancée. Le lien est donc
-  secondaire : une mention « lancée depuis… » dans le panneau de détail suffit, un repère
+  secondaire : une mention « lancée depuis… » dans la fiche de l'agent suffit, un repère
   visuel dans la 3D est facultatif.
 - **Skills** (`jira-comment`, `knowledge`…). Ce ne sont pas des personnages. Quand un
   agent utilise un skill, il porte un **badge** à son nom : un petit insigne en 3D sur le
-  personnage, ou au minimum un badge dans le panneau de détail HTML. Le hook
+  personnage, ou au minimum un badge dans la fiche HTML de l'agent. Le hook
   `PreToolUse` de l'outil `Skill` donne le nom du skill (à vérifier).
 - **Le Scriptorium** est un coin de la Bibliothèque.
 - **Nombre de pièces.** On part sur 14 lieux. La lisibilité et les 60 images/s seront
@@ -276,7 +276,10 @@ Fait :
   l'attente d'un prompt ;
 - la bulle de requête à l'autel (« … », « ? », « ! ») et le losange ambre de l'attente d'un prompt ;
 - la boîte de dialogue en lecture seule, ouverte par un clic sur un personnage ou sur sa ligne,
-  lisible sans connexion depuis la page servie en local.
+  lisible sans connexion depuis la page servie en local ;
+- les postes de travail : survol et clic sur le mobilier (`packages/web/src/scene/Post.tsx`),
+  carte du poste (`packages/web/src/ui/PostCard.tsx`), un poste par fonction dans les pièces à
+  plusieurs fonctions, et la liste « Lieux du bureau » du panneau latéral.
 
 Reste à faire :
 

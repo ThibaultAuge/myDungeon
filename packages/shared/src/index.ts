@@ -42,6 +42,34 @@ export interface AgentView {
 
 export type SessionOrigin = 'desktop' | 'cli';
 
+/**
+ * Working context of a session. Every field is raw data (ids, names, counts), never a
+ * display string: the client translates the labels and falls back to the raw value.
+ */
+export interface SessionInfo {
+  /** Absent when the session does not run in a git worktree. */
+  worktree?: { name: string };
+  branch?: string;
+  /** Branch the worktree was cut from. */
+  sourceBranch?: string;
+  /** Model id, e.g. `claude-opus-5-5`. */
+  model?: string;
+  /** Raw effort level (`low`, `medium`…). */
+  effort?: string;
+  /** Raw permission mode (`default`, `auto`, `plan`…). */
+  permissionMode?: string;
+  completedTurns?: number;
+  /** Claude Code version of the live process. */
+  cliVersion?: string;
+}
+
+/** A TCP port listening on this machine, attributed to a session. */
+export interface ListeningServer {
+  port: number;
+  /** Executable name of the listening process (`node`, `python`…), never its command line. */
+  process?: string;
+}
+
 export interface SessionView {
   /** Desktop `local_…` id, or `cli:<cliSessionId>` for a terminal session. */
   id: string;
@@ -57,6 +85,9 @@ export interface SessionView {
   createdAt: number;
   lastActivityAt: number;
   parent?: { sessionId: string; title?: string };
+  info: SessionInfo;
+  /** Web servers the session started, refreshed every few seconds; empty when none or ended. */
+  servers: ListeningServer[];
   main: AgentView;
   subagents: AgentView[];
 }

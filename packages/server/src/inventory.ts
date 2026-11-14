@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { z } from 'zod';
+import type { SessionInfo } from '@agent-office/shared';
 import type { ClaudePaths } from './paths.ts';
 
 // The desktop app's files are internal and undocumented: every schema below is lenient,
@@ -26,6 +27,8 @@ export interface DesktopSession {
   createdAt: number;
   lastActivityAt: number;
   parent?: { sessionId: string; title?: string };
+  /** Working context read from the session file (worktree, branch, model…). */
+  info: SessionInfo;
 }
 
 export interface LiveProcess {
@@ -36,6 +39,10 @@ export interface LiveProcess {
   status: 'busy' | 'idle' | 'unknown';
   updatedAt: number;
   name?: string;
+  /** Claude Code version. */
+  version?: string;
+  /** True when `cwd` holds a `.git` file, i.e. a git worktree (terminal sessions only use it). */
+  worktree?: boolean;
 }
 
 export interface Inventory {
@@ -108,8 +115,60 @@ const sessionSchema = z
     lastActivityAt: z.number().optional(),
     spawnedFrom: z.object({ sessionId: z.string(), title: z.string().optional() }).passthrough().nullable().optional(),
     forkedFromSessionId: z.string().nullable().optional(),
+    // Working context: any value of the wrong type is dropped, never fatal.
+    worktreeName: z.unknown().optional(),
+    branch: z.unknown().optional(),
+    sourceBranch: z.unknown().optional(),
+    model: z.unknown().optional(),
+    effort: z.unknown().optional(),
+    permissionMode: z.unknown().optional(),
+    completedTurns: z.unknown().optional(),
   })
   .passthrough();
+
+/** Model ids such as `claude-opus-5-5` or `claude-sonnet-5-5[1m]`. */
+const MODEL_ID = /^[\w.:@\[\]-]{1,64}$/;
+/** Raw enum-like values (effort, permission mode). */
+const RAW_WORD = /^[A-Za-z][\w-]{0,31}$/;
+/** Version strings such as `2.3.1` or `2.3.1-beta.2`. */
+const VERSION = /^[\w.+-]{1,32}$/;
+/**
+ * Branch and worktree names: anything printable, bounded (React escapes it). Bidi controls
+ * and zero-width characters are refused too: they could make a name read as another.
+ */
+const LABEL = /^[^\x00-\x1f\x7f​-‏‪-‮⁦-⁩]{1,128}$/;
+
+function matching(v: unknown, pattern: RegExp): string | undefined {
+  return typeof v === 'string' && pattern.test(v) ? v : undefined;
+}
+
+/** Strips undefined fields so an empty context is `{}` and snapshots stay small. */
+function compact<T extends object>(o: T): T {
+  return Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined)) as T;
+}
+
+export function sessionInfo(s: z.infer<typeof sessionSchema>): SessionInfo {
+  const worktreeName = matching(s.worktreeName, LABEL);
+  const turns = s.completedTurns;
+  return compact({
+    worktree: worktreeName ? { name: worktreeName } : undefined,
+    branch: matching(s.branch, LABEL),
+    sourceBranch: matching(s.sourceBranch, LABEL),
+    model: matching(s.model, MODEL_ID),
+    effort: matching(s.effort, RAW_WORD),
+    permissionMode: matching(s.permissionMode, RAW_WORD),
+    completedTurns: typeof turns === 'number' && Number.isSafeInteger(turns) && turns >= 0 ? turns : undefined,
+  });
+}
+
+export function cliVersion(v: unknown): string | undefined {
+  return matching(v, VERSION);
+}
+
+/** A worktree or branch name, or undefined when it fails `LABEL`. */
+export function label(v: unknown): string | undefined {
+  return matching(v, LABEL);
+}
 
 export function parseDesktopSession(raw: unknown): DesktopSession | null {
   const p = sessionSchema.safeParse(raw);
@@ -137,6 +196,7 @@ export function parseDesktopSession(raw: unknown): DesktopSession | null {
     createdAt: s.createdAt ?? 0,
     lastActivityAt: s.lastActivityAt ?? s.createdAt ?? 0,
     parent,
+    info: sessionInfo(s),
   };
 }
 
@@ -150,6 +210,8 @@ const liveSchema = z
     updatedAt: z.number().optional(),
     statusUpdatedAt: z.number().optional(),
     name: z.string().optional(),
+    // Any type: a wrong one drops the version, never the whole process.
+    version: z.unknown().optional(),
   })
   .passthrough();
 
@@ -165,6 +227,7 @@ export function parseLiveProcess(raw: unknown): LiveProcess | null {
     status: s.status === 'busy' || s.status === 'idle' ? s.status : 'unknown',
     updatedAt: s.statusUpdatedAt ?? s.updatedAt ?? 0,
     name: s.name,
+    version: cliVersion(s.version),
   };
 }
 
@@ -270,7 +333,7 @@ export function isRemotePath(p: string): boolean {
  * a network share (an SMB connection leaks NTLM credentials) or an automount, out of reach of
  * `isRemotePath`. Only `lstat` is used: resolving the target would already contact the host.
  */
-function linkedBelow(root: string, dir: string): boolean {
+export function linkedBelow(root: string, dir: string): boolean {
   const rel = path.relative(root, dir);
   let current = root;
   for (const part of rel.split(path.sep).filter(Boolean)) {
@@ -397,6 +460,19 @@ export function pidAlive(pid: number): boolean {
   }
 }
 
+/**
+ * True when `<cwd>/.git` is a regular file: git writes a `gitdir:` file instead of a folder
+ * in a linked worktree. `lstat` only, never on a remote path (see `isRemotePath`).
+ */
+export function isWorktree(cwd: string): boolean {
+  if (!cwd || !path.isAbsolute(cwd) || isRemotePath(cwd)) return false;
+  try {
+    return fs.lstatSync(path.join(cwd, '.git'), { throwIfNoEntry: false })?.isFile() ?? false;
+  } catch {
+    return false;
+  }
+}
+
 function readArchivedIndex(dir: string): Set<string> {
   const raw = readJson(path.join(dir, 'archived-sessions.idx')) as { archived?: unknown } | undefined;
   return new Set(Array.isArray(raw?.archived) ? raw.archived.filter((x): x is string => typeof x === 'string') : []);
@@ -444,7 +520,10 @@ export function readInventory(
   try {
     for (const f of fs.readdirSync(paths.liveDir).filter((f) => /^\d+\.json$/.test(f))) {
       const p = parseLiveProcess(readJson(path.join(paths.liveDir, f)));
-      if (p && isAlive(p.pid)) live.push(p);
+      if (p && isAlive(p.pid)) {
+        p.worktree = isWorktree(p.cwd);
+        live.push(p);
+      }
     }
   } catch {
     /* no live folder yet */
