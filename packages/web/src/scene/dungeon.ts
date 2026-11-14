@@ -1,4 +1,4 @@
-import { BOUNDS, doorOf, inFootprint, ROOMS, type FloorKind, type RoomDef, type Side } from './layout.ts';
+import { BOUNDS, doorOf, GATE, inFootprint, ROOMS, type FloorKind, type RoomDef, type Side } from './layout.ts';
 
 // Where the KayKit floor tiles, walls and wall decor go. Pure geometry, no three.js scene:
 // testable in node. Every list is grouped by model name, ready for <KitInstances>.
@@ -116,6 +116,40 @@ export function roomFloor(room: RoomDef, out: Placement = new Map()): Placement 
 /** The outer rectangle of the dungeon, corridors included. */
 export const OUTER = { x0: BOUNDS.x0 - 0.5, x1: BOUNDS.x1 + 0.5, z0: BOUNDS.z0 - 0.5, z1: BOUNDS.z1 + 0.5 };
 
+/**
+ * Thickness of the outer walls of the castle. Their outer face is the edge of the map (the
+ * stone base, the moat on the south side); their inner face stays about where a room wall is.
+ */
+export const PERIMETER_T = 0.6;
+/** The line of BOUNDS on each side of the map: where the rooms on the edge end. */
+export const BOUND_LINE: Record<Side, number> = { n: BOUNDS.z0, s: BOUNDS.z1, w: BOUNDS.x0, e: BOUNDS.x1 };
+/**
+ * Pillars as deep as an outer wall (gate jambs, slots between two rooms) overlap the wall ends:
+ * they are this much deeper, inwards only, so their faces never fight with the wall's.
+ */
+export const PERIMETER_PILLAR_EXTRA = 0.06;
+/** Middle line of the outer wall on each side of the map. */
+export const PERIMETER_LINE: Record<Side, number> = {
+  n: OUTER.z0 + PERIMETER_T / 2,
+  s: OUTER.z1 - PERIMETER_T / 2,
+  w: OUTER.x0 + PERIMETER_T / 2,
+  e: OUTER.x1 - PERIMETER_T / 2,
+};
+/** Inner face of the outer wall on each side of the map. */
+export const PERIMETER_INNER: Record<Side, number> = {
+  n: OUTER.z0 + PERIMETER_T,
+  s: OUTER.z1 - PERIMETER_T,
+  w: OUTER.x0 + PERIMETER_T,
+  e: OUTER.x1 - PERIMETER_T,
+};
+
+/** Sides of a room that lie on the edge of the map: they get the thick outer wall. */
+export function perimeterSides(room: RoomDef): Set<Side> {
+  const out = new Set<Side>();
+  for (const side of ['n', 's', 'w', 'e'] as Side[]) if (Math.abs(edge(room, side).at - BOUND_LINE[side]) < 1e-6) out.add(side);
+  return out;
+}
+
 function walledRooms(): RoomDef[] {
   return ROOMS.filter((r) => !r.insideOf);
 }
@@ -191,6 +225,8 @@ export interface WallRun {
   /** Ends of the run, in world coordinates. */
   a: [number, number];
   b: [number, number];
+  /** Wall thickness: PERIMETER_T on the outer walls, WALL_T inside. */
+  thick?: number;
 }
 
 /** Cuts the door openings (centres along the run) out of the run from a to b. */
@@ -221,13 +257,26 @@ export function wallRuns(room: RoomDef, rooms: RoomDef[] = walledRooms()): WallR
   const z0 = room.cz - room.d / 2 + WALL_INSET;
   const z1 = room.cz + room.d / 2 - WALL_INSET;
   const shared = sharedSides(room, rooms);
+  const outer = perimeterSides(room);
   const ex = room.cx + room.w / 2;
   const ez = room.cz + room.d / 2;
+  // The wall line of each side: the map edge's thick wall, a shared edge, or inside the room.
+  const at: Record<Side, number> = {
+    n: outer.has('n') ? PERIMETER_LINE.n : z0,
+    s: outer.has('s') ? PERIMETER_LINE.s : shared.has('s') ? ez : z1,
+    w: outer.has('w') ? PERIMETER_LINE.w : x0,
+    e: outer.has('e') ? PERIMETER_LINE.e : shared.has('e') ? ex : x1,
+  };
+  // A wall stops at the inner face of an outer wall it meets.
+  const ax0 = outer.has('w') ? PERIMETER_INNER.w : x0;
+  const ax1 = outer.has('e') ? PERIMETER_INNER.e : x1;
+  const az0 = outer.has('n') ? PERIMETER_INNER.n : z0;
+  const az1 = outer.has('s') ? PERIMETER_INNER.s : z1;
   const lines: Record<Side, [[number, number], [number, number]]> = {
-    n: [[x0, z0], [x1, z0]],
-    s: [[x0, shared.has('s') ? ez : z1], [x1, shared.has('s') ? ez : z1]],
-    w: [[x0, z0], [x0, z1]],
-    e: [[shared.has('e') ? ex : x1, z0], [shared.has('e') ? ex : x1, z1]],
+    n: [[ax0, at.n], [ax1, at.n]],
+    s: [[ax0, at.s], [ax1, at.s]],
+    w: [[at.w, az0], [at.w, az1]],
+    e: [[at.e, az0], [at.e, az1]],
   };
   const runs: WallRun[] = [];
   for (const side of ['n', 's', 'w', 'e'] as Side[]) {
@@ -243,7 +292,7 @@ export function wallRuns(room: RoomDef, rooms: RoomDef[] = walledRooms()): WallR
       doors.push(horizontal ? w.x : w.z);
     }
     const [a, b] = lines[side];
-    runs.push(...cutDoors({ room, side, a, b }, doors));
+    runs.push(...cutDoors({ room, side, a, b, thick: outer.has(side) ? PERIMETER_T : WALL_T }, doors));
   }
   return runs;
 }
@@ -254,27 +303,24 @@ export function wallRuns(room: RoomDef, rooms: RoomDef[] = walledRooms()): WallR
  */
 export function edgeRuns(rooms: RoomDef[] = walledRooms()): WallRun[] {
   const runs: WallRun[] = [];
-  const lines: Record<Side, { at: number; lo: number; hi: number }> = {
-    n: { at: BOUNDS.z0, lo: BOUNDS.x0, hi: BOUNDS.x1 },
-    s: { at: BOUNDS.z1, lo: BOUNDS.x0, hi: BOUNDS.x1 },
-    w: { at: BOUNDS.x0, lo: BOUNDS.z0, hi: BOUNDS.z1 },
-    e: { at: BOUNDS.x1, lo: BOUNDS.z0, hi: BOUNDS.z1 },
-  };
   for (const side of ['n', 's', 'w', 'e'] as Side[]) {
-    const line = lines[side];
-    const [ix, iz] = INWARD[side];
-    // The wall line of the rooms on this edge.
-    const at = line.at + (ix + iz) * WALL_INSET;
+    // The thick outer wall, its outer face on the edge of the map.
+    const at = PERIMETER_LINE[side];
+    // It runs between the inner faces of the outer walls it meets; the map corners get a pillar.
+    const [start, end] = side === 'n' || side === 's' ? [PERIMETER_INNER.w, PERIMETER_INNER.e] : [PERIMETER_INNER.n, PERIMETER_INNER.s];
+    // Rooms on this edge draw their own stretch of the outer wall (same test as wallRuns).
     const covered = rooms
+      .filter((r) => perimeterSides(r).has(side))
       .map((r) => edge(r, side))
-      .filter((e) => Math.abs(e.at - line.at) < 0.6)
       .map((e) => [e.lo + WALL_INSET, e.hi - WALL_INSET] as const)
+      // The gate leaves the edge open from one room's wall line to the other's.
+      .concat(side === GATE.side ? [[GATE.lo - WALL_INSET, GATE.hi + WALL_INSET] as const] : [])
       .sort((p, q) => p[0] - q[0]);
-    let from = line.lo + WALL_INSET;
+    let from = start;
     const point = (v: number): [number, number] => (side === 'n' || side === 's' ? [v, at] : [at, v]);
-    for (const [lo, hi] of [...covered, [line.hi - WALL_INSET, Infinity] as const]) {
+    for (const [lo, hi] of [...covered, [end, Infinity] as const]) {
       // The 0.3 m slot between two rooms standing side by side is closed by a pillar instead.
-      if (lo - from > 0.5) runs.push({ side, a: point(from), b: point(Math.min(lo, line.hi - WALL_INSET)) });
+      if (lo - from > 0.5) runs.push({ side, a: point(from), b: point(Math.min(lo, end)), thick: PERIMETER_T });
       from = Math.max(from, hi);
     }
   }
@@ -312,11 +358,16 @@ const WALL_VARIANTS: [string, number][] = [
 
 const BANNER_STYLES = ['', 'patternA_', 'patternB_', 'patternC_', 'shield_'];
 
+/** How far in front of a wall's inner face nothing may stand for a torch or banner to hang there. */
+const FREE_AHEAD = 0.6 - WALL_T / 2;
+
 /** True when nothing stands against the wall at (x, z), so a torch or a banner can hang there. */
-function wallIsFree(room: RoomDef, x: number, z: number, side: Side): boolean {
+function wallIsFree(room: RoomDef, x: number, z: number, side: Side, thick = WALL_T): boolean {
   const [ix, iz] = INWARD[side];
-  const rx = x + ix * 0.6 - room.cx;
-  const rz = z + iz * 0.6 - room.cz;
+  // Looked for in front of the wall's inner face, whatever its thickness.
+  const ahead = thick / 2 + FREE_AHEAD;
+  const rx = x + ix * ahead - room.cx;
+  const rz = z + iz * ahead - room.cz;
   if (room.props.some((p) => inFootprint(p, rx, rz))) return false;
   // Not inside a zone drawn on the floor (the Scriptorium).
   return !ROOMS.some((zn) => zn.insideOf === room.id && Math.abs(x - zn.cx) < zn.w / 2 + 0.5 && Math.abs(z - zn.cz) < zn.d / 2 + 0.5);
@@ -324,9 +375,9 @@ function wallIsFree(room: RoomDef, x: number, z: number, side: Side): boolean {
 
 const PILLAR_W = 0.3;
 
-function pillar(layout: WallLayout, x: number, z: number, wx = PILLAR_W, wz = PILLAR_W): void {
+function pillar(layout: WallLayout, x: number, z: number, wx = PILLAR_W, wz = PILLAR_W, anchor: [number, number] = [x, z]): void {
   // A 1.5 m pillar thinned to 0.3 m, and a short column for the lowered state.
-  addTall(layout, 'pillar', { x, y: 0, z, rotY: 0, scale: [wx / 1.5, KIT_SCALE, wz / 1.5], ax: x, az: z });
+  addTall(layout, 'pillar', { x, y: 0, z, rotY: 0, scale: [wx / 1.5, KIT_SCALE, wz / 1.5], ax: anchor[0], az: anchor[1] });
   add(layout.low, 'column', { x, y: 0, z, rotY: 0, scale: [(wx / PILLAR_W) * 0.4, KIT_SCALE, (wz / PILLAR_W) * 0.4] });
 }
 
@@ -369,6 +420,7 @@ export function sharedSides(room: RoomDef, rooms: RoomDef[] = walledRooms()): Se
 /** Tall wall pieces, the low wall inside them, and torches or banners on plain stretches. */
 function placeRun(layout: WallLayout, run: WallRun, rand: () => number): void {
   const { side, a, b, room } = run;
+  const thick = run.thick ?? WALL_T;
   const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
   const n = Math.max(1, Math.round(len / WALL_CHUNK));
   const chunk = len / n;
@@ -378,22 +430,47 @@ function placeRun(layout: WallLayout, run: WallRun, rand: () => number): void {
     const z = a[1] + (b[1] - a[1]) * t;
     const rotY = FACE_IN[side];
     const model = chunk < 1.5 ? 'wall' : pick(rand, WALL_VARIANTS);
-    addTall(layout, model, { x, y: 0, z, rotY, scale: [chunk / 4, KIT_SCALE, WALL_T], ax: x, az: z });
+    addTall(layout, model, { x, y: 0, z, rotY, scale: [chunk / 4, KIT_SCALE, thick], ax: x, az: z });
     // Slightly thinner than the tall wall, so that it hides inside it without flickering.
-    add(layout.low, 'barrier', { x, y: 0, z, rotY, scale: [chunk / 4, KIT_SCALE, (WALL_T - 0.03) / 0.5] });
+    add(layout.low, 'barrier', { x, y: 0, z, rotY, scale: [chunk / 4, KIT_SCALE, (thick - 0.03) / 0.5] });
     // Wall decor on plain stretches with nothing in front. A corridor end only gets a torch.
-    if (model !== 'wall' || chunk < 2 || (room && !wallIsFree(room, x, z, side))) continue;
+    if (model !== 'wall' || chunk < 2 || (room && !wallIsFree(room, x, z, side, thick))) continue;
     const [ix, iz] = INWARD[side];
     const roll = rand();
     if (roll < 0.45) {
-      const d = WALL_T / 2;
+      const d = thick / 2;
       addTall(layout, 'torch_mounted', { x: x + ix * d, y: 1.9, z: z + iz * d, rotY, ax: x, az: z });
     } else if (roll < 0.75 && room) {
       const style = BANNER_STYLES[Math.floor(rand() * BANNER_STYLES.length)];
       // The banner's back is 0.38 m in front of its origin in the pack.
-      const d = WALL_T / 2 - 0.38 * KIT_SCALE;
+      const d = thick / 2 - 0.38 * KIT_SCALE;
       addTall(layout, `banner_${style}${room.accent}`, { x: x + ix * d, y: 0, z: z + iz * d, rotY, ax: x, az: z });
     }
+  }
+}
+
+/** Wide jambs of the castle gate. */
+export const GATE_JAMB = 0.6;
+/** Height of the gate opening, under the lintel. */
+export const GATE_H = 2.2;
+
+/**
+ * The castle gate: two wide jambs on the room corners, a lintel over the opening and a torch
+ * on each side facing the drawbridge. All of it goes down with the cutaway like a wall.
+ */
+function gate(layout: WallLayout): void {
+  const z = PERIMETER_LINE.s;
+  const lo = GATE.lo - WALL_INSET;
+  const hi = GATE.hi + WALL_INSET;
+  const mid = (lo + hi) / 2;
+  // Every gate piece shares the anchor of the gate middle: the gate goes down as one piece.
+  for (const x of [lo, hi]) pillar(layout, x, z + INWARD.s[1] * (PERIMETER_PILLAR_EXTRA / 2), GATE_JAMB, PERIMETER_T + PERIMETER_PILLAR_EXTRA, [mid, z]);
+  // A wall model is 4 m high in the pack: squashed into a beam above the opening.
+  const lintel = 4 * KIT_SCALE - GATE_H;
+  addTall(layout, 'wall', { x: mid, y: GATE_H, z, rotY: FACE_IN.s, scale: [(hi - lo) / 4, lintel / 4, PERIMETER_T - 0.04], ax: mid, az: z });
+  // Outside face: rotation 0 turns the torch towards +z, out of the castle.
+  for (const x of [lo - 0.8, hi + 0.8]) {
+    addTall(layout, 'torch_mounted', { x, y: 1.9, z: z + PERIMETER_T / 2, rotY: 0, ax: mid, az: z });
   }
 }
 
@@ -401,9 +478,15 @@ export function wallLayout(rooms: RoomDef[] = walledRooms()): WallLayout {
   const layout: WallLayout = { tall: new Map(), low: new Map() };
   const edgeRand = seeded('walls:edge');
   for (const run of edgeRuns(rooms)) placeRun(layout, run, edgeRand);
+  // A thick square pillar at each corner of the map, where two outer walls meet.
+  for (const xs of ['w', 'e'] as Side[]) {
+    for (const zs of ['n', 's'] as Side[]) pillar(layout, PERIMETER_LINE[xs], PERIMETER_LINE[zs], PERIMETER_T, PERIMETER_T);
+  }
+  gate(layout);
   for (const room of rooms) {
     const rand = seeded(`walls:${room.id}`);
     const shared = sharedSides(room, rooms);
+    const outer = perimeterSides(room);
     for (const run of wallRuns(room, rooms)) placeRun(layout, run, rand);
     // Corner pillars hide the joins; door pillars frame the opening.
     const x0 = room.cx - room.w / 2 + WALL_INSET;
@@ -432,6 +515,24 @@ export function wallLayout(rooms: RoomDef[] = walledRooms()): WallLayout {
         if (zs === 'n') continue;
         z = room.cz + room.d / 2;
         wz = 2 * (WALL_INSET + PILLAR_W / 2);
+      }
+      // A corner on the map edge: the map corner pillar covers it when both sides are outer
+      // walls; a slot between two rooms gets a pillar through the whole outer wall; otherwise
+      // the pillar stands against the outer wall's inner face.
+      const px = outer.has(xs);
+      const pz = outer.has(zs);
+      if (px && pz) continue;
+      if (px) {
+        if (shared.has(zs)) {
+          x = PERIMETER_LINE[xs] + INWARD[xs][0] * (PERIMETER_PILLAR_EXTRA / 2);
+          wx = PERIMETER_T + PERIMETER_PILLAR_EXTRA;
+        } else x = PERIMETER_INNER[xs] + INWARD[xs][0] * (PILLAR_W / 2);
+      }
+      if (pz) {
+        if (shared.has(xs)) {
+          z = PERIMETER_LINE[zs] + INWARD[zs][1] * (PERIMETER_PILLAR_EXTRA / 2);
+          wz = PERIMETER_T + PERIMETER_PILLAR_EXTRA;
+        } else z = PERIMETER_INNER[zs] + INWARD[zs][1] * (PILLAR_W / 2);
       }
       pillar(layout, x, z, wx, wz);
     }

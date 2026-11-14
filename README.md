@@ -20,6 +20,7 @@ Un petit bureau en 3D où chaque agent Claude Code du poste local est un personn
     - Les pièces à plusieurs fonctions ont un poste par fonction : la Bibliothèque (rayonnages et tables) et son Scriptorium (pupitres des copistes), l'Atelier (établis) et le chevalet de l'enlumineur, la Salle des épreuves (table de relecture et laboratoire d'alchimie), la Salle Accessibilité / SEO (estrade du héraut et pupitre d'inspection).
     - Le décor (caisses, tonneaux, coffres, pièces, bougies, tapis) ne réagit pas au survol.
     - Si un agent se tient devant un meuble, le plus proche sous le pointeur l'emporte : l'agent ou le poste.
+  - **Un château dans une forêt de nuit.** Des arbres en 3D entourent le donjon : détaillés près du château, plus simples au loin, puis une lisière peinte à l'horizon. Des douves longent le sud, un pont-levis baissé mène à la porte du château, et un chemin de terre se perd dans la forêt. La forêt est sombre pour que le château, aux lumières chaudes, ressorte. La vue reste limitée autour du château.
 - **Trois états.**
   - Vert : il travaille.
   - Ambre : il attend ton prochain message. Un petit losange ambre s'affiche au-dessus de son étiquette.

@@ -394,23 +394,24 @@ export const ROOMS: RoomDef[] = [
     seats: [...row(-0.9, [-3, -1.6], S), ...around(1.6, -0.2, 1, [W, E, N])],
   },
   {
+    // One metre narrower on its west side: the corridor widens into the castle gate.
     id: 'concierge',
-    cx: 10,
+    cx: 10.5,
     cz: 8.25,
-    w: 8,
+    w: 7,
     d: 3.5,
     floorKind: 'dirt',
     accent: 'brown',
-    door: { side: 'w', at: 0 },
+    door: { side: 'n', at: -1.5 },
     props: [
-      { kind: 'brooms', x: 2.8, z: -1.3, post: 'concierge' },
-      { kind: 'cart', x: 0.8, z: 0.6, post: 'concierge' },
-      { kind: 'barrel', x: 3.2, z: 1, post: 'concierge' },
+      { kind: 'brooms', x: 2.3, z: -1.3, post: 'concierge' },
+      { kind: 'cart', x: 0.3, z: 0.6, post: 'concierge' },
+      { kind: 'barrel', x: 2.7, z: 1, post: 'concierge' },
     ],
     seats: [
-      { x: 2, z: -0.7, facing: faceTo(2, -0.7, 2.8, -1.3) },
-      { x: 0.8, z: -0.4, facing: S },
-      { x: -1, z: 0.6, facing: E },
+      { x: 1.5, z: -0.7, facing: faceTo(1.5, -0.7, 2.3, -1.3) },
+      { x: 0.3, z: -0.4, facing: S },
+      { x: -1.5, z: 0.6, facing: E },
     ],
   },
   {
@@ -521,6 +522,13 @@ export const POST_ROOM = new Map<PostId, RoomId>(ROOMS.flatMap((r) => postGroups
 
 /** Outer bounds of the dungeon, corridors included. */
 export const BOUNDS = { x0: -24, x1: 23, z0: -13, z1: 10 };
+
+/**
+ * The castle gate: an opening in the south edge, between the Héraut and the Conciergerie,
+ * at the end of the x = 5 corridor. `lo` and `hi` are the room edges on either side. The
+ * gate pieces, the moat and the drawbridge are built for the south side only.
+ */
+export const GATE = { side: 's', lo: 4, hi: 7 } as const;
 
 /**
  * Corridor centre lines. A corridor is 2 m wide and runs between two rows or columns of
