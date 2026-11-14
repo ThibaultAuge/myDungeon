@@ -41,7 +41,7 @@ Un agent qui attend seulement ton prochain message ne fait pas la queue. Il rest
 
 ### La taverne
 
-La taverne montre l'équipe disponible, même quand rien ne tourne. Elle contient un exemplaire de chaque type d'agent connu. Quand une session lance un sous-agent, son exemplaire quitte la taverne et prend la couleur de la session. Quand le sous-agent a fini, il retourne à la taverne et disparaît. L'agent principal attend ton prochain message à la taverne, dans la couleur de sa session. Une session arrêtée, mais reprenable, y garde son chevalier endormi : il ne se sélectionne pas en 3D.
+La taverne montre l'équipe disponible, même quand rien ne tourne. Elle contient un exemplaire de chaque type d'agent connu. Quand une session lance un sous-agent, son exemplaire quitte la taverne et prend la couleur de la session. Quand le sous-agent a fini, il retourne à la taverne et disparaît. L'agent principal attend ton prochain message à la taverne, dans la couleur de sa session. Une session arrêtée, mais reprenable, y garde son chevalier endormi : il ne se sélectionne pas en 3D. Une session arrêtée qui n'a jamais travaillé n'a pas de chevalier : elle apparaît en fantôme, qui erre dans les couloirs (voir [personnages.md](personnages.md#le-fantôme)).
 
 Le détail du fonctionnement est dans [lieux.md](lieux.md#la-taverne-et-le-cycle-de-vie-dun-agent).
 

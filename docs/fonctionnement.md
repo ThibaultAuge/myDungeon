@@ -42,6 +42,26 @@ Les hooks sont des commandes **asynchrones** : ils ne ralentissent jamais Claude
 - Redémarre le serveur après une installation, pour qu'il prenne le jeton.
 - `npm run hooks:uninstall` retire les hooks (avec une sauvegarde) et supprime `~/.claude/agent-office`.
 
+## Sessions sans activité
+
+Le serveur sait si une session a déjà travaillé. Il la considère comme **active** dès qu'il reçoit l'un de ces signaux :
+
+- un hook de travail : `UserPromptSubmit`, `PreToolUse`, `PostToolUse`, `PostToolUseFailure`, `PermissionRequest`, `SubagentStart`, `SubagentStop`, `Stop` ou `StopFailure`. Les hooks `SessionStart`, `SessionEnd` et `Notification` ne comptent pas ;
+- le processus Claude signale qu'il est occupé ;
+- à la découverte du processus, un transcript `~/.claude/projects/<dossier>/<session>.jsonl` non vide existe déjà.
+
+Une session de bureau est toujours active. Une fois active, une session le reste, même après son arrêt. Pendant que son processus tourne, une session garde son chevalier, même sans activité. Une session du terminal qui s'arrête sans avoir été active devient un fantôme (voir [personnages.md](personnages.md#le-fantôme)).
+
+```mermaid
+flowchart TD
+    A["Session arrêtée"] --> B{"Session de bureau ?"}
+    B -->|oui| C["Chevalier à la taverne"]
+    B -->|non| D{"Déjà active ?"}
+    D -->|oui| C
+    D -->|non| E["Fantôme"]
+```
+*Figure : Choix entre chevalier et fantôme pour une session arrêtée.*
+
 ## Données lues
 
 Tout est lu en lecture seule. Seuls ces fichiers sont ouverts :
@@ -54,6 +74,8 @@ Tout est lu en lecture seule. Seuls ces fichiers sont ouverts :
 - `<dossier de session>/.claude/launch.json` : les ports seulement, dans la limite de 64 KiB. Il sert à détecter les serveurs web d'une session ;
 - pour les sessions du terminal, le serveur vérifie si `<cwd>/.git` est un fichier. C'est le signe d'un worktree ;
 - toutes les 10 s, tant qu'une session est en cours : la liste des ports en écoute et des processus qui les ouvrent. Sous Windows, cela passe par `netstat -ano` et une requête PowerShell sur `Win32_Process`. Ailleurs, par `lsof` et `ps`.
+
+Pour chaque processus Claude en cours, le serveur vérifie aussi si son transcript `~/.claude/projects/<dossier>/<session>.jsonl` existe et n'est pas vide. Il ne fait qu'un `lstat` : le fichier n'est ni ouvert ni lu, et un lien symbolique n'est jamais suivi. Cette vérification a lieu à chaque relecture de l'inventaire.
 
 Les lignes de commande des processus ne quittent jamais le serveur. Seuls le port et le nom du processus sont envoyés à la page.
 

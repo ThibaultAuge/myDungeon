@@ -78,3 +78,14 @@ export function resolvePaths(): ClaudePaths {
     sessionDirs,
   };
 }
+
+/** The folder name Claude Code gives a working directory under `projects`. */
+export function projectDirName(cwd: string): string {
+  return cwd.replace(/[^A-Za-z0-9]/g, '-');
+}
+
+/** True when `p` is strictly inside `root` once both are resolved. */
+export function isInside(root: string, p: string): boolean {
+  const rel = path.relative(path.resolve(root), path.resolve(p));
+  return rel !== '' && !rel.startsWith('..') && !path.isAbsolute(rel);
+}

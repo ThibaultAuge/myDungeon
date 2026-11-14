@@ -481,6 +481,12 @@ select,
   font-weight: 600;
 }
 
+/* A ghost's tag: dashed and italic, so it never reads as a real agent. Same text contrast. */
+.agent-tag--ghost {
+  border-style: dashed;
+  font-style: italic;
+}
+
 /* Speech bubble of an agent at the altar, above its name tag. */
 .request-bubble {
   position: absolute;

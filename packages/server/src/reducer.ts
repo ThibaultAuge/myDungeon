@@ -239,6 +239,8 @@ function createSession(
     title: fields.title,
     cwd: fields.cwd,
     live: false,
+    // A desktop session is a real conversation of the app: it never wanders as a ghost.
+    everActive: origin === 'desktop',
     archived: false,
     info: {},
     servers: [],
@@ -256,6 +258,7 @@ function createSession(
  */
 function mainFromLiveStatus(s: SessionView, p: LiveProcess, now: number): void {
   if (p.status === 'unknown') return;
+  if (p.status === 'busy') s.everActive = true;
   if (s.main.state === 'waiting' && s.main.waitReason !== 'prompt') return;
   if (p.status === 'busy') patchAgent(s.main, { state: 'working', room: workRoom(s.main, s.main.tool) }, now);
   else setWaiting(s.main, 'prompt', now);
@@ -289,6 +292,7 @@ function absorb(state: OfficeState, target: SessionView, cliId: string): AgentVi
   const moved = tmp.subagents.filter((a) => !known.has(a.id)).map((a) => ({ ...a, sessionId: target.id }));
   target.subagents.push(...moved);
   target.live = target.live || tmp.live;
+  target.everActive = target.everActive || tmp.everActive;
   target.lastActivityAt = Math.max(target.lastActivityAt, tmp.lastActivityAt);
   const spawns = state.pendingSpawns.get(tmpId);
   if (spawns) state.pendingSpawns.set(target.id, [...(state.pendingSpawns.get(target.id) ?? []), ...spawns]);
@@ -369,6 +373,8 @@ export function applyInventory(state: OfficeState, inv: Inventory, now: number):
       state.cliIndex.set(p.cliSessionId, id);
     }
     seen.add(id);
+    // A transcript on disk proves the session already did real work before we saw it.
+    if (p.transcript) s.everActive = true;
     if (s.origin === 'cli') {
       const worktreeName = p.worktree ? label(path.basename(p.cwd)) : undefined;
       s.info = {
@@ -434,6 +440,22 @@ function resolveSession(state: OfficeState, ev: HookEvent, now: number): Session
 const TOOL_EVENTS = new Set(['PreToolUse', 'PostToolUse', 'PostToolUseFailure', 'PermissionRequest']);
 
 /**
+ * Hooks that prove the session did real work (a prompt, a tool, a subagent, a turn end).
+ * SessionStart, SessionEnd and Notification do not: an opened then closed session stays inactive.
+ */
+const ACTIVITY_EVENTS = new Set([
+  'UserPromptSubmit',
+  'PreToolUse',
+  'PostToolUse',
+  'PostToolUseFailure',
+  'PermissionRequest',
+  'SubagentStart',
+  'SubagentStop',
+  'Stop',
+  'StopFailure',
+]);
+
+/**
  * The subagent an event belongs to. `undefined`: the event is the main agent's.
  * `'ignore'`: an internal agent (no type) that has no figure, or an id we refuse: that
  * event belongs to some subagent, never to the main agent.
@@ -497,6 +519,8 @@ export function applyHook(state: OfficeState, ev: HookEvent, now: number): Sessi
   s.lastActivityAt = now;
   const name = ev.hook_event_name;
   if (name !== 'SessionEnd') s.live = true;
+  // Before the subagent lookup: an ignored subagent's work is still the session's work.
+  if (ACTIVITY_EVENTS.has(name)) s.everActive = true;
 
   const sub = findOrCreateSub(state, s, ev, now);
   if (sub === 'ignore') return s;

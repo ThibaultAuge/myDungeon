@@ -21,16 +21,9 @@ export const LINE_MAX = 1024 * 1024;
 /** Claude Code session ids are UUIDs: anything else never becomes a file name. */
 const CLI_SESSION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-/** The folder name Claude Code gives a working directory under `projects`. */
-export function projectDirName(cwd: string): string {
-  return cwd.replace(/[^A-Za-z0-9]/g, '-');
-}
-
-/** True when `p` is strictly inside `root` once both are resolved. */
-export function isInside(root: string, p: string): boolean {
-  const rel = path.relative(path.resolve(root), path.resolve(p));
-  return rel !== '' && !rel.startsWith('..') && !path.isAbsolute(rel);
-}
+// Shared with inventory.ts (which transcript.ts imports): they live in the leaf module paths.ts.
+export { isInside, projectDirName } from './paths.ts';
+import { isInside, projectDirName } from './paths.ts';
 
 function regularFile(p: string): fs.Stats | undefined {
   try {

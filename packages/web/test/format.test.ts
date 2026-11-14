@@ -45,6 +45,7 @@ function session(overrides: Partial<SessionView> = {}): SessionView {
     title: 'Refactor parser',
     cwd: 'C:\\work\\alpha',
     live: true,
+    everActive: true,
     archived: false,
     info: {},
     servers: [],

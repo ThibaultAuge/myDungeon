@@ -12,6 +12,8 @@ import { AgentFigure, agentPositions } from './AgentFigure.tsx';
 import { Ambush } from './ambush.ts';
 import { AmbushScene } from './Ambush.tsx';
 import { Forest } from './Forest.tsx';
+import { Ghosts, isGhost } from './ghost.ts';
+import { GhostFigure } from './GhostFigure.tsx';
 import { NIGHT_SKY, scatterTrees } from './forest.ts';
 import { assignSpots, BOUNDS, SPAWN, type SeatMemory, type SeatRequest, type Spot } from './layout.ts';
 import { ENTRY_SPOT, PAN_MARGIN } from './outside.ts';
@@ -41,7 +43,8 @@ interface Placed {
 export function visibleAgents(sessions: SessionView[], now: number): Placed[] {
   const out: Placed[] = [];
   for (const s of sessions) {
-    if (s.live || !s.archived) out.push({ agent: s.main, session: s });
+    // A ghost session is drawn as a wandering ghost (GhostFigure), never as a seated agent.
+    if ((s.live || !s.archived) && !isGhost(s)) out.push({ agent: s.main, session: s });
     for (const sub of s.subagents) {
       if (!s.live && sub.state !== 'done') continue;
       if (sub.state !== 'done' || now - sub.since < DONE_VISIBLE_MS) out.push({ agent: sub, session: s });
@@ -174,7 +177,7 @@ export function OfficeScene() {
   const [ambush] = useState(() => new Ambush(scatterTrees().near.map((tree) => ({ x: tree.x, z: tree.z }))));
   const [stage] = useState(() => new Stage());
   const lastSpots = useRef(new Map<string, Spot>());
-  const [, setGoneCount] = useState(0);
+  const [goneCount, setGoneCount] = useState(0);
   const onGone = useCallback(
     (id: string) => {
       stage.gone(id);
@@ -188,6 +191,21 @@ export function OfficeScene() {
   useMemo(() => {
     for (const id of stage.update(sessions, snapshotReceived, lastSpots.current)) ambush.release(id);
   }, [sessions, snapshotReceived, stage, ambush]);
+
+  // Ghost sessions wander the corridors and evaporate when they leave.
+  const [ghostRoll] = useState(() => new Ghosts());
+  // goneCount: an evaporated ghost leaves the list on the render its `gone` triggers.
+  const ghosts = useMemo(
+    () => ghostRoll.update(sessions, snapshotReceived),
+    [sessions, snapshotReceived, ghostRoll, goneCount], // eslint-disable-line react-hooks/exhaustive-deps
+  );
+  const onGhostGone = useCallback(
+    (id: string) => {
+      ghostRoll.gone(id);
+      setGoneCount((n) => n + 1);
+    },
+    [ghostRoll],
+  );
 
   const placed = visibleAgents(sessions, now).filter(
     (p) => !(p.agent.state === 'done' && arrived.has(p.agent.id)) && !stage.hidden(p.agent.id),
@@ -262,6 +280,18 @@ export function OfficeScene() {
           />
         )),
       ]}
+      {ghosts.map(({ session, leaving }) => (
+        <GhostFigure
+          key={`ghost:${session.id}`}
+          id={session.id}
+          name={agentName(session.main, session, t)}
+          color={sessionColor(session.main.id)}
+          // A seated agent that just became a ghost: the ghost rises from its body.
+          bodyId={session.main.id}
+          leaving={leaving}
+          onGone={onGhostGone}
+        />
+      ))}
       <AmbushScene ambush={ambush} />
 
       <OrbitControls makeDefault target={CENTER} enableDamping maxPolarAngle={1.35} minDistance={8} maxDistance={80} />

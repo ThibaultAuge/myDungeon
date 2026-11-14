@@ -21,6 +21,7 @@ import {
   readAgentTypes,
   readInventory,
   sessionInfo,
+  hasTranscript,
 } from '../src/inventory.ts';
 import type { ClaudePaths } from '../src/paths.ts';
 import { ENV_ALPHA, ENV_ALPHA_API, ENV_BETA, ENVS, LOCAL_A, LOCAL_B, CLI_A, loadFixture } from './fixtures/builders.ts';
@@ -411,6 +412,136 @@ describe('readInventory', () => {
    */
   it('tolerates a missing presets file path', () => {
     expect(readInventory({ ...paths, presetsFile: path.join(root, 'absent.json') }, isAlive).environments).toEqual([]);
+  });
+
+  /**
+   * Verifies that a live process is flagged transcript only when its non-empty .jsonl exists under projects
+   */
+  it('flags live processes whose transcript exists and is not empty', () => {
+    const projectDir = path.join(root, 'projects', 'C--work-alpha');
+    const file = path.join(projectDir, `${CLI_A}.jsonl`);
+    expect(readInventory(paths, isAlive).live[0].transcript).toBe(false);
+    fs.mkdirSync(projectDir, { recursive: true });
+    write(file, '');
+    expect(readInventory(paths, isAlive).live[0].transcript).toBe(false);
+    write(file, '{"type":"user"}\n');
+    try {
+      expect(readInventory(paths, isAlive).live[0].transcript).toBe(true);
+    } finally {
+      fs.rmSync(path.join(root, 'projects'), { recursive: true, force: true });
+    }
+  });
+});
+
+describe('hasTranscript', () => {
+  let projects: string;
+
+  beforeAll(() => {
+    projects = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-office-tr-'));
+    fs.mkdirSync(path.join(projects, 'C--work-alpha', `${CLI_A}.jsonl`), { recursive: true });
+    fs.mkdirSync(path.join(projects, 'C--work-beta'), { recursive: true });
+    fs.writeFileSync(path.join(projects, 'C--work-beta', `${CLI_A}.jsonl`), 'x', 'utf8');
+    fs.writeFileSync(path.join(projects, 'outside.jsonl'), 'x', 'utf8');
+  });
+
+  afterAll(() => {
+    fs.rmSync(projects, { recursive: true, force: true });
+  });
+
+  /**
+   * Verifies that the project folder is derived from cwd the way Claude Code names it
+   */
+  it('finds the transcript in the folder named after cwd', () => {
+    expect(hasTranscript(projects, 'C:\\work\\beta', CLI_A)).toBe(true);
+    expect(hasTranscript(projects, 'C:/work/beta', CLI_A)).toBe(true);
+  });
+
+  /**
+   * Verifies that a folder named like a transcript is not a transcript
+   */
+  it('refuses a directory', () => {
+    expect(hasTranscript(projects, 'C:\\work\\alpha', CLI_A)).toBe(false);
+  });
+
+  /**
+   * Verifies that crafted ids or an empty cwd never reach the file system outside projects
+   */
+  it('refuses crafted ids and an empty cwd', () => {
+    expect(hasTranscript(projects, 'C:\\work\\beta', '../../outside')).toBe(false);
+    expect(hasTranscript(projects, 'C:\\work\\beta', '..')).toBe(false);
+    expect(hasTranscript(projects, 'C:\\work\\beta', '')).toBe(false);
+    expect(hasTranscript(projects, '', CLI_A)).toBe(false);
+  });
+
+  /**
+   * Verifies that a missing projects folder simply yields false
+   */
+  it('returns false when the projects folder is missing', () => {
+    expect(hasTranscript(path.join(projects, 'missing'), 'C:\\work\\beta', CLI_A)).toBe(false);
+  });
+
+  /**
+   * Verifies that an empty transcript file does not count as a transcript
+   */
+  it('refuses an empty file', () => {
+    fs.mkdirSync(path.join(projects, 'C--work-empty'), { recursive: true });
+    fs.writeFileSync(path.join(projects, 'C--work-empty', `${CLI_A}.jsonl`), '', 'utf8');
+    expect(hasTranscript(projects, 'C:\\work\\empty', CLI_A)).toBe(false);
+  });
+
+  /**
+   * Verifies that ids with a dot, a separator or over 128 characters are refused
+   */
+  it.each([['a.b'], ['a/b'], ['a\\b'], ['a b'], ['x'.repeat(129)]])('refuses the id %j', (id) => {
+    expect(hasTranscript(projects, 'C:\\work\\beta', id)).toBe(false);
+  });
+
+  /**
+   * Verifies that an id of exactly 128 word characters is accepted when its file exists
+   */
+  it('accepts a 128-character id', () => {
+    const id = 'a'.repeat(128);
+    fs.writeFileSync(path.join(projects, 'C--work-beta', `${id}.jsonl`), 'x', 'utf8');
+    expect(hasTranscript(projects, 'C:\\work\\beta', id)).toBe(true);
+  });
+
+  /**
+   * Verifies that a cwd full of separators and dots stays a single folder inside projects
+   */
+  it('never escapes projects through cwd', () => {
+    // '..\\..' becomes '-----': no traversal, and that folder does not exist.
+    expect(hasTranscript(projects, '..\\..', 'outside')).toBe(false);
+  });
+
+  /**
+   * Verifies that a symlinked transcript is refused (lstat, link not followed)
+   */
+  it('refuses a symbolic link to a transcript', (ctx) => {
+    const dir = path.join(projects, 'C--work-link');
+    fs.mkdirSync(dir, { recursive: true });
+    const target = path.join(projects, 'C--work-beta', `${CLI_A}.jsonl`);
+    try {
+      fs.symlinkSync(target, path.join(dir, `${CLI_A}.jsonl`), 'file');
+    } catch (err) {
+      // File symlinks need a privilege (or developer mode) on Windows.
+      if (['EPERM', 'EACCES'].includes((err as NodeJS.ErrnoException).code ?? '')) ctx.skip();
+      throw err;
+    }
+    expect(hasTranscript(projects, 'C:\\work\\link', CLI_A)).toBe(false);
+  });
+
+  /**
+   * Verifies that an lstat failure is reported false instead of throwing
+   */
+  it('returns false when lstat throws', () => {
+    const spy = vi.spyOn(fs, 'lstatSync').mockImplementation(() => {
+      throw Object.assign(new Error('EACCES'), { code: 'EACCES' });
+    });
+    try {
+      expect(hasTranscript(projects, 'C:\\work\\beta', CLI_A)).toBe(false);
+    } finally {
+      spy.mockRestore();
+    }
   });
 });
 
