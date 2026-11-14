@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { SessionView } from '@agent-office/shared';
-import { agentName, stateLabel } from '../format.ts';
+import { agentName, stateLabel, statusKind } from '../format.ts';
 import { MESSAGES } from '../i18n/index.ts';
 import { useOffice } from '../store.ts';
 
@@ -32,7 +32,7 @@ export function StatusAnnouncer({ sessions }: { sessions: SessionView[] }) {
         next.set(a.id, key);
         const before = previous.current?.get(a.id);
         if (previous.current === null || before === key) continue;
-        const urgent = a.state === 'waiting' && a.waitReason !== 'prompt';
+        const urgent = statusKind(a) === 'urgent';
         if (urgent || a.state === 'done') {
           // Read when the change is detected, not subscribed: a language change alone must not re-run this diff.
           const t = MESSAGES[useOffice.getState().lang];

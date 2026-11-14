@@ -3,6 +3,25 @@ import type { Messages } from './i18n/index.ts';
 
 export const STATE_COLORS = { working: '#1D9E75', waiting: '#EF9F27', done: '#888780' } as const;
 
+/**
+ * What the status icon shows: `waiting` splits into a plain wait for the next prompt and an
+ * urgent wait (permission, question or error) that needs the user.
+ */
+export type StatusKind = 'working' | 'prompt' | 'urgent' | 'done';
+
+export const STATUS_COLORS: Record<StatusKind, string> = {
+  working: STATE_COLORS.working,
+  prompt: STATE_COLORS.waiting,
+  urgent: '#E24B4A',
+  done: STATE_COLORS.done,
+};
+
+export function statusKind(a: Pick<AgentView, 'state' | 'waitReason'>): StatusKind {
+  if (a.state !== 'waiting') return a.state;
+  // Same rule as the scene's request bubble and the announcer: anything but a prompt wait is urgent.
+  return a.waitReason === 'prompt' ? 'prompt' : 'urgent';
+}
+
 export function stateLabel(a: AgentView, t: Messages): string {
   if (a.state === 'working') return t.state.working;
   if (a.state === 'done') return t.state.done;

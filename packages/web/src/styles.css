@@ -93,12 +93,15 @@ h3 {
   word-break: break-all;
 }
 
-.dot {
-  display: inline-block;
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
+.status-icon {
   flex: none;
+}
+
+@media (forced-colors: active) {
+  .status-icon {
+    fill: CanvasText;
+    color: CanvasText;
+  }
 }
 
 .topbar {
@@ -541,8 +544,8 @@ select,
   cursor: pointer;
 }
 
-.agent-row .dot {
-  margin-top: 5px;
+.agent-row .status-icon {
+  margin-top: 2px;
 }
 
 .agent-row--sub {
