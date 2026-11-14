@@ -195,16 +195,28 @@ export function matchEnvironment(folders: string[], environments: Environment[])
 
 /** Agent type names we accept from a definition: what Claude Code itself accepts, short. */
 export const AGENT_NAME = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$/;
+/**
+ * Subagent ids we accept from a hook. No `:` nor `#`, so an id can never take the place of a
+ * client resting figure (`rest:<type>`) or of a main agent (`<session>#main`).
+ */
+export const AGENT_ID = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/;
 /** Definitions read per folder, and bytes read per file: only the frontmatter matters. */
 const MAX_AGENT_FILES = 64;
 const AGENT_HEAD_BYTES = 4096;
+/** Folder entries looked at, `.md` or not: a huge folder must not stall the event loop. */
+const MAX_AGENT_DIR_ENTRIES = 1024;
+
+/** A frontmatter closed by `---`, and one that may run to the end of a truncated head. */
+const FRONTMATTER = /^﻿?---\r?\n([\s\S]*?)\r?\n---/;
+const FRONTMATTER_OPEN = /^﻿?---\r?\n([\s\S]*?)(?:\r?\n---|$(?![\s\S]))/;
 
 /**
- * The `name:` of a definition's frontmatter, or undefined. The closing `---` may be missing
- * when only the head of a long definition was read: the frontmatter then runs to the end.
+ * The `name:` of a definition's frontmatter, or undefined. `truncated` says that only the
+ * head of a longer definition was read: the closing `---` may then be missing, and the
+ * frontmatter runs to the end of the text. A complete text needs its closing `---`.
  */
-export function agentNameFromDefinition(text: string): string | undefined {
-  const fm = /^﻿?---\r?\n([\s\S]*?)(?:\r?\n---|$(?![\s\S]))/.exec(text);
+export function agentNameFromDefinition(text: string, truncated = false): string | undefined {
+  const fm = (truncated ? FRONTMATTER_OPEN : FRONTMATTER).exec(text);
   if (!fm) return undefined;
   // Plain string handling, no regex over the value: a file from a cloned repo must not be
   // able to make the matcher backtrack for seconds on the event loop.
@@ -216,15 +228,33 @@ export function agentNameFromDefinition(text: string): string | undefined {
   return AGENT_NAME.test(value) ? value : undefined;
 }
 
-function readHead(file: string): string {
-  const fd = fs.openSync(file, 'r');
+/** Never follow a symlink, never block on a FIFO. POSIX only: both flags are absent (0) on Windows. */
+const OPEN_FLAGS = fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW ?? 0) | (fs.constants.O_NONBLOCK ?? 0);
+
+/**
+ * The head of a definition and whether the file is longer than that head, or undefined when
+ * the path is no longer a regular file (swapped for a link, a FIFO or a device since listing).
+ */
+function readHead(file: string): { text: string; truncated: boolean } | undefined {
+  const fd = fs.openSync(file, OPEN_FLAGS);
   try {
+    const st = fs.fstatSync(fd);
+    if (!st.isFile()) return undefined;
     const buf = Buffer.alloc(AGENT_HEAD_BYTES);
     const n = fs.readSync(fd, buf, 0, AGENT_HEAD_BYTES, 0);
-    return buf.subarray(0, n).toString('utf8');
+    return { text: buf.subarray(0, n).toString('utf8'), truncated: st.size > n };
   } finally {
     fs.closeSync(fd);
   }
+}
+
+/**
+ * True for a network (UNC) or device path: `\\server\share`, `//server/share`,
+ * `\\?\UNC\…`, `\\.\…`. Their synchronous reads may hang for seconds on an unreachable
+ * host, so agent folders there are skipped. `\\?\C:\…` is a local drive and stays readable.
+ */
+export function isRemotePath(p: string): boolean {
+  return /^[\\/]{2}/.test(p) && !/^[\\/]{2}\?[\\/][A-Za-z]:/.test(p);
 }
 
 /**
@@ -232,18 +262,32 @@ function readHead(file: string): string {
  * listed (busy or sleeping drive): absence then proves nothing.
  */
 function listAgentTypes(dir: string): string[] | null {
-  let entries: fs.Dirent[];
+  if (isRemotePath(dir)) return [];
+  let handle: fs.Dir;
   try {
-    entries = fs.readdirSync(dir, { withFileTypes: true });
+    handle = fs.opendirSync(dir);
   } catch (err) {
     const code = (err as NodeJS.ErrnoException).code;
     return code === 'ENOENT' || code === 'ENOTDIR' ? [] : null;
   }
+  const files: string[] = [];
+  try {
+    for (let seen = 0; seen < MAX_AGENT_DIR_ENTRIES && files.length < MAX_AGENT_FILES; seen++) {
+      const e = handle.readSync();
+      if (!e) break;
+      if (e.isFile() && e.name.endsWith('.md')) files.push(e.name);
+    }
+  } catch {
+    return null;
+  } finally {
+    handle.closeSync();
+  }
   const out: string[] = [];
-  for (const e of entries.filter((d) => d.isFile() && d.name.endsWith('.md')).slice(0, MAX_AGENT_FILES)) {
+  for (const f of files) {
     let name: string | undefined;
     try {
-      name = agentNameFromDefinition(readHead(path.join(dir, e.name)));
+      const head = readHead(path.join(dir, f));
+      name = head && agentNameFromDefinition(head.text, head.truncated);
     } catch {
       /* unreadable file: skipped */
     }
@@ -282,11 +326,20 @@ function readDefinedAgents(
   environments: Environment[],
   cache: AgentsCache | undefined,
   now: number,
+  environmentsKnown: boolean,
 ): DefinedAgents {
-  const read = (dir: string) => cachedAgentTypes(dir, cache, now);
+  const used = new Set<string>();
+  const read = (dir: string) => {
+    used.add(dir);
+    return cachedAgentTypes(dir, cache, now);
+  };
   const byEnv = new Map<string, string[]>();
   for (const env of environments) byEnv.set(env.id, env.folders.flatMap((f) => read(path.join(f, '.claude', 'agents'))));
-  return { global: read(path.join(claudeHome, 'agents')), byEnv };
+  const global = read(path.join(claudeHome, 'agents'));
+  // Folders of removed or edited environments: the cache must not grow for ever. Without the
+  // presets the environments are unknown, not gone: their folders stay cached.
+  if (cache && environmentsKnown) for (const dir of cache.keys()) if (!used.has(dir)) cache.delete(dir);
+  return { global, byEnv };
 }
 
 function readJson(file: string): unknown {
@@ -367,6 +420,6 @@ export function readInventory(
     presentIds,
     complete,
     presetsOk: presetsRaw !== undefined,
-    definedAgents: readDefinedAgents(paths.claudeHome, environments, agentsCache, now),
+    definedAgents: readDefinedAgents(paths.claudeHome, environments, agentsCache, now, presetsRaw !== undefined),
   };
 }
