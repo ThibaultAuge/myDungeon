@@ -123,6 +123,16 @@ Tous les agents d'un même type se ressemblent, y compris au repos à la taverne
 - **Couleur.** Chaque personnage a un disque au sol de la couleur de sa session, et le bord de son étiquette porte cette même couleur. L'étiquette du personnage sélectionné a un contour bleu et du texte en gras.
 - **Réduction des animations.** Si la réduction des animations est activée dans le système, les personnages gardent une pose fixe et n'effectuent pas de surgissement. Ils se déplacent toujours d'une pièce à l'autre. Le chevalier d'une session supprimée disparaît sans marche ni combat, et les squelettes ne s'affichent pas.
 
+## Une baffe sur un personnage
+
+Un clic droit sans glisser sur un personnage le baffe : une grande main en 3D arrive par le côté et lui balaie le visage du revers. Il encaisse le coup : des étoiles tournent au-dessus de son étiquette, et une bulle « PAF ! » apparaît (« SLAP! » en anglais, « KLATSCH! » en allemand), avec un bruit de claque.
+
+Cet effet est purement esthétique : rien n'agit sur l'agent ni sur sa session.
+
+- **Glisser.** Un clic droit glissé déplace toujours la caméra, sans baffer.
+- **Clavier.** Le bouton « Baffer » de la fiche de l'agent fait la même chose. Il n'apparaît que tant que l'agent a un personnage dans la scène.
+- **Réduction des animations.** Ni main ni coup : seule la bulle s'affiche, immobile.
+
 ## La fiche d'agent
 
 Un clic sur un personnage, ou sur sa ligne dans la liste, ouvre sa **fiche** en haut à droite de la scène. Elle est dans le même style que la [boîte de dialogue](#dialogue-avec-un-agent) en bas.

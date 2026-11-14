@@ -142,6 +142,7 @@ export const CLIPS = [
   'PickUp',
   'Spawn_Ground',
   'Hit_A',
+  'Hit_B',
   'Death_A',
   'Use_Item',
 ] as const;
@@ -188,6 +189,8 @@ export interface ClipInput {
   reducedMotion: boolean;
   /** A clip imposed by a scripted scene (the death outside the castle), over everything else. */
   scripted?: ClipChoice | null;
+  /** The figure was just slapped: the hit reaction to play (once). Absent otherwise. */
+  hit?: 'Hit_A' | 'Hit_B';
 }
 
 export interface ClipChoice {
@@ -207,10 +210,12 @@ export const hold = (name: ClipName, at = 0): ClipChoice => ({ name, loop: false
  * still changes (that is information), the limbs do not.
  */
 export function clipFor(input: ClipInput): ClipChoice {
-  const { moving, speed, state, spawning, kneeling, reducedMotion, scripted } = input;
+  const { moving, speed, state, spawning, kneeling, reducedMotion, scripted, hit } = input;
   // Reduced motion wins even over a scripted scene: limbs stay still.
   if (scripted && !reducedMotion) return scripted;
   if (spawning && !reducedMotion) return play('Spawn_Ground', SPAWN_TIME_SCALE, false);
+  // A slap (purely visual) interrupts everything but the spawn; reduced motion keeps the pose.
+  if (hit && !reducedMotion) return play(hit, 1, false);
   if (moving) {
     if (reducedMotion) return hold('Idle_A');
     return speed >= RUN_THRESHOLD

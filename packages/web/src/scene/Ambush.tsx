@@ -26,6 +26,11 @@ function SkeletonFigure({ ambush, index }: { ambush: Ambush; index: number }) {
     kneeling: false,
     spawnLeft: 0,
     scripted: skeletonClip(ambush.skeletons[index]),
+    // Skeletons cannot be slapped.
+    hit: null,
+    hitId: 0,
+    hitWait: 0,
+    hitLeft: 0,
   });
   const setGroup = useCallback(
     (g: Group | null) => {

@@ -402,6 +402,37 @@ describe('dictionaries', () => {
   });
 
   /**
+   * Verifies that the slap button's accessible name contains its visible text (WCAG 2.5.3)
+   */
+  it.each(ALL_LANGS)('%s slap label contains the visible slap button text', (lang) => {
+    const { slap, slapLabel } = MESSAGES[lang].info;
+    const label = slapLabel('Hermione');
+    expect(label.toLowerCase()).toContain(slap.trim().toLowerCase());
+    expect(label).toContain('Hermione');
+  });
+
+  /**
+   * Verifies that the slap texts are trimmed, and that the button and sound are translated
+   */
+  it.each(ALL_LANGS)('%s has trimmed, non-empty slap texts', (lang) => {
+    for (const [name, v] of [
+      ['info.slap', MESSAGES[lang].info.slap],
+      ['slap.sound', MESSAGES[lang].slap.sound],
+    ] as const) {
+      expect(v.trim(), name).not.toBe('');
+      expect(v, name).toBe(v.trim());
+    }
+  });
+
+  /**
+   * Verifies that the slap button text is translated in German and English
+   */
+  it.each(['de', 'en'] as const)('%s translates the slap button text', (lang) => {
+    expect(MESSAGES[lang].info.slap).not.toBe(MESSAGES.fr.info.slap);
+    expect(MESSAGES[lang].info.slapLabel('X')).not.toBe(MESSAGES.fr.info.slapLabel('X'));
+  });
+
+  /**
    * Verifies that German and English are actually translated, not French copies
    */
   it.each(['de', 'en'] as const)('%s differs from French for key interface texts', (lang) => {

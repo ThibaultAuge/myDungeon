@@ -4,6 +4,7 @@ Un petit bureau en 3D où chaque agent Claude Code du poste local est un personn
 
 - **Un donjon en 3D** de 14 lieux, entouré d'une forêt de nuit.
 - **Un personnage par agent**, de la couleur de sa session. Les sous-agents apparaissent, puis retournent à la taverne.
+- **Une baffe façon Dungeon Keeper** : clic droit sur un personnage, purement pour rire.
 - **Entrées et sorties** : le chevalier d'une session entre au château par le pont-levis. Quand la session disparaît, il sort par la porte et meurt sous les coups de squelettes.
 - **Trois états lisibles** : il travaille, il attend ton prochain message, il a terminé.
 - **L'autel des requêtes** : les agents qui ont besoin de toi (permission, question, erreur) font la queue.

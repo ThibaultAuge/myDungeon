@@ -14,7 +14,7 @@ description: Use when changing the selected-agent details card (AgentInfo), sess
   session's `createdAt` is when the office first saw it), activity = turns + active
   subagents, Claude Code version, web servers as `http://localhost:<port>` links built
   client-side by `serverUrl`, new tab, plus process name); Agent (agent details, last
-  message).
+  message). Its slap button (keyboard route of the slap gag): `docs/ai/dungeon-scene.md`.
 - Focus: × deselects and focuses the list row. If the card disappears with focus inside,
   focus goes to `#live-title`. Focus-inside is tracked with onFocus/onBlur because removing
   a focused node fires no blur and a deps-change cleanup runs after the DOM removal.

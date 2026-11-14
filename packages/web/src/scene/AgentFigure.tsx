@@ -1,4 +1,4 @@
-import { Component, memo, Suspense, useEffect, useMemo, useRef, type CSSProperties, type ReactNode, type RefObject } from 'react';
+import { Component, memo, Suspense, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from 'react';
 import { createPortal, useFrame, useThree } from '@react-three/fiber';
 import { Html, useAnimations } from '@react-three/drei';
 import { LoopOnce, LoopRepeat, Vector3, type AnimationClip, type Group, type Mesh, type Object3D, type SkinnedMesh } from 'three';
@@ -8,7 +8,7 @@ import { STATE_COLORS, statusKind } from '../format.ts';
 import { reducedMotion } from '../motion.ts';
 import { victimClip, victimSink, type Ambush } from './ambush.ts';
 import { clipFor, CLIPS, gripFor, lookFor, SPAWN_TIME_SCALE, type ClipChoice, type ClipName, type Look, type PropRef } from './characters.ts';
-import { CLICK_MAX_DRAG_PX, setPointerHover, TARGET_USER_DATA } from './cursor.ts';
+import { CLICK_MAX_DRAG_PX, nearestTarget, setPointerHover, TARGET_USER_DATA } from './cursor.ts';
 import { DestinationBadge } from './DestinationIcon.tsx';
 import { destinationOf } from './destinations.ts';
 import { KIT_SCALE } from './dungeon.ts';
@@ -16,6 +16,11 @@ import { useKitGLTF } from './kit.ts';
 import { reroute, SPAWN, type Point, type Spot } from './layout.ts';
 import { exitRoute, groundY, routeFrom } from './outside.ts';
 import { RequestBubble } from './RequestBubble.tsx';
+import { hitClipFor, onSlap, slapAgent, SLAP_EFFECT_MS } from './slap.ts';
+import { SlapEffect } from './SlapEffect.tsx';
+import { SlapHand } from './SlapHand.tsx';
+import { SWING_IMPACT } from './slapSwing.ts';
+import { playSlapSound, preloadSlapSound } from '../ui/slapSound.ts';
 import { advance, approach, nextSpeed, remainingDistance, turnToward } from './walk.ts';
 
 /** Live positions of the figures, read by the camera to follow the selected agent. */
@@ -29,6 +34,10 @@ const REST_TURN_RATE = 6;
 /** Height of the name tag and of the waiting bubble, above the tallest helmet. */
 const TAG_Y = 2.45;
 const BUBBLE_Y = 2.1;
+/** Height of the slap effect (hand, stars, bubble): around the head. */
+const SLAP_Y = 1.5;
+/** Pause of the walk after a slap until the character reports its hit clip's real length. */
+const HIT_FALLBACK = 0.6;
 
 /** What the figure does this frame, written by the walk and read by the character. */
 export interface Motion {
@@ -39,6 +48,13 @@ export interface Motion {
   spawnLeft: number;
   /** A clip imposed by a scripted scene (the death outside), or null. */
   scripted: ClipChoice | null;
+  /** Hit reaction of the last slap, and that slap's number (a new number restarts the clip). */
+  hit: 'Hit_A' | 'Hit_B' | null;
+  hitId: number;
+  /** Seconds until the 3D hand reaches the face: the hit clip waits for it. */
+  hitWait: number;
+  /** Seconds of hit reaction left: the walk pauses meanwhile (and during the wait). */
+  hitLeft: number;
 }
 
 /** Share of the gap to close this frame for an exponential turn; all of it under reduced motion. */
@@ -118,6 +134,8 @@ export function Character({ look, state, motion }: { look: Look; state: AgentSta
   /** Clips being played and their blend weight; the current one goes to 1, the others to 0. */
   const weights = useRef(new Map<ClipName, number>());
   const current = useRef<ClipName | null>(null);
+  /** Number of the last slap whose hit clip was started. */
+  const lastHit = useRef(0);
 
   useFrame((_, delta) => {
     const m = motion.current;
@@ -134,6 +152,7 @@ export function Character({ look, state, motion }: { look: Look; state: AgentSta
       kneeling: m.kneeling,
       reducedMotion: still,
       scripted: m.scripted,
+      hit: m.hitWait <= 0 && m.hitLeft > 0 && m.hit ? m.hit : undefined,
     });
     // When Suspense hides and shows the scene again (while the kit loads), React runs the
     // effect cleanups: drei's useAnimations then stops every action, but these refs survive.
@@ -147,6 +166,14 @@ export function Character({ look, state, motion }: { look: Look; state: AgentSta
     if (!next) {
       model.visible = true;
       return;
+    }
+    // A new slap starts its hit clip over, even when the same clip is playing or fading out,
+    // and the walk waits for the clip's real length.
+    if (choice.name === m.hit && m.hitId !== lastHit.current) {
+      lastHit.current = m.hitId;
+      m.hitLeft = next.getClip().duration;
+      if (current.current === choice.name) next.reset().play();
+      else weights.current.delete(choice.name);
     }
     const first = current.current === null;
     if (current.current !== choice.name) {
@@ -272,7 +299,45 @@ function AgentFigureImpl({ agent, name, color, spot, start, selected, onSelect, 
     kneeling: false,
     spawnLeft: start.id === SPAWN.id && agent.state !== 'done' ? -1 : 0,
     scripted: null,
+    hit: null,
+    hitId: 0,
+    hitWait: 0,
+    hitLeft: 0,
   });
+  /** Number of the slap on screen (a new one remounts the effect), null when none is. */
+  const [slap, setSlap] = useState<number | null>(null);
+  const slaps = useRef(0);
+  /** Where the right button went down on this figure, to tell a click from a camera drag. */
+  const rightDown = useRef<{ x: number; y: number } | null>(null);
+
+  // The slap is a purely visual gag: hit clip, hand, stars, bubble and sound, nothing else.
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    // Fetched once for the whole scene, so the first slap is heard at once.
+    preloadSlapSound();
+    const off = onSlap(agent.id, () => {
+      const n = ++slaps.current;
+      const m = motion.current;
+      // A figure still rising from the ground (or loading) skips the hit; hand, stars and sound still show.
+      const skip = reducedMotion() || m.spawnLeft !== 0;
+      m.hit = skip ? null : hitClipFor(n);
+      m.hitId = n;
+      m.hitLeft = skip ? 0 : HIT_FALLBACK;
+      // The hand sweeps in first: the cheek reacts, and sounds, when it lands.
+      const swing = !reducedMotion();
+      m.hitWait = skip ? 0 : SWING_IMPACT;
+      playSlapSound(swing ? SWING_IMPACT : 0);
+      setSlap(n);
+      clearTimeout(timer);
+      timer = setTimeout(() => setSlap(null), SLAP_EFFECT_MS);
+    });
+    return () => {
+      off();
+      clearTimeout(timer);
+      // Suspense can run this cleanup and the effect again: never leave an effect stuck on screen.
+      setSlap(null);
+    };
+  }, [agent.id]);
 
   // Doomed: out of the castle to the kill point. Under reduced motion, no walk and no fight.
   useEffect(() => {
@@ -324,6 +389,11 @@ function AgentFigureImpl({ agent, name, color, spot, start, selected, onSelect, 
     if (still && m.spawnLeft < 0) m.spawnLeft = 0;
     if (m.spawnLeft > 0) m.spawnLeft = Math.max(0, m.spawnLeft - delta);
     const spawning = m.spawnLeft !== 0;
+    // A slapped figure stops for its hit reaction, then sets off again from standstill.
+    if (still) m.hitLeft = m.hitWait = 0;
+    const hitting = m.hitWait > 0 || m.hitLeft > 0;
+    if (m.hitWait > 0) m.hitWait = Math.max(0, m.hitWait - delta);
+    else if (m.hitLeft > 0) m.hitLeft = Math.max(0, m.hitLeft - delta);
 
     m.moving = false;
     const doomed = exit?.victim(agent.id);
@@ -333,7 +403,10 @@ function AgentFigureImpl({ agent, name, color, spot, start, selected, onSelect, 
       onGone?.(agent.id);
       return;
     }
-    if (!spawning && path.current.length > 0) {
+    if (hitting && !exit && path.current.length > 0) {
+      // A slap pauses an ordinary walk; a figure walking out to its death never stops.
+      m.speed = 0;
+    } else if (!spawning && path.current.length > 0) {
       // A reroute keeps the current speed: the agent changes course without stopping.
       // Accepted limit: if the new destination is within the braking distance, the speed
       // drops to the braking curve in one frame, and a route that doubles back turns at speed.
@@ -411,6 +484,30 @@ function AgentFigureImpl({ agent, name, color, spot, start, selected, onSelect, 
         })
       }
       onPointerOut={onSelect && (() => setPointerHover(cursorKey, false))}
+      // Right click slaps (left click selects); a right drag pans the camera and slaps nothing.
+      // Decided on the release: `contextmenu` fires on the press on macOS and Linux, so its
+      // `delta` could not tell a click from a drag there.
+      onPointerDown={
+        onSelect &&
+        ((e) => {
+          if (e.button !== 2 || nearestTarget(e.intersections) !== group.current) return;
+          rightDown.current = { x: e.nativeEvent.clientX, y: e.nativeEvent.clientY };
+        })
+      }
+      onPointerUp={
+        onSelect &&
+        ((e) => {
+          if (e.button !== 2) return;
+          const down = rightDown.current;
+          rightDown.current = null;
+          // The nearest target only, as for the left click: never the agent behind a workstation.
+          if (!down || nearestTarget(e.intersections) !== group.current) return;
+          if (Math.hypot(e.nativeEvent.clientX - down.x, e.nativeEvent.clientY - down.y) > CLICK_MAX_DRAG_PX) return;
+          e.stopPropagation();
+          slapAgent(agent.id);
+        })
+      }
+      onContextMenu={onSelect && ((e) => e.nativeEvent.preventDefault())}
     >
       <CharacterBoundary fallback={capsule} onError={() => (motion.current.spawnLeft = 0)}>
         <Suspense fallback={null}>
@@ -456,6 +553,14 @@ function AgentFigureImpl({ agent, name, color, spot, start, selected, onSelect, 
           </span>
         </Html>
       )}
+      {/* One stable anchor; the effect inside remounts on each slap to restart its animations. */}
+      {connected && onSelect && (
+        <Html position={[0, SLAP_Y, 0]} center className="slap-anchor" zIndexRange={[30, 20]}>
+          {slap !== null && <SlapEffect key={slap} />}
+        </Html>
+      )}
+      {/* The 3D hand sweeps the other way on every other slap; none under reduced motion. */}
+      {slap !== null && !reducedMotion() && <SlapHand key={slap} dir={slap % 2 === 0 ? 1 : -1} />}
     </group>
   );
 }

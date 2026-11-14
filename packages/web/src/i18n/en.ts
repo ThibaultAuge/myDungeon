@@ -64,8 +64,13 @@ export const en: Messages = {
     folder: 'Folder',
     lastMessage: 'Last message',
   },
+  slap: {
+    sound: 'SLAP!',
+  },
   info: {
     label: (name: string) => `About ${name}`,
+    slap: 'Slap',
+    slapLabel: (name: string) => `Slap ${name} (just for fun, no effect on the agent)`,
     session: 'Session',
     agent: 'Agent',
     sessionName: 'Name',
