@@ -1,5 +1,6 @@
 import type { SessionView } from '@agent-office/shared';
-import { agentName, elapsed, sessionTitle, stateLabel, STATE_COLORS } from '../format.ts';
+import { agentName, elapsed, sessionTitle, stateLabel, statusKind } from '../format.ts';
+import { StatusIcon } from './StatusIcon.tsx';
 import { useT } from '../i18n/useT.ts';
 import { useOffice } from '../store.ts';
 import { useNow } from '../useNow.ts';
@@ -38,7 +39,7 @@ export function AgentPanel({ sessions }: { sessions: SessionView[] }) {
         </button>
       </div>
       <p className="state-line">
-        <span className="dot" style={{ background: STATE_COLORS[agent.state] }} aria-hidden="true" />
+        <StatusIcon kind={statusKind(agent)} />
         {t.panel.stateSince(stateLabel(agent, t), elapsed(agent.since, now, t))} · {t.rooms[agent.room] ?? agent.room}
       </p>
       <dl>

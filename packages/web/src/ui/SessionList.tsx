@@ -1,5 +1,6 @@
 import type { AgentView, SessionView } from '@agent-office/shared';
-import { agentName, elapsed, sessionColor, sessionTitle, stateLabel, STATE_COLORS } from '../format.ts';
+import { agentName, elapsed, sessionColor, sessionTitle, stateLabel, statusKind } from '../format.ts';
+import { StatusIcon } from './StatusIcon.tsx';
 import { useT } from '../i18n/useT.ts';
 import { useOffice } from '../store.ts';
 import { useNow } from '../useNow.ts';
@@ -25,7 +26,7 @@ function AgentButton({ agent, session, now }: { agent: AgentView; session: Sessi
       // Selected with its conversation closed: a press reopens it instead of deselecting.
       onClick={() => select(selected && dialogOpen ? null : agent.id)}
     >
-      <span className="dot" style={{ background: STATE_COLORS[agent.state] }} aria-hidden="true" />
+      <StatusIcon kind={statusKind(agent)} />
       <span className="agent-row__text">
         <span className="agent-row__name">{name}</span>
         <span className="muted">
