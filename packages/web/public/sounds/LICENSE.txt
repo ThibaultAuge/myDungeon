@@ -1,4 +1,5 @@
-slap.m4a
-"Slap.m4a" by TheNerdClubBoi (https://freesound.org/s/667099/)
-licensed under Creative Commons 0 (CC0 1.0, http://creativecommons.org/publicdomain/zero/1.0/).
-Credit is not required; given anyway. Unmodified, renamed from 667099__thenerdclubboi__slap.m4a.
+slap.wav
+Free sound effect supplied by the project owner, who confirmed it is free to use.
+Exact source and licence not recorded yet: add them here when known.
+Unmodified, renamed from SLAP.WAV (PCM 16-bit mono 22050 Hz, 0.86 s).
+SHA-256: a1cfd3f0ffa0ac6f4472b9b1e7212d885c797ab6738987ab16a752f1cc5a6f55

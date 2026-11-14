@@ -164,23 +164,47 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cast
     re-accelerates from 0. `Character` restarts the hit clip on a new `hitId` (`reset().play()`
     if it is the current action, else deletes it from the weights so the normal path restarts
     it). While spawning/loading (`spawnLeft !== 0`) or under reduced motion the hit clip is
-    skipped but the DOM effect and sound still play.
+    skipped but the DOM effect and sound still play. `Motion.hitWait` (`SWING_IMPACT`) delays
+    the hit clip until the hand lands; the walk pause covers wait + hit (`hitLeft` frozen
+    during the wait).
+  - Swing math (`slapSwing.ts`, pure, tested): `SWING_DURATION` 0.32 s, `SWING_IMPACT`
+    0.12 s; `swingAngle(time)` linear, 0 at impact; `swingPose(time, dir)` returns
+    `{right, up, toward, tangentRight, tangentToward, roll, scale}` in the camera's
+    horizontal frame around the head, `null` outside the sweep; scale grows/shrinks at the
+    ends. `RADIUS` 1.4 m with the pivot 0.5 m behind the head so the hand crosses in front
+    of the face; wide on purpose (at the usual camera distance a figure is a few dozen px
+    and the name tag covers the head).
+  - 3D hand (`SlapHand.tsx`): three.js primitives (leather cuff + brass band, box palm, 4
+    capsule fingers, capsule thumb, KayKit palette; no KayKit pack has a hand); geometries
+    and materials shared at module scope (`dispose={null}`). Keyed by slap count in
+    `AgentFigure`, not mounted under reduced motion; `dir` alternates per slap. `useFrame`:
+    camera frame from `camera.matrixWorld` (right flattened, `toward = right × up` so it
+    stays defined top-down), head at `HEAD_Y` 1.25 local, world pose → parent-local
+    (`worldToLocal` + inverse parent world quaternion); back of hand blended `FACE_CAMERA`
+    0.8 toward the camera (a hand facing its motion is seen edge-on from above), fingers
+    toward screen-up, `HAND_SCALE` 2 (inherits the sub-agent 0.85 scale, intended).
+    Drawn over walls: materials `transparent: true`, opacity 1, so they render in the last
+    (transparent) pass; cuff mesh `renderOrder` 1000, `frustumCulled` false, its
+    `onBeforeRender` sets the depth mask true then calls `renderer.clearDepth()`; other parts
+    `renderOrder` 1001. Raycast disabled on hand meshes.
   - Effect: one stable drei `<Html>` per selectable figure at `SLAP_Y` 1.5 (class
     `slap-anchor`, `zIndexRange [30, 20]`) holding `<SlapEffect key={slap}>`; the key remount
     restarts the CSS animations. State is cleared after `SLAP_EFFECT_MS` and in the effect
-    cleanup (Suspense re-run). `SlapEffect`: `aria-hidden` hand SVG sweeping (direction flips
-    every other slap), 3 ★ stars spinning above the name tag, comic bubble `t.slap.sound`.
-    CSS `.slap*`: reduced motion hides hand and stars and keeps the bubble static;
-    forced-colors rules.
-  - Sound (`ui/slapSound.ts`): recorded file `public/sounds/slap.m4a` (Freesound #667099,
-    CC0, copied unmodified from the gitignored `assets-src/`; credit in
-    `public/sounds/LICENSE.txt`). `preloadSlapSound()` (called in `AgentFigure`'s slap
+    cleanup (Suspense re-run). `SlapEffect`: 3 ★ stars spinning above the name tag, comic
+    bubble `t.slap.sound`. CSS `.slap*`: reduced motion hides the stars and keeps the bubble
+    static; forced-colors rules.
+  - Sound (`ui/slapSound.ts`): recorded file `public/sounds/slap.wav` (PCM 16-bit
+    mono 22050 Hz, 0.86 s; supplied by the user as `SLAP.WAV` in the gitignored
+    `assets-src/`, copied unmodified; the user confirmed it is a free sound, exact source
+    and licence not recorded yet; SHA-256 and status in `public/sounds/LICENSE.txt`). `preloadSlapSound()` (called in `AgentFigure`'s slap
     effect) fetches the bytes with no `AudioContext`. On a slap, the single page
     `AudioContext` (created lazily in the gesture, never closed or recreated) decodes a copy
     once and plays an `AudioBufferSourceNode` at gain 0.6, max 3 overlapping voices. A failed
     fetch or decode clears the cache (next slap retries) and logs one `console.warn`. Plays
     only when `running`, else after one in-flight `resume()`; slaps during a pending resume
-    are dropped, not queued.
+    are dropped, not queued. `playSlapSound(delay)` schedules the sound `SWING_IMPACT`
+    after the click via `source.start(currentTime + delay)`; on a suspended context the
+    delay counts from the resume.
   - Keyboard route: `AgentInfo` "Baffer" button `.agent-info__slap`, `aria-label`
     `t.info.slapLabel(name)` containing the visible text (tested in `i18n.test.ts`), shown
     only while `hasSlapTarget` (`useSyncExternalStore`); if it disappears while focused,
@@ -216,9 +240,10 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cast
   `LOOKS`, `lookFor`, `PROP_GRIP`, `gripFor`, `clipFor` and the clip constants.
 - `packages/web/src/scene/AgentFigure.tsx` — walk, `Character` (takes a `Look`), `Held`,
   `CharacterBoundary`, tag, destination badge toggle, slap handlers and anchor.
-- `packages/web/src/scene/slap.ts` (pure bus and clip choice), `scene/SlapEffect.tsx`,
+- `packages/web/src/scene/slap.ts` (pure bus and clip choice), `scene/slapSwing.ts` (pure
+  swing pose), `scene/SlapHand.tsx` (3D hand), `scene/SlapEffect.tsx` (stars, bubble),
   `ui/slapSound.ts`, slap button in `ui/AgentInfo.tsx`; `.slap*` in `styles.css`;
-  `packages/web/public/sounds/` (`slap.m4a`, `LICENSE.txt`).
+  `packages/web/public/sounds/` (`slap.wav`, `LICENSE.txt`).
 - `packages/web/src/scene/destinations.ts` — pure: `Destination = RoomId | StationId`,
   `destinationOf(spot)` (station ?? room), `postDestination(post: PostId)` (identity; it
   compiles only because every `PostId` is a `RoomId` or a `StationId`).
@@ -233,7 +258,7 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cast
 - `packages/web/src/ui/PostCard.tsx`, `PostList.tsx`; `packages/web/src/store.ts`
   (`selectedPost`, `selectPost`); Canvas `onPointerMissed` is in `Office.tsx`.
 - `packages/web/test/dungeon.test.ts`, `walk.test.ts`, `characters.test.ts`, `slap.test.ts`,
-  `layout.test.ts` (`layout.ts`: `ROOMS`, seats and `assignSpots`, altar `queueSpot`,
+  `slapSwing.test.ts`, `layout.test.ts` (`layout.ts`: `ROOMS`, seats and `assignSpots`, altar `queueSpot`,
   `SPAWN`, `corridorPath`, `routeBetween`, `reroute`, post tagging, `postGroups`,
   `POST_ROOM`, spot `room`/`station`), `highlight.test.ts`, `cursor.test.ts`,
   `destinations.test.ts` (`destinationOf`; room ids and post names never overlap;
@@ -299,7 +324,10 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cast
   file outputs absolute paths inside the worktree; relative paths resolve elsewhere.
   A headless screenshot takes about 4 s, longer than the 1.5 s slap effect: to capture it,
   patch `window.setTimeout` for the 1500 ms delay and pause `document.getAnimations()` on
-  `.slap*` elements first.
+  `.slap*` elements first. For the 0.32 s 3D hand sweep: zoom the camera with the mouse
+  wheel first (the hand is small at the default distance), override `performance.now` with
+  a frozen value (`THREE.Clock` reads it), slap, then step the frozen value to chosen ms and
+  screenshot; restore with `delete performance.now`.
   `.playwright-mcp/` is gitignored because captures may show real session names; keep it so.
 - Where figures rest, wait, appear and leave (tavern, altar, roster):
   `docs/ai/agent-lifecycle.md`.
@@ -323,7 +351,7 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cast
   to 0.1 m inside the room edge.
 - Orientation-based cutaway was tried and rejected; keep the cursor parabola.
 - Tests must not import `kit.ts` or any `.tsx` file (drei / `import.meta.env`); test
-  `dungeon.ts`, `layout.ts`, `walk.ts`, `characters.ts`, `slap.ts`, `destinations.ts`, `forest.ts` and
+  `dungeon.ts`, `layout.ts`, `walk.ts`, `characters.ts`, `slap.ts`, `slapSwing.ts`, `destinations.ts`, `forest.ts` and
   the manifest JSON.
 - Walk speed was set so figures reach the room before short tasks finish (user request).
   The chibi legs walk naturally at 0.57 (`Walking_A`) and 1.4 u/s (`Running_A`) at
@@ -362,7 +390,15 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cast
   right-press position is only cleared by a right release on that figure; one extra drei
   `<Html>` per selectable figure (per-frame projection cost); no mute switch for the sound;
   the server SPA fallback answers a missing `/sounds/` file with `index.html` (status 200),
-  so a missing `slap.m4a` fails decoding silently and is refetched on every slap.
+  so a missing `slap.wav` fails decoding silently and is refetched on every slap.
+- Sound files rule: before shipping a new sound under `public/sounds/`, record its source
+  and licence in `public/sounds/LICENSE.txt`. Never commit a sound ripped from a commercial
+  game.
+- Slap hand rules, keep them: the hand casts no shadow (the depth clear never runs in the
+  shadow pass); nothing else may use `renderOrder` ≥ 1000. Accepted limits: two hands on
+  screen at the same instant share the depth clear and may overlap wrongly; the hand's
+  clock starts 1-2 frames (~16-33 ms) after the click while the hit clip and sound start
+  from the click; the first slap may compile a new shader program.
 - Post card plate layout, keep it: `.post-card__plate` is IN THE FLOW with
   `margin-top: -16px` (not `position: absolute` like the agent plates), so a two-line title
   (FR "Rayonnages et tables de lecture" wraps) pushes the text down. Its

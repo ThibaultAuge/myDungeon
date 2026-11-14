@@ -76,7 +76,7 @@ Pour le développement, `npm run dev` lance le serveur et Vite (http://127.0.0.1
 
 La carte utilise les packs gratuits KayKit de Kay Lousberg (www.kaylousberg.com) : Dungeon Pack 1.1, RPG Tools Bits 1.0 et Fantasy Weapons Bits 1.0. Les personnages utilisent KayKit Adventurers 2.0. Ils sont sous licence CC0 : le crédit n'est pas obligatoire, on le donne quand même (voir `packages/web/public/kaykit/LICENSE.txt`). Les modèles utilisés sont déjà dans le dépôt.
 
-Le bruit de la baffe est « Slap.m4a » de TheNerdClubBoi sur Freesound (https://freesound.org/s/667099/), sous licence CC0 : le crédit n'est pas obligatoire, on le donne quand même (voir `packages/web/public/sounds/LICENSE.txt`).
+Le bruit de la baffe (`packages/web/public/sounds/slap.wav`) est un son libre fourni par le responsable du projet ; sa source exacte et sa licence ne sont pas encore renseignées (voir `packages/web/public/sounds/LICENSE.txt`).
 
 Pour en ajouter un :
 

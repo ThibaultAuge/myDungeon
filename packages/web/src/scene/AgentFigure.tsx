@@ -16,6 +16,8 @@ import { reroute, routeBetween, SPAWN, type Point, type Spot } from './layout.ts
 import { RequestBubble } from './RequestBubble.tsx';
 import { hitClipFor, onSlap, slapAgent, SLAP_EFFECT_MS } from './slap.ts';
 import { SlapEffect } from './SlapEffect.tsx';
+import { SlapHand } from './SlapHand.tsx';
+import { SWING_IMPACT } from './slapSwing.ts';
 import { playSlapSound, preloadSlapSound } from '../ui/slapSound.ts';
 import { advance, approach, nextSpeed, remainingDistance, turnToward } from './walk.ts';
 
@@ -45,7 +47,9 @@ interface Motion {
   /** Hit reaction of the last slap, and that slap's number (a new number restarts the clip). */
   hit: 'Hit_A' | 'Hit_B' | null;
   hitId: number;
-  /** Seconds of hit reaction left: the walk pauses meanwhile. */
+  /** Seconds until the 3D hand reaches the face: the hit clip waits for it. */
+  hitWait: number;
+  /** Seconds of hit reaction left: the walk pauses meanwhile (and during the wait). */
   hitLeft: number;
 }
 
@@ -143,7 +147,7 @@ function Character({ look, state, motion }: { look: Look; state: AgentState; mot
       spawning: m.spawnLeft > 0,
       kneeling: m.kneeling,
       reducedMotion: still,
-      hit: m.hitLeft > 0 && m.hit ? m.hit : undefined,
+      hit: m.hitWait <= 0 && m.hitLeft > 0 && m.hit ? m.hit : undefined,
     });
     // When Suspense hides and shows the scene again (while the kit loads), React runs the
     // effect cleanups: drei's useAnimations then stops every action, but these refs survive.
@@ -283,6 +287,7 @@ function AgentFigureImpl({ agent, name, color, spot, start, selected, onSelect, 
     spawnLeft: start.id === SPAWN.id && agent.state !== 'done' ? -1 : 0,
     hit: null,
     hitId: 0,
+    hitWait: 0,
     hitLeft: 0,
   });
   /** Number of the slap on screen (a new one remounts the effect), null when none is. */
@@ -304,7 +309,10 @@ function AgentFigureImpl({ agent, name, color, spot, start, selected, onSelect, 
       m.hit = skip ? null : hitClipFor(n);
       m.hitId = n;
       m.hitLeft = skip ? 0 : HIT_FALLBACK;
-      playSlapSound();
+      // The hand sweeps in first: the cheek reacts, and sounds, when it lands.
+      const swing = !reducedMotion();
+      m.hitWait = skip ? 0 : SWING_IMPACT;
+      playSlapSound(swing ? SWING_IMPACT : 0);
       setSlap(n);
       clearTimeout(timer);
       timer = setTimeout(() => setSlap(null), SLAP_EFFECT_MS);
@@ -350,9 +358,10 @@ function AgentFigureImpl({ agent, name, color, spot, start, selected, onSelect, 
     if (m.spawnLeft > 0) m.spawnLeft = Math.max(0, m.spawnLeft - delta);
     const spawning = m.spawnLeft !== 0;
     // A slapped figure stops for its hit reaction, then sets off again from standstill.
-    if (still) m.hitLeft = 0;
-    const hitting = m.hitLeft > 0;
-    if (hitting) m.hitLeft = Math.max(0, m.hitLeft - delta);
+    if (still) m.hitLeft = m.hitWait = 0;
+    const hitting = m.hitWait > 0 || m.hitLeft > 0;
+    if (m.hitWait > 0) m.hitWait = Math.max(0, m.hitWait - delta);
+    else if (m.hitLeft > 0) m.hitLeft = Math.max(0, m.hitLeft - delta);
 
     m.moving = false;
     if (hitting && path.current.length > 0) {
@@ -490,9 +499,11 @@ function AgentFigureImpl({ agent, name, color, spot, start, selected, onSelect, 
       {/* One stable anchor; the effect inside remounts on each slap to restart its animations. */}
       {connected && onSelect && (
         <Html position={[0, SLAP_Y, 0]} center className="slap-anchor" zIndexRange={[30, 20]}>
-          {slap !== null && <SlapEffect key={slap} flip={slap % 2 === 0} />}
+          {slap !== null && <SlapEffect key={slap} />}
         </Html>
       )}
+      {/* The 3D hand sweeps the other way on every other slap; none under reduced motion. */}
+      {slap !== null && !reducedMotion() && <SlapHand key={slap} dir={slap % 2 === 0 ? 1 : -1} />}
     </group>
   );
 }

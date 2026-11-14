@@ -542,8 +542,8 @@ select,
   }
 }
 
-/* The slap (a nod to Dungeon Keeper): hand sweeping across the head, stars, comic bubble.
-   Purely visual; remounted on every slap so the animations start over. */
+/* The slap (a nod to Dungeon Keeper): stars and comic bubble over the head; the hand is
+   in 3D (SlapHand.tsx). Purely visual; remounted on every slap so the animations start over. */
 .slap-anchor {
   pointer-events: none;
 }
@@ -553,67 +553,6 @@ select,
   display: block;
   width: 0;
   height: 0;
-}
-
-.slap__hand {
-  position: absolute;
-  left: -36px;
-  top: -36px;
-  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.5));
-  opacity: 0;
-  animation: slap-swipe 0.35s ease-in forwards;
-}
-
-.slap--flip .slap__hand {
-  animation-name: slap-swipe-flip;
-}
-
-.slap__hand-shape {
-  fill: #f2c9a0;
-  stroke: #3a2614;
-  stroke-width: 2.5;
-  stroke-linejoin: round;
-}
-
-.slap__hand-line {
-  fill: none;
-  stroke: #3a2614;
-  stroke-width: 2;
-  stroke-linecap: round;
-}
-
-.slap__hand-cuff {
-  fill: #8a6a2f;
-  stroke: #3a2614;
-  stroke-width: 2.5;
-}
-
-@keyframes slap-swipe {
-  0% {
-    opacity: 1;
-    transform: translateX(70px) rotate(-20deg);
-  }
-  70% {
-    opacity: 1;
-  }
-  100% {
-    opacity: 0;
-    transform: translateX(-70px) rotate(15deg);
-  }
-}
-
-@keyframes slap-swipe-flip {
-  0% {
-    opacity: 1;
-    transform: translateX(-70px) scaleX(-1) rotate(-20deg);
-  }
-  70% {
-    opacity: 1;
-  }
-  100% {
-    opacity: 0;
-    transform: translateX(70px) scaleX(-1) rotate(15deg);
-  }
 }
 
 /* Stars turning over the head: the ring spins, each star sits on it. */
@@ -705,9 +644,8 @@ select,
   }
 }
 
-/* Reduced motion: no sweeping hand nor spinning stars, only the bubble, still. */
+/* Reduced motion: no spinning stars (and no 3D hand), only the bubble, still. */
 @media (prefers-reduced-motion: reduce) {
-  .slap__hand,
   .slap__stars {
     display: none;
   }
@@ -718,14 +656,6 @@ select,
 }
 
 @media (forced-colors: active) {
-  .slap__hand-shape,
-  .slap__hand-cuff {
-    fill: Canvas;
-    stroke: CanvasText;
-  }
-  .slap__hand-line {
-    stroke: CanvasText;
-  }
   .slap__star {
     color: CanvasText;
     text-shadow: none;

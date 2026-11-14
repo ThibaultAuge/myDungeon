@@ -1,8 +1,7 @@
-// Slap sound: a recorded slap (Freesound #667099 by thenerdclubboi, CC0, see
-// packages/web/public/sounds/LICENSE.txt), played through Web Audio so that quick slaps
+// Slap sound: a recorded slap (free sound, see packages/web/public/sounds/LICENSE.txt), played through Web Audio so that quick slaps
 // overlap instead of cutting each other off.
 
-const SLAP_URL = `${import.meta.env.BASE_URL}sounds/slap.m4a`;
+const SLAP_URL = `${import.meta.env.BASE_URL}sounds/slap.wav`;
 const VOLUME = 0.6;
 /** Sounds playing at once: more would only clip. */
 const MAX_VOICES = 3;
@@ -62,25 +61,32 @@ function sound(ctx: AudioContext): Promise<AudioBuffer | null> {
   return decoded;
 }
 
-/** Plays the slap. Silent when Web Audio or the file is missing, or the browser keeps audio blocked. */
-export function playSlapSound(): void {
+/**
+ * Plays the slap `delay` seconds from now (when the hand lands). Called inside the click,
+ * which lets the browser start audio; the delay is scheduled by Web Audio itself. Silent
+ * when Web Audio or the file is missing, or the browser keeps audio blocked.
+ */
+export function playSlapSound(delay = 0): void {
   const ctx = audio();
   if (!ctx) return;
   // Resumed inside the click: the browser's autoplay policy allows it then. Slaps made
   // while a resume is pending are dropped, so blocked slaps never pile up into one burst.
-  if (ctx.state === 'running') void sound(ctx).then((b) => b && play(ctx, b));
+  // On a running context the time is taken now, so a slap waiting for the decoding still
+  // lands on the hit. A suspended context's clock is frozen: that time is taken after resume.
+  const at = ctx.currentTime + delay;
+  if (ctx.state === 'running') void sound(ctx).then((b) => b && play(ctx, b, at));
   else if (!resuming)
     resuming = ctx
       .resume()
       .then(() => sound(ctx))
       .then((b) => {
-        if (b) play(ctx, b);
+        if (b) play(ctx, b, ctx.currentTime + delay);
       })
       .catch(() => {})
       .finally(() => (resuming = null));
 }
 
-function play(ctx: AudioContext, buffer: AudioBuffer): void {
+function play(ctx: AudioContext, buffer: AudioBuffer, at: number): void {
   if (voices >= MAX_VOICES) return;
   try {
     const source = ctx.createBufferSource();
@@ -93,7 +99,8 @@ function play(ctx: AudioContext, buffer: AudioBuffer): void {
       voices--;
       gain.disconnect();
     };
-    source.start();
+    // A time already past (slow decoding) starts it at once.
+    source.start(at);
   } catch {
     // A sound effect never breaks the scene.
   }
