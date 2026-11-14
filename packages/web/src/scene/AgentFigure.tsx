@@ -6,11 +6,10 @@ import type { AgentView } from '@agent-office/shared';
 import { STATE_COLORS } from '../format.ts';
 import { reducedMotion } from '../motion.ts';
 import { reroute, routeBetween, SPAWN, type Point, type Spot } from './layout.ts';
+import { advance, nextSpeed, remainingDistance } from './walk.ts';
 
 /** Live positions of the figures, read by the camera to follow the selected agent. */
 export const agentPositions = new Map<string, Vector3>();
-
-const SPEED = 4.5;
 
 interface Props {
   agent: AgentView;
@@ -31,6 +30,7 @@ export function AgentFigure({ agent, name, color, spot, selected, onSelect }: Pr
   const pos = useMemo(() => new Vector3(start.x, 0, start.z), []); // eslint-disable-line react-hooks/exhaustive-deps
   const path = useRef<Point[]>(agent.kind === 'sub' ? routeBetween(SPAWN, spot) : []);
   const last = useRef<Spot>(spot);
+  const speed = useRef(0);
 
   useEffect(() => {
     if (last.current.id === spot.id) return;
@@ -52,22 +52,17 @@ export function AgentFigure({ agent, name, color, spot, selected, onSelect }: Pr
     // Reduced motion: agents still move between rooms (that is information), the ambient loops stop.
     const t = reducedMotion() ? 0 : clock.elapsedTime;
     const dt = Math.min(delta, 0.05);
-    const next = path.current[0];
     let walking = false;
-    if (next) {
-      const dx = next.x - pos.x;
-      const dz = next.z - pos.z;
-      const dist = Math.hypot(dx, dz);
-      if (dist < 0.06) {
-        path.current.shift();
-      } else {
-        const step = Math.min(dist, SPEED * dt);
-        pos.x += (dx / dist) * step;
-        pos.z += (dz / dist) * step;
-        g.rotation.y = Math.atan2(dx, dz);
-        walking = true;
-      }
+    if (path.current.length > 0) {
+      // A reroute keeps the current speed: the agent changes course without stopping.
+      // Accepted limit: if the new destination is within the braking distance, the speed
+      // drops to the braking curve in one frame, and a route that doubles back turns at speed.
+      speed.current = nextSpeed(speed.current, remainingDistance(pos, path.current), dt);
+      const heading = advance(pos, path.current, speed.current * dt);
+      if (heading !== null) g.rotation.y = heading;
+      walking = path.current.length > 0;
     } else {
+      speed.current = 0;
       // Shortest arc, so an agent never spins a full turn to face its desk.
       const diff = Math.atan2(Math.sin(spot.facing - g.rotation.y), Math.cos(spot.facing - g.rotation.y));
       g.rotation.y += diff * 0.1;
