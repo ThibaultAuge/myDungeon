@@ -47,7 +47,15 @@
     "license": "adventurers/KayKit_Adventurers_2.0_FREE/License.txt",
     "format": "glb",
     "textures": [],
-    "models": ["Knight", "Rogue_Hooded"]
+    "models": ["Knight", "Barbarian", "Mage", "Ranger", "Rogue", "Rogue_Hooded"]
+  },
+  "adventurers_props": {
+    "source": "adventurers/KayKit_Adventurers_2.0_FREE/Assets/gltf",
+    "license": "adventurers/KayKit_Adventurers_2.0_FREE/License.txt",
+    "textures": ["knight_texture.png", "barbarian_texture.png", "mage_texture.png", "rogue_texture.png"],
+    "models": [
+      "spellbook_open", "spellbook_closed", "smokebomb", "shield_spikes", "shield_badge_color", "staff", "mug_full", "dagger"
+    ]
   },
   "adventurers_anim": {
     "source": "adventurers/KayKit_Adventurers_2.0_FREE/Animations/gltf/Rig_Medium",

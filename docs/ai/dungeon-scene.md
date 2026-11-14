@@ -1,5 +1,5 @@
 ---
-description: Use when changing the 3D dungeon map — rooms, floors, walls, cutaway, props, lighting, KayKit models or their import — agent figures (walking motion, character models, animations), or when previewing the web scene.
+description: Use when changing the 3D dungeon map — rooms, floors, walls, cutaway, props, lighting, KayKit models or their import — agent figures (walking motion, character models, role looks and held props, animations), or when previewing the web scene.
 ---
 
 # 3D dungeon scene (KayKit assets)
@@ -7,8 +7,9 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cuta
 ## Current State
 - The map is built from KayKit CC0 models (Dungeon Pack 1.1, RPG Tools Bits 1.0, Fantasy
   Weapons Bits 1.0, free tiers), grouped in three packs: `dungeon`, `tools`, `weapons`.
-  Agents use KayKit Adventurers 2.0 (CC0): packs `adventurers` (character skins) and
-  `adventurers_anim` (shared `Rig_Medium_General`, `Rig_Medium_MovementBasic` clips).
+  Agents use KayKit Adventurers 2.0 (CC0): packs `adventurers` (character bodies),
+  `adventurers_anim` (shared `Rig_Medium_General`, `Rig_Medium_MovementBasic` clips) and
+  `adventurers_props` (8 held props, gltf + 4 textures).
 - KayKit is about 1.33x our scene: every model is scaled by `KIT_SCALE = 0.75`. After
   scaling: small floor tile 1.5 m, wall 3 m high per 3 m chunk, table 0.75 m.
 - Rooms (`RoomDef` in `layout.ts`) carry `floorKind` (`stone`, `stoneFancy`, `grate`, `wood`,
@@ -26,10 +27,23 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cuta
   sun. Floors and small shapes/models (< 0.3 m, or scale < 0.6) cast no shadow.
 
 ### Agent figures
-- Skins: `CHARACTERS` in `characters.ts` lists skins per kind — `Knight` for main agents,
-  `Rogue_Hooded` for subagents. `characterFor(kind, id)` picks one deterministically from
-  a hash of the id. Every subagent figure, whatever its skin, is scaled 0.85 by kind in
-  `AgentFigure` (whole group: model, tag, ring, disc).
+- Looks (`characters.ts`): a `Look` is a body plus optional `right` / `left` held props
+  (`PropRef { pack: 'adventurers_props' | 'tools'; model }`). Main agents use `MAIN_BODY`
+  (`Knight`). Every subagent figure, whatever its look, is scaled 0.85 by kind in
+  `AgentFigure` (whole group: model, tag, ring, disc). Subagents get a role look from `LOOKS`, keyed by the
+  lower-case agent TYPE (18 entries: the user's agents plus `Explore`, `Plan`,
+  `general-purpose`, `claude-code-guide`, `statusline-setup`). `lookFor(kind, agentType)`
+  looks up case-insensitively with `Object.hasOwn`; an unknown type gets
+  `SUB_BODIES[FNV-1a(type) % 5]` with empty hands, `''` gets `SUB_BODIES[0]`. Keying by
+  type, not agent id, makes every agent of a type and its resting figure `rest:<type>` look
+  alike. `LOOKS` entries, `PropRef`s and grips are frozen.
+- Held props: `Held` in `AgentFigure.tsx` clones the prop (`scene.clone()`, geometry and
+  materials shared, `castShadow` on the clone's meshes) and mounts it via R3F `createPortal`
+  into bone `handslotr` / `handslotl` (GLTFLoader strips the dots of `handslot.r`), inside a
+  group carrying the grip. A dev warning fires when a hand slot is missing. Grips:
+  `PROP_GRIP` / `gripFor` hold rotation/scale for `tools` models only; Adventurers props fit
+  the slot as they are. The slot's local X points down, so upright tools turn a quarter turn
+  on Z; the lantern turns on −Z (hangs).
 - Walking: cruise `CRUISE_SPEED` 9 u/s, `ACCELERATION` 18 u/s², `MIN_SPEED` 0.3, with
   ease-in / ease-out over the WHOLE route (braking curve `sqrt(2·A·remaining)` on the total
   remaining distance, so no stop at corners). Speed lives in a ref in `AgentFigure`, reset
@@ -71,12 +85,13 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cuta
 - `scripts/import-kaykit.mjs` (`npm run kaykit:import`) — copies manifest entries from
   `assets-src/<pack>/` (gitignored, unzipped by the user) to `packages/web/public/kaykit/<pack>/`
   (committed).
-- `packages/web/src/scene/characters.ts` — pure, no three.js: `CHARACTERS`, `characterFor`,
-  `clipFor` and the clip constants.
-- `packages/web/src/scene/AgentFigure.tsx` — walk, `Character`, `CharacterBoundary`, tag.
+- `packages/web/src/scene/characters.ts` — pure, no three.js: `MAIN_BODY`, `SUB_BODIES`,
+  `LOOKS`, `lookFor`, `PROP_GRIP`, `gripFor`, `clipFor` and the clip constants.
+- `packages/web/src/scene/AgentFigure.tsx` — walk, `Character` (takes a `Look`), `Held`,
+  `CharacterBoundary`, tag.
 - `packages/web/src/scene/walk.ts` — pure walking motion, no three.js: `remainingDistance`,
   `nextSpeed`, `advance` (mutates the position, shifts reached waypoints, carries leftover
-  step past corners, lands exactly on the last waypoint), `turnToward`.
+  step past corners, lands exactly on the last waypoint), `turnToward`, `approach`.
 - `packages/web/src/scene/layout.ts`, `Room.tsx`, `Office.tsx`.
 - `packages/web/test/dungeon.test.ts`, `walk.test.ts`, `characters.test.ts`,
   `layout.test.ts` (`layout.ts`: `ROOMS`, seats and `assignSpots`, altar `queueSpot`,
@@ -85,10 +100,16 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cuta
 ## Usage
 - New model: add it to `kit-manifest.json`, run `npm run kaykit:import`. Never hand-copy
   files into `public/kaykit/`. Load every model through `useKitGLTF`, never `useGLTF` directly.
-- New agent skin (planned: a distinct skin per subagent): add the name to
-  `CHARACTERS.sub` (or `.main`) and to the manifest `adventurers` models. The source zip
-  holds Barbarian, Knight, Mage, Ranger, Rogue, Rogue_Hooded. All share the Rig_Medium
-  skeleton (23 identical bones), so the shared clip files apply to every skin.
+- New or changed role look: edit `LOOKS` (lower-case type key) and, for a new prop, the
+  manifest models of its pack. A `tools` prop also needs a `PROP_GRIP` entry calibrated by
+  eye (tested: every `tools` prop in `LOOKS` has a grip, every `adventurers_props` model is
+  used). All six bodies (Barbarian, Knight, Mage, Ranger, Rogue, Rogue_Hooded) share the
+  Rig_Medium skeleton (23 identical bones), so the shared clip files apply to every body.
+- Grip calibration workflow: in Playwright, import the store by the URL actually loaded
+  (take it from performance resource entries; Vite appends `?t=` after edits) and call
+  `useOffice.setState({ sessions: [], roster: [...] })` so the tavern shows one resting
+  figure per type. Hide other objects and move the camera for close-ups, mutate the grip
+  group under the hand bone live, then copy the values into `PROP_GRIP`.
 - Repeated pieces go through `<KitInstances>`; one-off furniture through `<Kit>`; a new
   prop is a `PROPS` entry. Put placement logic in `dungeon.ts` so it stays testable.
 - Agent motion logic goes in `walk.ts`, clip choice in `clipFor` (both tested), never
@@ -97,8 +118,11 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cuta
 - Preview: `.claude/launch.json` entry `agent-office-web` runs Vite dev on 5173, proxying to
   the test server on 4778. `agent-office` / `agent-office-test` serve `packages/web/dist`,
   which needs `npm run build` first. Previewing from a worktree with fake hooks:
-  `docs/ai/agent-lifecycle.md`. The in-app Browser pane, when hidden, gives the Canvas
-  size 0 and renders no frames; use Playwright for visual verification.
+  `docs/ai/agent-lifecycle.md`. The preview launcher reads the main folder's
+  `.claude/launch.json`, so from a worktree run Vite on another port (5174 worked; the
+  WebSocket is refused there, which is fine for store-injected galleries). The in-app
+  Browser pane, when hidden, gives the Canvas size 0 and renders no frames; use Playwright
+  for visual verification.
 - Where figures rest, wait, appear and leave (tavern, altar, roster):
   `docs/ai/agent-lifecycle.md`.
 
@@ -123,6 +147,14 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cuta
   `KIT_SCALE`, so feet slide at cruise speed by design. Accepted limits: a reroute to a
   target within braking distance drops speed in one frame; a doubling-back reroute turns
   at speed.
+- No prop node name may equal a rig bone name: a clash would hijack animation tracks.
+  Checked for the current props; re-check when adding one.
+- Accepted limits of held props (review suggestions not done): props keep per-file
+  materials (one texture copy per distinct held model, no `shareMaterial`); every held mesh
+  casts a shadow; one R3F portal per prop (`bone.add` in a layout effect would be lighter).
+- Clip blending must step weights with `approach(value, target, step)` from `walk.ts`
+  (tested in `walk.test.ts`). An inline blend that took the decrease branch at
+  `weight === target` flickered 1→0 every other slow frame, showing a T-pose.
 - Kneeling replaced the old 30 cm sink at the altar; done agents are no longer transparent.
 - First-load Suspense gotcha: an upper Suspense hides and re-shows the scene while the kit
   loads; React 19.2 runs passive effect cleanups then, so `useAnimations` stops every action

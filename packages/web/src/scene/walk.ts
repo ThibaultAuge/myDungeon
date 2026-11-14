@@ -32,6 +32,16 @@ export function nextSpeed(speed: number, remaining: number, dt: number): number 
 }
 
 /**
+ * Moves `value` towards `target` by at most `step`, and stops on it. A value already on
+ * its target stays put, whatever the step (a large step must not overshoot back and forth).
+ */
+export function approach(value: number, target: number, step: number): number {
+  if (value < target) return Math.min(target, value + step);
+  if (value > target) return Math.max(target, value - step);
+  return value;
+}
+
+/**
  * Turns an angle `current` towards `target` by a `fraction` of the gap, along the shortest
  * arc, so a figure never spins a full turn. `fraction` 1 snaps to the target.
  */

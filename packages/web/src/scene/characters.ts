@@ -4,27 +4,114 @@
 import type { AgentState, AgentView } from '@agent-office/shared';
 
 /** Character models of the `adventurers` pack in kit-manifest.json. */
-export type CharacterModel = 'Knight' | 'Rogue_Hooded';
+export type CharacterModel = 'Knight' | 'Barbarian' | 'Mage' | 'Ranger' | 'Rogue' | 'Rogue_Hooded';
+
+/** The main agent is always the knight; subagents share the other bodies. */
+export const MAIN_BODY: CharacterModel = 'Knight';
+export const SUB_BODIES: readonly CharacterModel[] = ['Barbarian', 'Mage', 'Ranger', 'Rogue', 'Rogue_Hooded'];
+
+/** A model held in a hand: an Adventurers prop, or an RPG Tools item. */
+export interface PropRef {
+  pack: 'adventurers_props' | 'tools';
+  model: string;
+}
+
+/** What a figure looks like: a body and what it holds. */
+export interface Look {
+  body: CharacterModel;
+  right?: PropRef;
+  left?: PropRef;
+}
+
+const prop = (model: string): PropRef => Object.freeze({ pack: 'adventurers_props', model });
+const tool = (model: string): PropRef => Object.freeze({ pack: 'tools', model });
 
 /**
- * Skins per kind of agent. An agent picks one deterministically from its id, so adding
- * a skin to a list is enough to vary the figures (planned for subagents).
+ * One look per subagent type, chosen for its role (user decision). Keys are lower case,
+ * like STATIONS in layout.ts. Every subagent of a type, and its resting figure in the
+ * tavern, looks the same.
  */
-export const CHARACTERS: Record<AgentView['kind'], readonly CharacterModel[]> = {
-  main: ['Knight'],
-  sub: ['Rogue_Hooded'],
+export const LOOKS: Readonly<Record<string, Look>> = {
+  hermione: { body: 'Mage', right: prop('spellbook_open') },
+  dexter: { body: 'Rogue', right: prop('smokebomb') },
+  neo: { body: 'Barbarian', right: tool('lantern'), left: prop('shield_spikes') },
+  hancock: { body: 'Barbarian', right: tool('bucket_metal') },
+  timmy: { body: 'Ranger', right: tool('magnifying_glass') },
+  gatsby: { body: 'Rogue', right: prop('shield_badge_color') },
+  oracle: { body: 'Mage', right: prop('staff') },
+  curator: { body: 'Mage', right: prop('spellbook_closed') },
+  otis: { body: 'Rogue_Hooded', right: tool('journal_open') },
+  turing: { body: 'Mage', right: tool('drafting_compass') },
+  'samuel-morse': { body: 'Ranger', right: tool('map') },
+  barbapapa: { body: 'Rogue', right: tool('hammer') },
+  'butt-stallion': { body: 'Barbarian', right: prop('mug_full') },
+  explore: { body: 'Ranger', right: tool('lantern') },
+  plan: { body: 'Rogue_Hooded', right: tool('map') },
+  'general-purpose': { body: 'Rogue_Hooded', right: prop('dagger') },
+  'claude-code-guide': { body: 'Rogue_Hooded', right: tool('lantern') },
+  'statusline-setup': { body: 'Rogue', right: tool('wrench_A') },
 };
 
-/** Stable small hash of a string, the same one on every client. */
+// Shared by every figure of a type: frozen, with their PropRefs and the grips, so that no
+// caller can change them all at once.
+for (const look of Object.values(LOOKS)) Object.freeze(look);
+
+/**
+ * Stable 32-bit FNV-1a hash, the same on every client. A plain `h * 31 + c` would be
+ * useless modulo 5 (31 ≡ 1): the body would only depend on the sum of the letters.
+ */
 function hash(s: string): number {
-  let h = 0;
-  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+  let h = 0x811c9dc5;
+  for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 0x01000193) >>> 0;
   return h;
 }
 
-export function characterFor(kind: AgentView['kind'], agentId: string): CharacterModel {
-  const skins = CHARACTERS[kind];
-  return skins[hash(agentId) % skins.length];
+/**
+ * The look of an agent. A subagent type missing from LOOKS gets a body picked from its
+ * type name (stable, so all agents of that type match) and empty hands.
+ */
+export function lookFor(kind: AgentView['kind'], agentType: string): Look {
+  if (kind === 'main') return { body: MAIN_BODY };
+  const key = agentType.toLowerCase();
+  if (Object.hasOwn(LOOKS, key)) return LOOKS[key];
+  if (key === '') return { body: SUB_BODIES[0] };
+  return { body: SUB_BODIES[hash(key) % SUB_BODIES.length] };
+}
+
+/** How a held model sits in the hand slot, in the model's own units. */
+export interface Grip {
+  position: [number, number, number];
+  rotation: [number, number, number];
+  scale: number;
+}
+
+const grip = (rotation: [number, number, number], scale: number): Grip =>
+  Object.freeze({ position: Object.freeze([0, 0, 0]), rotation: Object.freeze(rotation), scale }) as Grip;
+
+const NEUTRAL_GRIP: Grip = grip([0, 0, 0], 1);
+
+/** A quarter turn. The hand slot's local X points down, so tools (modelled upright along +Y) turn on Z. */
+const Q = Math.PI / 2;
+const upright = (scale: number): Grip => grip([0, 0, Q], scale);
+
+/**
+ * Adjustments for models that were not made to be held (RPG Tools items lie on tables).
+ * Adventurers props fit the hand slot as they are. Calibrated by eye on the scene.
+ */
+export const PROP_GRIP: Readonly<Record<string, Grip>> = {
+  magnifying_glass: upright(1),
+  journal_open: upright(0.7),
+  drafting_compass: upright(1.3),
+  hammer: upright(1),
+  wrench_A: upright(1.2),
+  map: upright(0.7),
+  bucket_metal: upright(0.6),
+  // Turned the other way, so it hangs from its handle below the hand.
+  lantern: grip([0, 0, -Q], 0.55),
+};
+
+export function gripFor(ref: PropRef): Grip {
+  return Object.hasOwn(PROP_GRIP, ref.model) ? PROP_GRIP[ref.model] : NEUTRAL_GRIP;
 }
 
 /** Clips used by the figures, from Rig_Medium_General and Rig_Medium_MovementBasic. */
