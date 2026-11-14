@@ -323,6 +323,7 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cast
 - Post card open items (accessibility audit, not done): opening a card from the keyboard
   list does not move focus into it; the card has no max-height / scroll for very short
   scenes or 400% zoom.
-- Open items: about 700 draw calls per frame because props are not instanced (planned fix:
-  drei `<Instances>` for shapes); the scene-wide Suspense hide/show also causes about 15
+- Open items: repeated kit pieces, floors and the forest are instanced (`KitInstances.tsx`,
+  instanced meshes), but one-off furniture (`<Kit>`) and shape props are not, so each adds
+  its own draw calls (possible fix: drei `<Instances>` for shapes); the scene-wide Suspense hide/show also causes about 15
   "synchronously unmount a root" warnings per load.
