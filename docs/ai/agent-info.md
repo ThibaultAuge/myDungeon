@@ -21,7 +21,7 @@ description: Use when changing the selected-agent details card (AgentInfo), sess
 - CSS `.agent-info*` shares the `--dlg-*` variables with `.agent-dialog`; its max-height keeps
   12px above the box's plate (`--dlg-height`); mobile rules at ≤800px; forced-colors rules.
 - i18n: `info.*` keys; `panel.*` kept for reused labels (`panel.close` closes details and
-  conversation); `office.side` is "Sessions and history".
+  conversation); `office.side` is "Agents and places".
 - Shared types: `SessionView.info: SessionInfo` (worktree?, branch?, sourceBranch?, model?,
   effort?, permissionMode?, completedTurns?, cliVersion?) and
   `SessionView.servers: ListeningServer[]` (`{port, process?}`). Raw data only, never

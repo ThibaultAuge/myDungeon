@@ -2,46 +2,15 @@
 
 Un petit bureau en 3D où chaque agent Claude Code du poste local est un personnage. On voit qui travaille, sur quoi, qui attend une réponse et qui a fini.
 
-- **Une entreprise par environnement** de l'app desktop Claude (un nom et ses dossiers). On passe de l'une à l'autre.
-- **Un donjon de 14 lieux**, reliés par des couloirs (le plan est dans [docs/lieux-et-personnages.md](docs/lieux-et-personnages.md)). Les agents passent par les portes et les couloirs, jamais à travers un mur.
-  - **L'agent principal et les sous-agents génériques** (Explore, general-purpose…) vont dans la pièce de l'outil qu'ils utilisent :
-    - **Bibliothèque** : lecture et recherche (`Read`, `Grep`, `Glob`) ;
-    - **Observatoire** : web (`WebFetch`, `WebSearch`) ;
-    - **Atelier** : écriture (`Edit`, `Write`, `NotebookEdit`) ;
-    - **Salle des machines** : commandes (`Bash`, `PowerShell`) ;
-    - **Salle des cartes** : planification (`EnterPlanMode`, `ExitPlanMode`, `TodoWrite`), et à chaque nouveau prompt.
-  - **Les sous-agents spécialisés** restent à leur poste quel que soit l'outil : Hermione et Dexter en salle des épreuves, Oracle à l'observatoire, Turing au cabinet de l'arithméticien, Curator et Otis au Scriptorium, etc. Hancock quitte son réduit pour l'atelier quand il modifie du code.
-  - **L'autel des requêtes**, au centre : tout agent qui a besoin de toi (permission, question, erreur) y fait la queue, le plus ancien en tête, à genoux. La file avance quand il repart, et contourne la nef par les couloirs si elle s'allonge. Un agent qui attend seulement ton prochain message reste à la taverne.
-  - **La taverne** : au repos, elle contient un exemplaire de chaque type d'agent connu de l'environnement affiché. Un appel fait sortir celui de la taverne, qui prend la couleur de sa session et va à son poste. Les appels simultanés sortent des casiers. Un sous-agent qui a fini reprend la couleur neutre, retourne à la taverne et disparaît à son arrivée. L'agent principal y attend ton prochain message, dans la couleur de sa session.
-  - Chaque pièce a ses places. Un agent garde la sienne tant qu'il reste dans la pièce ; quand elle est pleine, les suivants se tiennent le long des murs.
-- **Une carte en vrais modèles 3D** : dalles de pierre, de bois ou de terre selon la pièce, murs avec fenêtres, arches, torches et bannières aux couleurs de la pièce, meubles et objets de décoration, ombres douces.
-  - **Déplace la souris pour découvrir les salles.** Les murs situés devant le curseur s'enfoncent dans le sol, et il ne reste qu'un muret qui marque le contour des pièces. Ceux situés derrière restent debout.
-  - **Les postes de travail.** Le mobilier de chaque pièce forme des postes. Survole un poste : ses meubles s'éclairent légèrement et le curseur devient une main. Clique dessus pour ouvrir une carte en haut à droite de la 3D, dans le même style que la fiche d'agent et la boîte de dialogue. Sa plaque porte le pictogramme du poste, celui qui s'affiche au-dessus d'un agent qui s'y rend, et son titre. Dessous, on lit le nom de la pièce, la fonction du poste en quelques mots et les agents qui y travaillent. À l'observatoire et au Scriptorium, la carte affiche le pictogramme de la pièce ; le télescope et les pupitres du Scriptorium ont chacun le leur. Le poste dont la carte est ouverte reste éclairé. Ferme la carte avec ×, avec Échap ou en cliquant dans le vide. Un clic après un glissement de caméra ne fait rien.
-    - Les pièces à plusieurs fonctions ont un poste par fonction : la Bibliothèque (rayonnages et tables) et son Scriptorium (pupitres des copistes), l'Atelier (établis) et le chevalet de l'enlumineur, la Salle des épreuves (table de relecture et laboratoire d'alchimie), la Salle Accessibilité / SEO (estrade du héraut et pupitre d'inspection).
-    - Le décor (caisses, tonneaux, coffres, pièces, bougies, tapis) ne réagit pas au survol.
-    - Si un agent se tient devant un meuble, le plus proche sous le pointeur l'emporte : l'agent ou le poste.
-  - **Un château dans une forêt de nuit.** Des arbres en 3D entourent le donjon : détaillés près du château, plus simples au loin, puis une lisière peinte à l'horizon. Des douves longent le sud, un pont-levis baissé mène à la porte du château, et un chemin de terre se perd dans la forêt. La forêt est sombre pour que le château, aux lumières chaudes, ressorte. La vue reste limitée autour du château.
-- **Trois états.**
-  - Vert : il travaille.
-  - Ambre : il attend ton prochain message. Un petit losange ambre s'affiche au-dessus de son étiquette.
-  - Gris : il a terminé. Il reste immobile, en pose calme.
-- **La bulle de requête.** Un agent qui a besoin de toi porte au-dessus de son étiquette une bulle de BD rouge : « … » pour une permission, « ? » pour une question, « ! » pour une erreur. Il se place alors à l'autel des requêtes.
-- **Les sous-agents** apparaissent comme des collègues de la même couleur que leur session. Ils surgissent du sol à leur arrivée.
-- **Des personnages animés** (pack KayKit Adventurers 2.0) : un chevalier pour l'agent principal, et pour chaque type de sous-agent une tenue de son rôle (barbare, mage, rôdeur, voleur, voleur encapuchonné) avec un objet en main. Tous les agents d'un même type se ressemblent, y compris au repos à la taverne. La liste complète est dans [docs/lieux-et-personnages.md](docs/lieux-et-personnages.md).
-  - Ils marchent ou courent entre les pièces, et font une animation de travail quand ils travaillent.
-  - En attente, ils regardent autour d'eux, le losange ambre restant affiché. Le premier de la file s'agenouille devant l'autel.
-  - Chaque personnage a un disque au sol de la couleur de sa session, et le bord de son étiquette porte cette même couleur. L'étiquette du personnage sélectionné a un contour bleu et du texte en gras.
-  - Si la réduction des animations est activée dans le système, les personnages gardent une pose fixe et n'effectuent pas de surgissement, mais ils se déplacent toujours d'une pièce à l'autre.
-- **Un clic sur un personnage**, ou sur sa ligne dans la liste, ouvre sa **fiche** en haut à droite de la scène, dans le même style que la [boîte de dialogue](#dialogue-avec-un-agent) en bas. La fiche affiche :
-  - son état et depuis quand, sa tâche ou sa dernière requête, son outil, la session qui l'a lancé (« lancée depuis »), et son dernier message ;
-  - le contexte de sa session : origine (app Claude ou terminal, en cours ou terminée), worktree (oui ou non) et son nom, dossier, branche et branche d'origine, modèle, effort, mode de permission, heure de début (sessions de l'app), nombre de tours, sous-agents actifs, version de Claude Code ;
-  - les serveurs web que la session a lancés, sous forme de liens `http://localhost:<port>` qui s'ouvrent dans un nouvel onglet. Ils sont détectés toutes les 10 s : un port en écoute ouvert par un processus lancé par la session, ou un port déclaré dans `.claude/launch.json` du dossier de la session et servi depuis ce dossier. Un port ouvert par un outil ou un serveur MCP lancé par Claude apparaît aussi. Seules les adresses locales sont détectées.
-  - Le × de la fiche désélectionne l'agent : la fiche et la boîte de dialogue se ferment. La liste latérale, nommée « Agents et lieux », est l'équivalent complet de la vue 3D au clavier et au lecteur d'écran. Sa liste « Lieux du bureau », groupée par pièce, ouvre la même carte que le clic sur un poste ; fermer la carte rend le focus au bouton choisi.
-- **Une baffe façon Dungeon Keeper** (purement pour le plaisir). Un clic droit sur un personnage, sans glisser, le « baffe » : il encaisse le coup, une grande main balaie sa tête, des étoiles tournent au-dessus de son étiquette et une bulle « PAF ! » apparaît (« SLAP! » en anglais, « KLATSCH! » en allemand), avec un bruit de claque. Cet effet est purement esthétique : il n'agit ni sur l'agent ni sur sa session.
-  - Un clic droit glissé déplace toujours la caméra, sans baffer. Au clavier, le bouton « Baffer » de la fiche de l'agent fait la même chose ; il n'apparaît que tant que l'agent a un personnage dans la scène.
-  - Avec « réduire les animations », seule la bulle s'affiche, immobile, et le personnage ne bouge pas.
-- **L'historique** liste les sessions terminées.
-- **`/debug`** montre le flux brut des événements reçus.
+- **Un donjon en 3D** de 14 lieux, entouré d'une forêt de nuit.
+- **Un personnage par agent**, de la couleur de sa session. Les sous-agents apparaissent, puis retournent à la taverne.
+- **Une baffe façon Dungeon Keeper** : clic droit sur un personnage, purement pour rire.
+- **Entrées et sorties** : le chevalier d'une session entre au château par le pont-levis. Quand la session disparaît, il sort par la porte et meurt sous les coups de squelettes.
+- **Trois états lisibles** : il travaille, il attend ton prochain message, il a terminé.
+- **L'autel des requêtes** : les agents qui ont besoin de toi (permission, question, erreur) font la queue.
+- **Une fiche par agent** : contexte de sa session, serveurs web locaux, conversation en lecture seule.
+- **Trois langues** : français, allemand et anglais.
+- **Temps réel, sans influence sur Claude** : les hooks et les fichiers locaux de l'app desktop alimentent le serveur, qui ne fait qu'observer.
 
 ## Prérequis
 
@@ -72,134 +41,6 @@ Si le port 4777 est déjà pris (par exemple par une autre session), la configur
 
 Pour le développement, `npm run dev` lance le serveur et Vite (http://127.0.0.1:5173, qui relaie `/api` et `/ws` vers le port 4777). La configuration `agent-office-web` de `.claude/launch.json` lance Vite seul, relayé vers le serveur de test du port 4778.
 
-### Modèles 3D
-
-La carte utilise les packs gratuits KayKit de Kay Lousberg (www.kaylousberg.com) : Dungeon Pack 1.1, RPG Tools Bits 1.0 et Fantasy Weapons Bits 1.0. Les personnages utilisent KayKit Adventurers 2.0. Ils sont sous licence CC0 : le crédit n'est pas obligatoire, on le donne quand même (voir `packages/web/public/kaykit/LICENSE.txt`). Les modèles utilisés sont déjà dans le dépôt.
-
-Le bruit de la baffe (`packages/web/public/sounds/slap.wav`) est un son libre fourni par le responsable du projet ; sa source exacte et sa licence ne sont pas encore renseignées (voir `packages/web/public/sounds/LICENSE.txt`).
-
-Pour en ajouter un :
-
-1. Télécharge le pack sur https://kaylousberg.itch.io/ (prix libre, 0 € convient).
-2. Décompresse-le dans son propre dossier sous `assets-src/` (`dungeon/`, `rpg-tools/`, `weapons/` ou `adventurers/`). Ce dossier n'est pas versionné. Par exemple, `KayKit_Adventurers_2.0_FREE.zip` se décompresse dans `assets-src/adventurers/`.
-3. Ajoute le nom du modèle dans `packages/web/src/scene/kit-manifest.json`.
-4. Lance la copie vers `packages/web/public/kaykit/` :
-
-```bash
-npm run kaykit:import
-```
-
-Un pack peut être en `"format": "glb"` : ses modèles sont alors des fichiers `.glb` autonomes, sans texture séparée (`"textures": []`). L'import refuse un `.glb` qui pointe vers des fichiers externes, qui utilise une extension (comme Draco) ou dont les blocs internes (chunks) sont inattendus.
-
-Sous Windows, l'import peut faire apparaître des `.gltf` comme modifiés, à cause des fins de ligne seulement. Pour les restaurer :
-
-```bash
-git checkout -- packages/web/public/kaykit/dungeon packages/web/public/kaykit/tools packages/web/public/kaykit/weapons
-```
-
-## Comment ça marche
-
-```
-Claude Code (app desktop, CLI)
-  ├─ hooks ──► ~/.claude/agent-office/hook-relay.mjs ──POST /hooks (jeton)──►┐
-  └─ fichiers locaux de l'app desktop ─────────────────────────────────────►┤
-                                              Serveur Node (127.0.0.1:4777)
-                                              état en mémoire ──WebSocket──► page 3D
-```
-
-- **Les hooks** donnent le temps réel : prompt envoyé, outil utilisé, permission demandée, sous-agent lancé ou terminé, fin de tour, fin de session.
-- **L'inventaire** relit les fichiers de l'app desktop (au fil de leurs modifications, et toutes les 10 s). Il fournit les environnements, les sessions, leur titre et leur session parente, et indique si une session tourne. Au démarrage du serveur, il reconstruit l'état même sans hooks.
-- **Le navigateur** reçoit un instantané complet de l'environnement affiché, au plus toutes les 100 ms. Une reconnexion suffit donc à tout resynchroniser.
-
-### Langues
-
-L'interface existe en français, en allemand et en anglais. Les boutons `FR | DE | EN`, en haut à droite, changent la langue à la volée, sur toutes les pages. À la première visite, la page suit la langue du navigateur, ou le français s'il n'est réglé sur aucune des trois. Le choix est ensuite mémorisé dans le navigateur.
-
-Les titres de sessions, noms d'environnements, tâches et messages des agents s'affichent tels qu'ils ont été écrits. Les journaux du serveur restent en français.
-
-## Dialogue avec un agent
-
-Clique sur un personnage dans la 3D, ou sur sa ligne dans la liste des sessions. Une boîte de dialogue s'ouvre en bas de la scène et affiche la conversation de l'agent, comme dans un jeu de rôle :
-
-- tes messages ;
-- les réponses de l'agent ;
-- une ligne courte pour chaque outil appelé. Le contenu brut des résultats et la réflexion de l'agent ne s'affichent pas.
-
-Pour un sous-agent, la boîte affiche sa propre conversation. La consigne qu'il a reçue s'affiche sous le nom « Agent principal ».
-
-- **Historique.** Fais défiler vers le haut, ou clique sur « Charger les messages précédents ».
-- **Nouveaux messages.** Ils arrivent tout seuls : le serveur relit la conversation toutes les 2 s.
-- **Fermer.** Clique sur × ou appuie sur Échap. La boîte se ferme et l'agent reste sélectionné.
-- **Lecture seule.** La boîte n'a pas encore de zone de saisie. Répondre à un agent depuis la 3D fera l'objet d'une phase distincte (voir [Limites et suite](#limites-et-suite)).
-
-Le texte des conversations s'affiche comme du texte brut. Il n'est jamais interprété comme du HTML.
-
-### Accès aux conversations
-
-Aucune connexion n'est requise. La page charge la conversation de l'agent ouvert directement depuis le serveur local (`GET /api/transcript`).
-
-Ce choix convient à un outil mono-utilisateur, lancé à la main sur ton propre poste. L'accès reste limité à la machine :
-
-- le serveur n'écoute que sur `127.0.0.1` ;
-- il refuse tout en-tête `Host` ou `Origin` inconnu, ce qui bloque le DNS rebinding et les requêtes venues d'autres sites.
-
-Exposer le serveur au-delà de la machine serait un projet distinct, avec son propre contrôle d'accès. Ne change pas l'adresse d'écoute sans cette protection.
-
-## Ce que l'installation des hooks modifie
-
-`npm run hooks:install` :
-
-- **ajoute un hook pour 12 événements** dans le `settings.json` **global** de Claude Code (`~/.claude/settings.json`, ou `CLAUDE_CONFIG_DIR`). Tous les événements concernent donc toutes tes sessions ;
-- **sauvegarde d'abord** ce fichier dans `settings.json.agent-office-<date>.bak` ;
-- **copie le relais** dans `~/.claude/agent-office/hook-relay.mjs`, avec `relay.env` (jeton et port). Le relais ne s'exécute jamais depuis le dépôt ;
-- **ne touche à aucun autre réglage**, ni à aucun autre hook.
-
-Les hooks sont des commandes **asynchrones** : ils ne ralentissent jamais Claude. Le relais transmet l'événement au serveur, **ignore sa réponse**, n'affiche rien et se termine toujours sans erreur. Le serveur ne peut donc jamais influencer Claude : il observe seulement. Si le serveur est arrêté, rien ne change pour Claude.
-
-- `npm run hooks:install -- --rotate` régénère le jeton.
-- Après une modification de `scripts/hook-relay.mjs`, relance l'installation pour recopier le relais.
-- Redémarre le serveur après une installation, pour qu'il prenne le jeton.
-- `npm run hooks:uninstall` retire les hooks (avec une sauvegarde) et supprime `~/.claude/agent-office`.
-
-## Données lues
-
-Tout est lu en lecture seule. Seuls ces fichiers sont ouverts :
-
-- `%LOCALAPPDATA%\Claude-Data\claude_*\ccd-session-presets.json` : les environnements ;
-- `…\claude-code-sessions\<compte>\<org>\local_*.json` et `archived-sessions.idx` : les sessions de l'app desktop ;
-- `~/.claude/sessions/<pid>.json` : les processus Claude Code en cours (occupé ou au repos) ;
-- `~/.claude/projects/<dossier>/<session>.jsonl` et `…/<session>/subagents/agent-<id>.jsonl` : la conversation de l'agent ouvert dans la boîte de dialogue, en lecture bornée. Le chemin est déduit de l'état du serveur.
-
-Le serveur n'ouvre jamais `config.json` de l'app desktop (il contient des jetons de connexion) ni les fichiers `*.key`.
-
-Ces formats sont internes à Claude et peuvent changer d'une version à l'autre. Les lectures sont tolérantes : un champ manquant est ignoré, et un fichier en cours d'écriture ne fait pas disparaître une session.
-
-## Sécurité
-
-- Le serveur écoute sur `127.0.0.1` uniquement. Il refuse un en-tête `Host` ou `Origin` inconnu, ce qui protège contre le DNS rebinding et les pages web malveillantes.
-- `POST /hooks` exige le jeton, vérifié avant même la lecture de la requête.
-- Les pages ne peuvent pas être intégrées dans une iframe (`X-Frame-Options: DENY`, `frame-ancestors 'none'`).
-- **Conversations.** `GET /api/transcript` renvoie la conversation de l'agent ouvert, sans authentification (voir la section « Dialogue avec un agent »).
-- **Chemin du transcript.** Il est déduit de l'état du serveur, jamais d'une valeur envoyée par le navigateur ou par un hook.
-- **Lecture bornée.** Le serveur ne lit qu'une partie bornée de la conversation. Le texte est affiché comme du texte, jamais interprété en HTML.
-- **Limite connue.** Les routes `/api/*` (inventaire et `/api/transcript`) et le WebSocket ne demandent pas d'authentification. Tout programme local peut donc lire les titres, dossiers, prompts et commandes (tronqués), ainsi que la conversation de l'agent ouvert. Toute action future sur les agents aura sa propre protection.
-- **Sur un poste partagé**, restreins les droits du dossier du projet. Un lecteur secondaire comme `F:\` donne souvent le contrôle total aux « Utilisateurs authentifiés ». Dans une invite de commandes administrateur :
-
-```bash
-icacls "C:\chemin\vers\agent-office" /inheritance:r /grant:r "%USERNAME%:(OI)(CI)F" "*S-1-5-18:(OI)(CI)F" "*S-1-5-32-544:(OI)(CI)F"
-```
-
-## Variables d'environnement
-
-| Variable | Rôle | Défaut |
-|---|---|---|
-| `AGENT_OFFICE_PORT` | Port du serveur | `4777` (ou `relay.env`) |
-| `AGENT_OFFICE_TOKEN` | Jeton des hooks (32 caractères minimum) | `relay.env` |
-| `AGENT_OFFICE_DESKTOP_DATA` | Dossier `Claude-Data\claude_*` de l'app desktop | détecté |
-| `AGENT_OFFICE_RELAY_DIR` | Dossier du relais et de `relay.env` | `~/.claude/agent-office` |
-| `AGENT_OFFICE_SETTINGS` | Fichier `settings.json` à modifier | `~/.claude/settings.json` |
-| `CLAUDE_CONFIG_DIR` | Dossier de configuration de Claude Code | `~/.claude` |
-
 ## Tests
 
 ```bash
@@ -210,8 +51,12 @@ npm test
 npm run typecheck
 ```
 
-## Limites et suite
+## Documentation
 
-- La scène fait environ 700 appels de dessin par image, ombres comprises : les meubles ne sont pas encore regroupés en instances. Des assets Unreal ne seraient utilisables que si leur licence Fab autorise un usage hors Unreal Engine.
-- La boîte de dialogue est en lecture seule. Répondre aux agents depuis la 3D (permission, question) fera l'objet d'une phase distincte, avec sa propre protection d'accès. Envoyer un prompt libre à une session déjà ouverte n'a pas encore de solution officielle.
-- Le plan complet se trouve dans [plans/plan-agent-office-2026-11-13.md](plans/plan-agent-office-2026-11-13.md).
+- [Utilisation](docs/utilisation.md) : ce que tu vois et ce que tu peux faire dans la scène.
+- [Fonctionnement](docs/fonctionnement.md) : flux de données, hooks, données lues, variables d'environnement.
+- [Sécurité](docs/securite.md) : accès local, conversations, poste partagé.
+- [Modèles 3D](docs/modeles-3d.md) : packs KayKit, licence, ajout d'un modèle.
+- [Lieux](docs/lieux.md) : plan du donjon, pièces, places, taverne et cycle de vie.
+- [Personnages](docs/personnages.md) : représentation des agents, tenues, entrée et sortie du chevalier, changement de look.
+- [Conception](docs/conception.md) : ambiance, décisions, état de l'implémentation, limites.

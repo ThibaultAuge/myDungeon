@@ -2,6 +2,14 @@ import { describe, expect, it } from 'vitest';
 import type { AgentState } from '@agent-office/shared';
 import {
   CLIPS,
+  DEATH_CLIP_TIME,
+  HIT_CLIP_TIME,
+  SKELETON_LOOKS,
+  SPAWN_CLIP_TIME,
+  USE_ITEM_CLIP_TIME,
+  hold,
+  play,
+  type ClipChoice,
   KNEEL_POSE_TIME,
   LOOKS,
   MAIN_BODY,
@@ -97,6 +105,82 @@ describe('character constants', () => {
     expect(MAX_CLIP_RATE).toBeGreaterThan(1);
     expect(SPAWN_TIME_SCALE).toBeGreaterThan(0);
     expect(KNEEL_POSE_TIME).toBeGreaterThan(0);
+  });
+});
+
+describe('clips of the death outside the castle', () => {
+  /** Verifies that the hit, death and strike clips are listed for loading */
+  it('lists Hit_A, Death_A and Use_Item', () => {
+    for (const name of ['Hit_A', 'Death_A', 'Use_Item', 'Spawn_Ground'] as const) expect(CLIPS).toContain(name);
+  });
+
+  /** Verifies that the one-shot clip lengths are positive and finite */
+  it.each([
+    ['SPAWN_CLIP_TIME', SPAWN_CLIP_TIME],
+    ['HIT_CLIP_TIME', HIT_CLIP_TIME],
+    ['DEATH_CLIP_TIME', DEATH_CLIP_TIME],
+    ['USE_ITEM_CLIP_TIME', USE_ITEM_CLIP_TIME],
+  ])('has a positive, finite %s', (_label, time) => {
+    expect(Number.isFinite(time)).toBe(true);
+    expect(time).toBeGreaterThan(0);
+  });
+
+  /** Verifies that play builds a running clip, looping at rate 1 by default */
+  it('builds a playing clip with play', () => {
+    expect(play('Idle_B')).toEqual({ name: 'Idle_B', loop: true, timeScale: 1, frozen: false, frozenAt: 0 });
+    expect(play('Death_A', 2, false)).toEqual({ name: 'Death_A', loop: false, timeScale: 2, frozen: false, frozenAt: 0 });
+  });
+
+  /** Verifies that hold builds a still pose, at time 0 by default */
+  it('builds a frozen pose with hold', () => {
+    expect(hold('Idle_A')).toEqual({ name: 'Idle_A', loop: false, timeScale: 0, frozen: true, frozenAt: 0 });
+    expect(hold('PickUp', 0.3)).toEqual({ name: 'PickUp', loop: false, timeScale: 0, frozen: true, frozenAt: 0.3 });
+  });
+
+  /** Verifies that play and hold return a fresh object each call */
+  it('returns fresh clip objects', () => {
+    const a = play('Idle_B');
+    a.timeScale = 9;
+    expect(play('Idle_B').timeScale).toBe(1);
+  });
+});
+
+describe('SKELETON_LOOKS', () => {
+  /** Verifies that the three skeletons are all the bare Minion (no helmet nor hood hiding the skull) */
+  it('gives three bare skeletons from the skeletons pack', () => {
+    expect(SKELETON_LOOKS).toHaveLength(3);
+    expect(SKELETON_LOOKS.map((l) => l.body)).toEqual(['Skeleton_Minion', 'Skeleton_Minion', 'Skeleton_Minion']);
+    for (const l of SKELETON_LOOKS) {
+      expect(l.pack).toBe('skeletons');
+      expect(l.body).toMatch(/^Skeleton_/);
+    }
+  });
+
+  /** Verifies that every skeleton holds a weapon from the skeleton_props pack */
+  it('arms every skeleton from skeleton_props', () => {
+    for (const l of SKELETON_LOOKS) {
+      expect(l.right?.pack).toBe('skeleton_props');
+      expect(l.right?.model.length).toBeGreaterThan(0);
+    }
+  });
+
+  /** Verifies that skeleton weapons get the neutral grip, made for the hand slot */
+  it('holds skeleton weapons with the neutral grip', () => {
+    for (const l of SKELETON_LOOKS) expect(gripFor(l.right!)).toEqual(NEUTRAL);
+  });
+
+  /** Verifies that the shared looks cannot be changed by a caller */
+  it('is frozen', () => {
+    expect(Object.isFrozen(SKELETON_LOOKS)).toBe(true);
+    for (const l of SKELETON_LOOKS) expect(Object.isFrozen(l)).toBe(true);
+  });
+
+  /** Verifies that no agent ever gets a skeleton body */
+  it('never gives an agent a skeleton look', () => {
+    for (const t of ['', 'neo', 'skeleton', 'Skeleton_Warrior', ...Object.keys(LOOKS)]) {
+      expect(lookFor('main', t).pack).toBeUndefined();
+      expect(lookFor('sub', t).pack, t).toBeUndefined();
+    }
   });
 });
 
@@ -623,6 +707,38 @@ describe('clipFor', () => {
       expect(c.name === input.hit, JSON.stringify(input)).toBe(applies);
       expect((HIT_CLIPS as readonly string[]).includes(c.name), JSON.stringify(input)).toBe(applies);
     }
+  });
+
+  /** Verifies that the scripted one-shot clips (hit, death, strike) never come from clipFor alone, a slap aside */
+  it('never picks Hit_A, Death_A or Use_Item without a scripted clip or a slap', () => {
+    for (const input of ALL.filter((i) => !i.hit)) {
+      expect(['Hit_A', 'Death_A', 'Use_Item'], JSON.stringify(input)).not.toContain(clipFor(input).name);
+    }
+  });
+
+  // ---- scripted
+
+  const SCRIPTED: ClipChoice[] = [play('Death_A', 1, false), play('Hit_A', 1, false), play('Use_Item'), hold('Spawn_Ground', 0.4)];
+
+  /** Verifies that a scripted clip wins over spawning, moving, kneeling and every state */
+  it.each(SCRIPTED.map((c) => [c.name, c] as const))('returns the scripted %s clip over everything else', (_name, scripted) => {
+    for (const input of ALL.filter((i) => !i.reducedMotion)) {
+      expect(clipFor({ ...input, scripted }), JSON.stringify(input)).toEqual(scripted);
+    }
+  });
+
+  /** Verifies that reduced motion ignores a scripted clip and keeps the still pose */
+  it.each(SCRIPTED.map((c) => [c.name, c] as const))('ignores the scripted %s clip under reduced motion', (_name, scripted) => {
+    for (const input of ALL.filter((i) => i.reducedMotion)) {
+      const c = clipFor({ ...input, scripted });
+      expect(c, JSON.stringify(input)).toEqual(clipFor(input));
+      expect(c.frozen, JSON.stringify(input)).toBe(true);
+    }
+  });
+
+  /** Verifies that a null or missing scripted clip leaves the usual choice unchanged */
+  it('ignores a null scripted clip', () => {
+    for (const input of ALL) expect(clipFor({ ...input, scripted: null }), JSON.stringify(input)).toEqual(clipFor(input));
   });
 
   /** Verifies that the input is left untouched and the result is deterministic */

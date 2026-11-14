@@ -3,6 +3,8 @@
 - KayKit : RPG Tools Bits 1.0 (free)
 - KayKit : Fantasy Weapons Bits 1.0 (free)
 - KayKit : Adventurers Character Pack 2.0 (free)
+- KayKit : Forest Nature Pack 1.0 (free)
+- KayKit : Character Pack Skeletons 1.1 (free)
 
 License: Creative Commons Zero (CC0 1.0), http://creativecommons.org/publicdomain/zero/1.0/
 Credit is not required; it is given here as thanks.

@@ -10,12 +10,20 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cast
   Agents use KayKit Adventurers 2.0 (CC0): packs `adventurers` (character bodies),
   `adventurers_anim` (shared `Rig_Medium_General`, `Rig_Medium_MovementBasic` clips) and
   `adventurers_props` (8 held props, gltf + 4 textures). Pack `forest` (trees around the
-  castle): `docs/ai/night-forest.md`.
+  castle, plus grass tufts and a rock used as room decor): `docs/ai/night-forest.md`.
+- Room-decor packs (KayKit CC0, free tiers): `furniture`, `halloween`, `restaurant`
+  (Furniture / Halloween / Restaurant Bits 1.0), `resources` (Resource Bits), `mixed1`,
+  `mixed2` (Mixed Bag 1 / 2). Their use: `docs/ai/room-identity.md`.
+- KayKit Skeletons 1.1 (free tier), one pack each, shared by decor and ambush:
+  `skeletons` (glb, only `Skeleton_Minion`: the training dummy `SkeletonDummy.tsx`,
+  `docs/ai/room-identity.md`, and the ambush attackers, `docs/ai/agent-lifecycle.md`) and
+  `skeleton_props` (gltf, texture `skeleton_texture.png`: `Skeleton_Shield_Large_A` as decor,
+  `Skeleton_Blade` / `Skeleton_Axe` held by the attackers).
 - KayKit is about 1.33x our scene: every model is scaled by `KIT_SCALE = 0.75`. After
   scaling: small floor tile 1.5 m, wall 3 m high per 3 m chunk, table 0.75 m.
 - Rooms (`RoomDef` in `layout.ts`) carry `floorKind` (`stone`, `stoneFancy`, `grate`, `wood`,
-  `woodDark`, `dirt`) and `accent` (one of 6 KayKit banner colours). Decor `PropKind`s
-  `crates`, `barrels`, `chest`, `coins`, `candle` have footprints.
+  `woodDark`, `dirt`) and `accent` (one of 6 KayKit banner colours). Per-room wall
+  variants, wall hangs, room lights and decor kinds / recipes: `docs/ai/room-identity.md`.
 - Inner walls: wall line `WALL_INSET` (0.15 m) inside the room edge, thickness `WALL_T`
   (0.25 m). Back-to-back rooms (garde / epreuves / heraut) share ONE wall on the common
   edge, drawn by the west/north room; wide pillars bridge corners.
@@ -53,8 +61,7 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cast
 ### Workstations (posts)
 - `layout.ts`: `POST_IDS` (18), `PostId`, optional `Prop.post`, `postGroups(room)` →
   `{ posts: { post, props }[], decor }`, `POST_ROOM` (`Map<PostId, RoomId>`). Every
-  functional prop carries a post; decoration kinds (`crates`, `barrels`, `chest`, `coins`,
-  `candle`, `rug`) never do (tested). A multi-function room has one post per function:
+  functional prop carries a post; decoration kinds (`DECOR_KINDS`) never do (tested). A multi-function room has one post per function:
   biblio / scriptorium, atelier / chevalet, epreuves → relecture / labo, heraut → estrade /
   inspection.
 - `Post.tsx` wraps a post's pieces. In `useLayoutEffect` it computes, once, one padded
@@ -93,8 +100,11 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cast
 - Post texts: `docs/ai/i18n.md`.
 
 ### Agent figures
-- Looks (`characters.ts`): a `Look` is a body plus optional `right` / `left` held props
-  (`PropRef { pack: 'adventurers_props' | 'tools'; model }`). Main agents use `MAIN_BODY`
+- Looks (`characters.ts`): a `Look` is a body (`pack`: `'adventurers'` by default, or
+  `'skeletons'`) plus optional `right` / `left` held props
+  (`PropRef { pack: 'adventurers_props' | 'tools' | 'skeleton_props'; model }`).
+  `SKELETON_LOOKS`: three bare `Skeleton_Minion` bodies (Blade, Axe, Blade); `SkeletonModel`
+  is only `'Skeleton_Minion'`. Main agents use `MAIN_BODY`
   (`Knight`). Every subagent figure, whatever its look, is scaled 0.85 by kind in
   `AgentFigure` (whole group: model, tag, ring, disc). Subagents get a role look from `LOOKS`, keyed by the
   lower-case agent TYPE (18 entries: the user's agents plus `Explore`, `Plan`,
@@ -115,7 +125,8 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cast
   remaining distance, so no stop at corners). Speed lives in a ref in `AgentFigure`, reset
   to 0 when the path empties; a reroute keeps the current speed. Facing uses `turnToward`
   with exponential rates (`WALK_TURN_RATE` 14, `REST_TURN_RATE` 6).
-- Clips: `clipFor` (pure, in `characters.ts`) picks, in priority order: spawn
+- Clips: `clipFor` (pure, in `characters.ts`) picks, in priority order: `ClipInput.scripted`
+  (a clip imposed by a scripted scene such as the ambush; ignored under reduced motion) > spawn
   (`Spawn_Ground`, once, ×1.5, only for a figure whose `start` is the lockers `SPAWN` and not
   done; one coming from a resting seat just walks) > hit (`Hit_A` / `Hit_B`, once, not
   looped; ignored under reduced motion) > moving (`Walking_A`, or `Running_A` above
@@ -123,8 +134,11 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cast
   0.5 floor for `Walking_A` only) >
   kneeling at the altar (`PickUp` frozen at `KNEEL_POSE_TIME`) > done (`Idle_A` frozen, no
   transparency) > working (`Interact`) > waiting (`Idle_B`). Reduced motion: still poses,
-  turns snap, no spawn; position still moves.
-- `AgentFigure` structure: the parent runs the walk and writes a `Motion` ref; the
+  turns snap, no spawn; position still moves. `CLIPS` also lists `Hit_A`, `Death_A` and
+  `Use_Item` (scripted only); their measured lengths (`SPAWN_CLIP_TIME`, `HIT_CLIP_TIME`,
+  `DEATH_CLIP_TIME`, `USE_ITEM_CLIP_TIME`) are checked against the GLB by a test.
+- `AgentFigure` structure: the parent runs the walk and writes a `Motion` ref (exported,
+  with `scripted`); the exported
   `Character` child (own `Suspense` + `CharacterBoundary` error boundary with a capsule
   fallback) clones the model with `SkeletonUtils`, animates through drei `useAnimations`
   with manual weight blending (`FADE` 0.2 s), hides the model until the first clip is
@@ -230,16 +244,23 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cast
   simple shapes in a KayKit-matched palette).
 - `packages/web/src/scene/kit.ts` — `useKitGLTF` (drei `useGLTF(url, false)`: Draco off, so
   no third-party decoder fetch); one shared material per pack + material name. `kitUrl` is
-  module-private.
+  module-private and throws unless the pack / model is listed in the manifest.
 - `packages/web/src/scene/kit-manifest.json` — models and textures per pack; a pack may set
   `"format": "glb"` (self-contained, `textures: []`).
 - `scripts/import-kaykit.mjs` (`npm run kaykit:import`) — copies manifest entries from
   `assets-src/<pack>/` (gitignored, unzipped by the user) to `packages/web/public/kaykit/<pack>/`
-  (committed).
+  (committed). Source of `furniture`, `halloween`, `restaurant`: GitHub repos
+  `KayKit-Game-Assets/KayKit-{Furniture,Halloween,Restaurant}-Bits-1.0` at commits
+  `96d5930a8dbdb363409bbc2d3341718b00e17c9c` / `6dc69bf6b2fa766a985754f35ec6a0324090e6c6` /
+  `153c8a7535b48237854cb54ff6890679f8c574d1`, unpacked as
+  `assets-src/gh-<name>/repo/addons/kaykit_<name>_bits/Assets/gltf`; their `LICENSE.txt`
+  was fetched separately (the zipball omits it).
 - `packages/web/src/scene/characters.ts` — pure, no three.js: `MAIN_BODY`, `SUB_BODIES`,
-  `LOOKS`, `lookFor`, `PROP_GRIP`, `gripFor`, `clipFor` and the clip constants.
-- `packages/web/src/scene/AgentFigure.tsx` — walk, `Character` (takes a `Look`), `Held`,
-  `CharacterBoundary`, tag, destination badge toggle, slap handlers and anchor.
+  `LOOKS`, `SKELETON_LOOKS`, `lookFor`, `PROP_GRIP`, `gripFor`, `clipFor`, `CLIPS` and the
+  clip constants / measured clip times.
+- `packages/web/src/scene/AgentFigure.tsx` — walk, `Motion`, `Character` (takes a `Look`;
+  both exported, reused by `Ambush.tsx`), `Held`, `CharacterBoundary`, tag, destination
+  badge toggle, slap handlers and anchor.
 - `packages/web/src/scene/slap.ts` (pure bus and clip choice), `scene/slapSwing.ts` (pure
   swing pose), `scene/SlapHand.tsx` (3D hand), `scene/SlapEffect.tsx` (stars, bubble),
   `ui/slapSound.ts`, slap button in `ui/AgentInfo.tsx`; `.slap*` in `styles.css`;
@@ -268,6 +289,11 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cast
 ## Usage
 - New model: add it to `kit-manifest.json`, run `npm run kaykit:import`. Never hand-copy
   files into `public/kaykit/`. Load every model through `useKitGLTF`, never `useGLTF` directly.
+  Only free-tier CC0 assets may be committed (public repo); the Mixed Bag preview images
+  show EXTRA-only items that are not in the free zip. The import needs every listed pack
+  folder in `assets-src/` (gitignored, so absent from a worktree): make the main checkout's
+  `assets-src` reachable at the worktree root first (a junction or a copy works). Skeleton
+  sources: `assets-src/skeletons/KayKit_Skeletons_1.1_FREE`.
 - New or changed role look: edit `LOOKS` (lower-case type key) and, for a new prop, the
   manifest models of its pack. A `tools` prop also needs a `PROP_GRIP` entry calibrated by
   eye (tested: every `tools` prop in `LOOKS` has a grip, every `adventurers_props` model is
@@ -279,7 +305,8 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cast
   figure per type. Hide other objects and move the camera for close-ups, mutate the grip
   group under the hand bone live, then copy the values into `PROP_GRIP`.
 - Repeated pieces go through `<KitInstances>`; one-off furniture through `<Kit>`; a new
-  prop is a `PROPS` entry. Put placement logic in `dungeon.ts` so it stays testable.
+  prop is a `PROPS` entry; multi-piece room decor is a recipe (`docs/ai/room-identity.md`).
+  Put placement logic in `dungeon.ts` so it stays testable.
 - Any other per-agent visual reaction: reuse the `slap.ts` bus pattern (per-id listeners,
   target watch for a keyboard button) and the keyed `<Html>` remount to replay CSS effects.
 - Agent motion logic goes in `walk.ts`, clip choice in `clipFor` (both tested), never
@@ -313,9 +340,9 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cast
   `docs/ai/agent-lifecycle.md`. The preview launcher reads the main folder's
   `.claude/launch.json`, so from a worktree run Vite on another port (the WebSocket is
   refused there, which is fine for store-injected galleries; `/env/<anything>` renders the
-  scene without a server). Ports 5174 and 5175 may already be held by another worktree's
-  Vite: check with `netstat` that the port belongs to this worktree's process (or pick a
-  free one such as 5181), otherwise the page shown is another branch's code. A worktree can
+  scene without a server). Ports 5174, 5175 and 5181 may already be held by another
+  session's Vite: check with `netstat` that the port belongs to this worktree's process (or
+  pick a free one), otherwise the page shown is another branch's code. A worktree can
   also serve its build on another port: `npm run build`, then
   `AGENT_OFFICE_PORT=4790 AGENT_OFFICE_TOKEN=… npm run start`. The in-app Browser pane, when
   hidden, gives the Canvas size 0 and renders no frames; use Playwright for visual
@@ -329,7 +356,11 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cast
   a frozen value (`THREE.Clock` reads it), slap, then step the frozen value to chosen ms and
   screenshot; restore with `delete performance.now`.
   `.playwright-mcp/` is gitignored because captures may show real session names; keep it so.
-- Where figures rest, wait, appear and leave (tavern, altar, roster):
+  Per-room screenshots: reach the R3F store through the fiber module's `_roots` (import the
+  `@react-three_fiber` dep URL taken from performance entries) and move camera / controls.
+  Draw calls: wrap the `WebGL2RenderingContext` draw functions in an init script (guard
+  against double install).
+- Where figures rest, wait, appear and leave (tavern, altar, forest entry, ambush, roster):
   `docs/ai/agent-lifecycle.md`.
 
 ## Notes
@@ -342,17 +373,22 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cast
 - Running the import rewrites existing `.gltf` files with LF→CRLF noise under
   `core.autocrlf`: restore them with `git checkout` on the `dungeon`, `tools`, `weapons`
   folders.
-- Some manifest models are unused on purpose, kept for upcoming 3D work (user decision).
-  Do not prune them as dead code.
+- Models of the `dungeon`, `tools`, `weapons` and adventurer packs that are unused are kept
+  on purpose for upcoming 3D work (user decision); do not prune them as dead code. The
+  room-decor packs list only models actually used.
 - Inner wall footprint matches the pre-KayKit one, so seat positions are unaffected.
 - Accepted limits of the thick outer walls: wall variants with relief (`wall_shelves`,
   `wall_arched`) are stretched by the 0.6 depth scale (not yet checked visually); props near
   outer walls may stand up to 0.175 m off the inner face, which moved outward from 0.275 m
   to 0.1 m inside the room edge.
 - Orientation-based cutaway was tried and rejected; keep the cursor parabola.
+- Attacking skeletons stay bare `Skeleton_Minion` bodies (user decision): do not use
+  Skeleton_Warrior / Rogue / Mage, whose helmet or hood hides the skull from the top-down
+  camera so they did not read as skeletons. Only Minion is in the manifest's `skeletons` pack.
 - Tests must not import `kit.ts` or any `.tsx` file (drei / `import.meta.env`); test
-  `dungeon.ts`, `layout.ts`, `walk.ts`, `characters.ts`, `slap.ts`, `slapSwing.ts`, `destinations.ts`, `forest.ts` and
-  the manifest JSON.
+  `dungeon.ts`, `layout.ts`, `walk.ts`, `characters.ts`, `slap.ts`, `slapSwing.ts`,
+  `destinations.ts`, `forest.ts`, `outside.ts`, `stage.ts`, `ambush.ts`, `tavern.ts`,
+  `decor.ts`, `merge.ts` and the manifest JSON.
 - Walk speed was set so figures reach the room before short tasks finish (user request).
   The chibi legs walk naturally at 0.57 (`Walking_A`) and 1.4 u/s (`Running_A`) at
   `KIT_SCALE`, so feet slide at cruise speed by design. Accepted limits: a reroute to a
@@ -412,6 +448,6 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cast
 - Post card open items (accessibility audit, not done): opening a card from the keyboard
   list does not move focus into it; the card has no max-height / scroll for very short
   scenes or 400% zoom.
-- Open items: about 700 draw calls per frame because props are not instanced (planned fix:
-  drei `<Instances>` for shapes); the scene-wide Suspense hide/show also causes about 15
-  "synchronously unmount a root" warnings per load.
+- Draw-call count and post mesh merging: `docs/ai/room-identity.md`. Open item: the
+  scene-wide Suspense hide/show causes about 15 "synchronously unmount a root" warnings
+  per load.

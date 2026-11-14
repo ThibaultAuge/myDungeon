@@ -1,4 +1,4 @@
-import type { AgentView } from '@agent-office/shared';
+import type { AgentView, SessionView } from '@agent-office/shared';
 import type { SeatMemory } from './layout.ts';
 
 // The tavern's life cycle, as pure functions (no three.js, testable in node).
@@ -32,18 +32,28 @@ export function restingTypes(roster: string[], onStage: AgentView[]): string[] {
  * `lockers` (an extra copy comes out of the lockers) or `seat` (already in place: main
  * agents, and finished subagents found on loading, which are home already).
  */
-export type Origin = 'rest' | 'lockers' | 'seat';
+export type Origin = 'rest' | 'lockers' | 'seat' | 'forest';
 
 /**
  * Origins of the figures appearing in this frame. `wasResting` holds the lower-case types
  * that rested in the previous frame. When several agents of a type appear together, the
  * oldest one takes the resting figure's place and the others come from the lockers.
+ * The main agent of a session in `fromForest` (a session that just appeared) walks in from
+ * the forest; other main agents are already in place.
  */
-export function startOrigins(newcomers: AgentView[], wasResting: ReadonlySet<string>): Map<string, Origin> {
+export function startOrigins(
+  newcomers: AgentView[],
+  wasResting: ReadonlySet<string>,
+  fromForest: ReadonlySet<string> = new Set(),
+): Map<string, Origin> {
   const out = new Map<string, Origin>();
   const claimed = new Set<string>();
   const ordered = [...newcomers].sort((a, b) => a.since - b.since || a.id.localeCompare(b.id));
   for (const a of ordered) {
+    if (a.kind === 'main' && fromForest.has(a.sessionId)) {
+      out.set(a.id, 'forest');
+      continue;
+    }
     if (a.kind === 'main' || a.state === 'done') {
       out.set(a.id, 'seat');
       continue;
@@ -57,6 +67,31 @@ export function startOrigins(newcomers: AgentView[], wasResting: ReadonlySet<str
     }
   }
   return out;
+}
+
+/** Sessions that appeared and sessions that left between two snapshots of the same route. */
+export interface SessionChanges {
+  /** Ids of the sessions that appeared. */
+  appeared: string[];
+  /** The sessions that left, as they last were. */
+  departed: SessionView[];
+}
+
+/**
+ * Compares two snapshots. A temporary terminal session (`cli:<id>`) merged into a desktop
+ * session that lists `<id>` in its `cliSessionIds` neither leaves nor makes the desktop
+ * session appear: it is the same session under a new id.
+ */
+export function sessionChanges(prev: readonly SessionView[], next: readonly SessionView[]): SessionChanges {
+  const prevIds = new Set(prev.map((s) => s.id));
+  const nextIds = new Set(next.map((s) => s.id));
+  const absorbedInto = (s: SessionView) =>
+    s.id.startsWith('cli:') && next.some((n) => n.id !== s.id && n.cliSessionIds.includes(s.id.slice(4)));
+  const absorbs = (s: SessionView) => s.cliSessionIds.some((c) => prevIds.has(`cli:${c}`) && !nextIds.has(`cli:${c}`));
+  return {
+    appeared: next.filter((s) => !prevIds.has(s.id) && !absorbs(s)).map((s) => s.id),
+    departed: prev.filter((s) => !nextIds.has(s.id) && !absorbedInto(s)),
+  };
 }
 
 /**

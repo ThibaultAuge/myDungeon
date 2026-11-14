@@ -2,8 +2,8 @@ import { useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { Matrix4, Vector3, type InstancedMesh } from 'three';
 import { reducedMotion } from '../motion.ts';
-import { corridorFloor, foundation, inForeground, KIT_SCALE, OUTER, roomFloor, wallLayout, type CutItem, type Placement } from './dungeon.ts';
-import { useKitParts } from './kit.ts';
+import { corridorFloor, foundation, inForeground, KIT_SCALE, OUTER, roomFloor, tallModel, wallLayout, type CutItem, type Placement } from './dungeon.ts';
+import { useKitParts, type Pack } from './kit.ts';
 import { itemMatrix, KitInstances } from './KitInstances.tsx';
 import { ROOMS } from './layout.ts';
 
@@ -51,8 +51,9 @@ const mp = new Matrix4();
  * Copies of one tall model (a wall, a pillar, a torch) that each sink into the ground while
  * their anchor shows in front of the cutaway curve, and rise again behind it.
  */
-function CutawayKit({ name, items }: { name: string; items: CutItem[] }) {
-  const parts = useKitParts('dungeon', name);
+function CutawayKit({ model, items }: { model: string; items: CutItem[] }) {
+  const { pack, name } = tallModel(model);
+  const parts = useKitParts(pack as Pack, name);
   const meshes = useRef<(InstancedMesh | null)[]>([]);
   const seen = useRef<InstancedMesh[]>([]);
   // Height of each copy, from 0 (sunk) to 1 (standing). NaN forces the first write.
@@ -118,8 +119,8 @@ export function Walls() {
   return (
     <group>
       <Placed placement={layout.low} />
-      {[...layout.tall].map(([name, items]) => (
-        <CutawayKit key={name} name={name} items={items} />
+      {[...layout.tall].map(([model, items]) => (
+        <CutawayKit key={model} model={model} items={items} />
       ))}
     </group>
   );

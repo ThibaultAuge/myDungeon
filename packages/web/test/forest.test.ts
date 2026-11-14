@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import { DECOR_RECIPES } from '../src/scene/decor.ts';
 import { OUTER } from '../src/scene/dungeon.ts';
 import {
   BRIDGE,
@@ -519,10 +520,11 @@ describe('KayKit forest pack', () => {
   });
 
   /**
-   * Verifies that the forest pack ships no model that none of the lists uses
+   * Verifies that the forest pack ships no model that neither the lists nor the room decor (grass tufts) uses
    */
-  it('ships only models used by one of the lists', () => {
-    const used = new Set(ALL_FOREST_MODELS);
+  it('ships only models used by one of the lists or by the room decor', () => {
+    const decor = Object.values(DECOR_RECIPES).flatMap((pieces) => (pieces ?? []).filter((p) => p.pack === 'forest').map((p) => p.name));
+    const used = new Set([...ALL_FOREST_MODELS, ...decor]);
     expect(spec.models.filter((m) => !used.has(m))).toEqual([]);
   });
 

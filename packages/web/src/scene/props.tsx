@@ -2,9 +2,12 @@ import { useMemo, useRef, type ReactNode } from 'react';
 import { useFrame } from '@react-three/fiber';
 import type { Mesh, MeshBasicMaterial } from 'three';
 import { reducedMotion } from '../motion.ts';
+import { DECOR_RECIPES } from './decor.ts';
 import { KIT_SCALE, type KitItem } from './dungeon.ts';
+import type { Pack } from './kit.ts';
 import { Kit, KitInstances } from './KitInstances.tsx';
 import type { Accent, PropKind, RoomDef } from './layout.ts';
+import { SkeletonDummy } from './SkeletonDummy.tsx';
 
 // Furniture of the dungeon. KayKit models where the packs have one; otherwise simple shapes
 // in colours taken from the KayKit palette, so both kinds sit together.
@@ -20,7 +23,6 @@ const PALETTE = {
   iron: '#5E6470',
   dark: '#3B3742',
   brass: '#E3A53B',
-  paper: '#F4E7C8',
 };
 
 const ACCENT_HEX: Record<Accent, string> = {
@@ -120,6 +122,32 @@ function Pew() {
 
 type PropRenderer = (room: RoomDef) => ReactNode;
 
+/**
+ * A decor kind drawn one model at a time from its recipe. The map draws decoration with
+ * instances (DecorInstances); this is for a recipe drawn anywhere else.
+ */
+function Recipe({ kind }: { kind: PropKind }) {
+  return (
+    <group>
+      {(DECOR_RECIPES[kind] ?? []).map((p, i) => (
+        <Kit
+          key={i}
+          pack={p.pack as Pack}
+          name={p.name}
+          pos={[p.x, p.y ?? 0, p.z]}
+          rot={[0, p.rot ?? 0, 0]}
+          scale={p.s ?? 1}
+          shadow={p.shadow}
+        />
+      ))}
+    </group>
+  );
+}
+
+const recipe =
+  (kind: PropKind): PropRenderer =>
+  () => <Recipe kind={kind} />;
+
 export const PROPS: Record<PropKind, PropRenderer> = {
   altar: (room) => (
     <group>
@@ -132,12 +160,8 @@ export const PROPS: Record<PropKind, PropRenderer> = {
     </group>
   ),
   pew: () => <Pew />,
-  candles: () => (
-    <group>
-      <Kit name="column" scale={[0.45, 0.9, 0.45]} />
-      <Kit name="candle_triple" pos={[0, 1.4 * KIT_SCALE * 0.9, 0]} scale={0.6} />
-    </group>
-  ),
+  // A small stone shrine covered in candles.
+  candles: () => <Kit pack="halloween" name="shrine_candles" scale={0.8} />,
   mapTable: () => (
     <group>
       <Kit name="table_long" rot={[0, Math.PI / 2, 0]} scale={[1.4, 1, 1.3]} />
@@ -145,6 +169,8 @@ export const PROPS: Record<PropKind, PropRenderer> = {
       <Kit pack="tools" name="compass_base" pos={[1.2, on(0.75, -0.14, 0.6), -0.4]} scale={0.6} />
       <Lying name="drafting_compass" x={1.4} z={0.3} y={0.75} s={0.6} turn={0.6} />
       <Kit name="candle_lit" pos={[-1.6, 0.75, -0.6]} scale={0.5} />
+      <Kit pack="tools" name="blueprint_stacked" pos={[1.3, 0.75, -1.15]} rot={[0, 0.3, 0]} scale={0.45} />
+      <Kit pack="tools" name="map_rolled" pos={[-1.2, on(0.75, -0.12, 0.7), 0.7]} rot={[0, 1.3, 0]} scale={0.7} />
     </group>
   ),
   globe: () => (
@@ -220,6 +246,7 @@ export const PROPS: Record<PropKind, PropRenderer> = {
       <Kit pack="tools" name="journal_open" pos={[-0.3, on(0.75, -0.42, 0.45), 0]} rot={[-1.2, 0, 0]} scale={0.45} />
       <Lying name="journal_closed" x={0.35} z={0.1} y={0.75} s={0.5} turn={0.3} />
       <Kit name="candle_lit" pos={[0.6, 0.75, -0.25]} scale={0.45} />
+      <Kit pack="furniture" name="book_set" pos={[-0.75, on(0.75, -0.25, 0.4), -0.15]} rot={[0, 0.2, 0]} scale={0.4} />
     </group>
   ),
   lectern: () => (
@@ -245,6 +272,8 @@ export const PROPS: Record<PropKind, PropRenderer> = {
       <Kit name="table_medium_tablecloth" scale={[1.45, 1, 0.66]} />
       <Kit pack="tools" name="map_empty" pos={[-0.3, 0.76, 0]} scale={0.8} />
       <Kit pack="tools" name="compass_base" pos={[0.75, on(0.76, -0.14, 0.6), 0]} scale={0.6} />
+      <Kit pack="tools" name="map_rolled" pos={[-1, on(0.76, -0.12, 0.6), -0.15]} rot={[0, 1.4, 0]} scale={0.6} />
+      <Kit name="candle_melted" pos={[1.25, 0.76, -0.2]} scale={0.5} />
     </group>
   ),
   aviary: () => (
@@ -256,18 +285,23 @@ export const PROPS: Record<PropKind, PropRenderer> = {
       ))}
       <Box size={[2.4, 0.06, 0.06]} pos={[0, 0.6, 0]} color={PALETTE.woodLight} />
       <Box size={[2.4, 0.06, 0.06]} pos={[0, 1.2, 0]} color={PALETTE.woodLight} />
+      {/* Plump birds on the perches: Mixed Bag plushies, a wink. */}
       {[-0.7, 0.1, 0.8].map((x, i) => (
-        <Ball key={x} r={0.16} pos={[x, 0.78 + (i % 2) * 0.6, 0]} color={i === 1 ? '#F4F4F4' : '#9AA5B1'} />
+        <Kit
+          key={x}
+          pack="mixed1"
+          name={i === 1 ? 'chicken_plushie_B' : 'chicken_plushie_A'}
+          pos={[x, 0.63 + (i % 2) * 0.6, 0]}
+          rot={[0, 0.4 - i * 0.4, 0]}
+          scale={0.5}
+        />
       ))}
     </group>
   ),
   boiler: () => (
     <group>
-      <Cyl r={0.8} h={0.2} pos={[0, 0.1, 0]} color={PALETTE.stone} />
-      <Cyl r={0.72} h={1.6} pos={[0, 1, 0]} color="#B4532A" />
-      <Cyl r={0.76} h={0.1} pos={[0, 1.5, 0]} color={PALETTE.brass} />
-      <Cyl r={0.15} h={0.9} pos={[0.3, 2.2, 0]} color={PALETTE.dark} />
-      <Blink pos={[0, 0.6, 0.72]} on="#FF7A1A" off="#B83A1A" r={0.14} />
+      <Kit pack="mixed1" name="woodstove" scale={1.15} />
+      <Blink pos={[0, 0.75, 0.5]} on="#FF7A1A" off="#B83A1A" r={0.14} />
     </group>
   ),
   engine: () => (
@@ -341,6 +375,9 @@ export const PROPS: Record<PropKind, PropRenderer> = {
           <Blink pos={[x, 1.32, 0]} on={i % 2 ? '#3FD07A' : '#E54B4B'} off="#8FA3AD" phase={i} r={0.06} />
         </group>
       ))}
+      <Kit pack="restaurant" name="jar_C_large" pos={[0.3, 0.9, -0.25]} scale={0.5} />
+      <Kit pack="restaurant" name="jar_A_medium" pos={[-0.9, 0.9, -0.25]} scale={0.5} />
+      <Kit pack="restaurant" name="jar_B_small" pos={[0.9, 0.9, -0.25]} scale={0.45} />
     </group>
   ),
   stage: (room) => (
@@ -359,24 +396,19 @@ export const PROPS: Record<PropKind, PropRenderer> = {
       <Lying name="journal_open" x={-0.2} z={0} y={0.75} s={0.4} />
     </group>
   ),
-  couch: (room) => {
-    const c = ACCENT_HEX[room.accent];
-    return (
-      <group>
-        <Box size={[2.8, 0.25, 0.9]} pos={[0, 0.15, 0]} color={PALETTE.woodDark} />
-        <Box size={[2.5, 0.25, 0.8]} pos={[0, 0.4, 0.02]} color={c} />
-        <Box size={[2.8, 0.6, 0.25]} pos={[0, 0.7, -0.35]} color={c} />
-        <Box size={[0.25, 0.5, 0.9]} pos={[-1.3, 0.55, 0]} color={PALETTE.wood} />
-        <Box size={[0.25, 0.5, 0.9]} pos={[1.3, 0.55, 0]} color={PALETTE.wood} />
-      </group>
-    );
-  },
+  couch: () => (
+    <group>
+      <Kit pack="furniture" name="couch_pillows" pos={[0, 0, -0.1]} scale={0.95} />
+      <Kit pack="furniture" name="rug_oval_A" pos={[0, 0.01, 1.1]} scale={0.6} shadow={false} />
+    </group>
+  ),
   diceTable: () => (
     <group>
       <Kit name="table_small" scale={[1.2, 0.95, 1.2]} />
       <Box size={[0.14, 0.14, 0.14]} pos={[0.15, 0.78, 0.1]} color="#FFFFFF" rot={[0, 0.5, 0]} />
       <Box size={[0.14, 0.14, 0.14]} pos={[-0.15, 0.78, -0.05]} color="#E54B4B" rot={[0, 1.1, 0]} />
       <Kit name="coin_stack_small" pos={[-0.25, 0.71, 0.25]} scale={0.4} />
+      <Kit pack="mixed1" name="puzzlecube_complete" pos={[0.3, on(0.71, -0.21, 0.35), -0.3]} rot={[0, 0.6, 0]} scale={0.35} />
     </group>
   ),
   posters: (room) => (
@@ -409,10 +441,10 @@ export const PROPS: Record<PropKind, PropRenderer> = {
   longTable: () => (
     <group>
       <Kit name="table_long" scale={[0.8, 1, 1.33]} />
-      <Kit name="plate_food_A" pos={[0, 0.75, -1.3]} scale={0.4} />
+      <Kit pack="restaurant" name="food_stew" pos={[0, 0.75, -1.3]} scale={0.4} />
       <Kit name="plate_food_B" pos={[0, 0.75, -0.4]} scale={0.4} />
       <Kit name="plate_stack" pos={[0.1, 0.75, 0.5]} scale={0.4} />
-      <Kit name="plate_food_A" pos={[0, 0.75, 1.4]} scale={0.4} />
+      <Kit pack="restaurant" name="food_dinner" pos={[0, 0.75, 1.4]} scale={0.35} />
       <Kit name="candle_lit" pos={[-0.1, 0.75, 0.95]} scale={0.45} />
     </group>
   ),
@@ -437,24 +469,26 @@ export const PROPS: Record<PropKind, PropRenderer> = {
       ))}
     </group>
   ),
-  rug: (room) => (
-    <group>
-      <Box size={[2.8, 0.02, 1.8]} pos={[0, 0.03, 0]} color={PALETTE.paper} />
-      <Box size={[2.6, 0.021, 1.6]} pos={[0, 0.032, 0]} color={ACCENT_HEX[room.accent]} />
-    </group>
-  ),
-  crates: () => <Kit name="crates_stacked" scale={0.7} />,
-  barrels: () => (
-    <group>
-      <Kit name="barrel_small" pos={[-0.4, 0, 0]} />
-      <Kit name="barrel_small" pos={[0.4, 0, 0.05]} />
-    </group>
-  ),
-  chest: () => <Kit name="chest_gold" scale={0.75} />,
-  coins: () => <Kit name="coin_stack_large" scale={0.45} />,
-  candle: () => (
-    <group>
-      <Kit name="candle_lit" scale={0.8} />
-    </group>
-  ),
+  keg: () => <Kit name="keg" scale={0.45} />,
+  rug: recipe('rug'),
+  crates: recipe('crates'),
+  barrels: recipe('barrels'),
+  chest: recipe('chest'),
+  coins: recipe('coins'),
+  candle: recipe('candle'),
+  chartChest: recipe('chartChest'),
+  sacks: recipe('sacks'),
+  weeds: recipe('weeds'),
+  bookPile: recipe('bookPile'),
+  lumber: recipe('lumber'),
+  forge: recipe('forge'),
+  fuel: recipe('fuel'),
+  treasury: recipe('treasury'),
+  gamerCorner: recipe('gamerCorner'),
+  cobwebs: recipe('cobwebs'),
+  prison: recipe('prison'),
+  beartrap: recipe('beartrap'),
+  skeleton: () => <SkeletonDummy />,
+  logs: recipe('logs'),
+  pantry: recipe('pantry'),
 };

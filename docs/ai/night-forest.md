@@ -44,8 +44,12 @@ description: Use when changing the night environment around the castle — fores
   castle down to `uFarLight` 0.11, moon-blue tint, then fade to `NIGHT_SKY` with distance to
   the castle rectangle (30→150 m). Night materials set `toneMapped = false` so the fade
   matches the untonemapped background.
-- Camera: `Office.tsx` clamps the OrbitControls target to `BOUNDS` ± `PAN_MARGIN` 20 so
-  panning cannot leave the finite world.
+- Camera: `Office.tsx` clamps the OrbitControls target to `BOUNDS` ± `PAN_MARGIN` 20
+  (`outside.ts`) so panning cannot leave the finite world.
+- Figures outside the castle (main agents walking in from the path end, the skeleton ambush
+  on the path, `groundY` height on the drawbridge and ground, path indices `PATH`):
+  `docs/ai/agent-lifecycle.md`. Path knots or bridge changes move those routes and kill
+  points; re-run `outside.test.ts`.
 
 ## Relevant Files
 - `packages/web/src/scene/forest.ts` — pure, no three.js: `GROUND_Y`, `WATER_Y`,
@@ -60,6 +64,8 @@ description: Use when changing the night environment around the castle — fores
   `receiveShadow` props, used by `NearForest`.
 - `packages/web/src/scene/kit-manifest.json` (`forest` pack), `packages/web/public/kaykit/forest/`.
 - `packages/web/src/scene/Office.tsx` — mounts `<Forest />`, background colour, pan clamp.
+- `packages/web/src/scene/outside.ts` — `PAN_MARGIN` (other exports:
+  `docs/ai/agent-lifecycle.md`).
 - `packages/web/test/forest.test.ts`.
 
 ## Usage

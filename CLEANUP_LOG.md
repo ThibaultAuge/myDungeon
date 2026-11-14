@@ -77,3 +77,19 @@ After `packages/web/src/ui/AgentPanel.tsx` was replaced by the in-scene `AgentIn
   "agent info card"). No code change.
 
 Rollback: re-insert the snippets above at the listed positions.
+
+## 2026-11-14 — branch claude/rooms-3d-visual-identity-61fe4f
+
+Cleanup after the room visual identity rework:
+
+- `packages/web/src/scene/props.tsx`: removed the `paper` entry from the module-private
+  `PALETTE` object (formerly line 26, last entry after `brass`):
+
+  ```ts
+    paper: '#F4E7C8',
+  ```
+
+  Reason: zero references to `PALETTE.paper` in `packages/*/src` or `packages/*/test`;
+  `PALETTE` is not exported.
+
+Rollback: re-add `paper: '#F4E7C8',` after `brass` in `PALETTE`.
