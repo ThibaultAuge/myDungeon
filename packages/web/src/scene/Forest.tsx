@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo, useRef } from 'react';
+import { Component, Suspense, useLayoutEffect, useMemo, useRef, type ReactNode } from 'react';
 import {
   BackSide,
   BoxGeometry,
@@ -25,8 +25,24 @@ import {
   type Material,
 } from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { OUTER } from './dungeon.ts';
-import { BRIDGE, GROUND_Y, MOAT, NIGHT_SKY, PATH_HALF_WIDTH, pathPoints, scatterTrees, WATER_Y, type Tree } from './forest.ts';
+import { OUTER, type KitItem, type Placement } from './dungeon.ts';
+import {
+  BRIDGE,
+  GROUND_Y,
+  KAYKIT_TREE_SCALE,
+  MOAT,
+  NIGHT_SKY,
+  nearModel,
+  PATH_HALF_WIDTH,
+  pathPoints,
+  FOREST_MATERIAL_SOURCE,
+  scatterTrees,
+  scatterUndergrowth,
+  WATER_Y,
+  type Tree,
+} from './forest.ts';
+import { useKitParts } from './kit.ts';
+import { KitInstances } from './KitInstances.tsx';
 
 // The night forest around the castle. The castle keeps its warm light; everything here is
 // darkened and tinted by `nightify`, and fades into the sky with the distance to the castle.
@@ -124,24 +140,25 @@ function painted(geometry: BufferGeometry, hex: string, y = 0): BufferGeometry {
 }
 
 const TRUNK = '#5a3f2c';
-const PINE = ['#24503a', '#2a5a41', '#316548'];
-const LEAVES = ['#3b6a35', '#467640'];
+const PINE_LOW = '#24503a';
+const PINE_TOP = '#316548';
+const LEAVES = '#3b6a35';
 
-/** One tree model per kind and level of detail, about 4.5 m high, standing on y = 0. */
-function treeGeometry(kind: Tree['kind'], detailed: boolean): BufferGeometry {
-  const seg = detailed ? 7 : 5;
+/**
+ * A simple tree model per kind, about 4.5 m high, standing on y = 0: the far forest, nearly
+ * faded into the night, where the KayKit models would cost five times the triangles.
+ */
+function treeGeometry(kind: Tree['kind']): BufferGeometry {
   const parts =
     kind === 'pine'
       ? [
-          painted(new CylinderGeometry(0.12, 0.2, 1.2, detailed ? 6 : 4), TRUNK, 0.6),
-          painted(new ConeGeometry(1.25, 1.9, seg), PINE[0], 1.75),
-          ...(detailed ? [painted(new ConeGeometry(0.95, 1.6, seg), PINE[1], 2.65)] : []),
-          painted(new ConeGeometry(0.62, 1.4, seg), PINE[2], detailed ? 3.55 : 3.0),
+          painted(new CylinderGeometry(0.12, 0.2, 1.2, 4), TRUNK, 0.6),
+          painted(new ConeGeometry(1.25, 1.9, 5), PINE_LOW, 1.75),
+          painted(new ConeGeometry(0.62, 1.4, 5), PINE_TOP, 3.0),
         ]
       : [
-          painted(new CylinderGeometry(0.14, 0.22, 1.8, detailed ? 6 : 4), TRUNK, 0.9),
-          painted(new IcosahedronGeometry(1.3, 0), LEAVES[0], 2.7),
-          ...(detailed ? [painted(new IcosahedronGeometry(0.85, 0), LEAVES[1], 3.6)] : []),
+          painted(new CylinderGeometry(0.14, 0.22, 1.8, 4), TRUNK, 0.9),
+          painted(new IcosahedronGeometry(1.3, 0), LEAVES, 2.7),
         ];
   const merged = mergeGeometries(parts)!;
   merged.computeVertexNormals();
@@ -156,9 +173,9 @@ const pos = new Vector3();
 const size = new Vector3();
 const tint = new Color();
 
-function TreeInstances({ trees, kind, detailed }: { trees: Tree[]; kind: Tree['kind']; detailed: boolean }) {
+function FarTrees({ trees, kind }: { trees: Tree[]; kind: Tree['kind'] }) {
   const ref = useRef<InstancedMesh>(null);
-  const geometry = useGeometry(() => treeGeometry(kind, detailed));
+  const geometry = useGeometry(() => treeGeometry(kind));
   const mine = useMemo(() => trees.filter((t) => t.kind === kind), [trees, kind]);
   useLayoutEffect(() => {
     const mesh = ref.current;
@@ -173,6 +190,80 @@ function TreeInstances({ trees, kind, detailed }: { trees: Tree[]; kind: Tree['k
     mesh.computeBoundingSphere();
   }, [mine]);
   return <instancedMesh key={mine.length} ref={ref} args={[geometry, MAT.tree, mine.length]} />;
+}
+
+const CASTLE_X = (OUTER.x0 + OUTER.x1) / 2;
+const CASTLE_Z = (OUTER.z0 + OUTER.z1) / 2;
+
+/** Quadrant (0 to 3) of a point around the middle of the castle. */
+function quadrant(x: number, z: number): number {
+  return (x < CASTLE_X ? 0 : 1) + (z < CASTLE_Z ? 0 : 2);
+}
+
+/** Keeps the scene alive when the forest models fail to load: only the near trees go missing. */
+class ForestBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+
+  componentDidCatch(error: unknown) {
+    console.error('KayKit forest failed to load', error);
+  }
+
+  render() {
+    return this.state.failed ? null : this.props.children;
+  }
+}
+
+/**
+ * The near forest: KayKit Forest trees, bushes and rocks, instanced per model. They share a
+ * night-shaded copy of the pack material, so the kit's own shared material stays untouched.
+ */
+function NearForest({ trees }: { trees: Tree[] }) {
+  const [base] = useKitParts('forest', FOREST_MATERIAL_SOURCE);
+  // Every forest model uses the one pack material (tested): its texture is enough. Lambert is
+  // plenty for a forest dimmed to a third of its light, and cheaper than the pack's PBR.
+  const material = useMemo(() => {
+    const source = (Array.isArray(base.material) ? base.material[0] : base.material) as MeshStandardMaterial;
+    // The pack's gradient texture is daylight-bright: dimmed so the forest stays a night forest.
+    return nightify(new MeshLambertMaterial({ map: source.map, color: new Color(0.6, 0.6, 0.6) }));
+  }, [base]);
+  useLayoutEffect(() => () => material.dispose(), [material]);
+  const placement = useMemo(() => {
+    const p: Placement = new Map();
+    const put = (model: string, item: KitItem) => {
+      const list = p.get(model);
+      if (list) list.push(item);
+      else p.set(model, [item]);
+    };
+    // One instanced set per model and quadrant around the castle: a set's bounding sphere then
+    // covers one side only, so the frustum culls the sides out of view.
+    for (const t of trees) {
+      const s = t.scale * KAYKIT_TREE_SCALE;
+      put(`${nearModel(t)}|${quadrant(t.x, t.z)}`, { x: t.x, y: GROUND_Y, z: t.z, rotY: t.rotY, scale: [s, s, s] });
+    }
+    for (const u of scatterUndergrowth()) {
+      put(`${u.model}|${quadrant(u.x, u.z)}`, { x: u.x, y: GROUND_Y, z: u.z, rotY: u.rotY, scale: [u.scale, u.scale, u.scale] });
+    }
+    return p;
+  }, [trees]);
+  return (
+    <>
+      {[...placement].map(([key, items]) => (
+        <KitInstances
+          key={key}
+          pack="forest"
+          name={key.split('|')[0]}
+          items={items}
+          shadow={false}
+          receiveShadow={false}
+          material={material}
+        />
+      ))}
+    </>
+  );
 }
 
 /** The forest floor, out to the horizon, with the moat cut out. */
@@ -357,10 +448,13 @@ export function Forest() {
       <Moat />
       <Drawbridge />
       <Path />
-      <TreeInstances trees={trees.near} kind="pine" detailed />
-      <TreeInstances trees={trees.near} kind="round" detailed />
-      <TreeInstances trees={trees.far} kind="pine" detailed={false} />
-      <TreeInstances trees={trees.far} kind="round" detailed={false} />
+      <ForestBoundary>
+        <Suspense fallback={null}>
+          <NearForest trees={trees.near} />
+        </Suspense>
+      </ForestBoundary>
+      <FarTrees trees={trees.far} kind="pine" />
+      <FarTrees trees={trees.far} kind="round" />
       <Horizon />
     </group>
   );

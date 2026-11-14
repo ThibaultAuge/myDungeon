@@ -97,8 +97,10 @@ export interface Tree {
   /** Size factor: 1 is a tree about 4.5 m high. */
   scale: number;
   kind: TreeKind;
-  /** Brightness factor of the whole tree (foliage and trunk), for variety. */
+  /** Brightness factor of the whole tree (foliage and trunk), for variety. Far trees only. */
   shade: number;
+  /** Picks the model among those of its kind, from 0 to 1. */
+  variant: number;
 }
 
 /** Clear ground left between the castle walls and the first trees. */
@@ -141,6 +143,7 @@ export function scatterTrees(): { near: Tree[]; far: Tree[] } {
         const size = rand();
         const kind = rand();
         const shade = rand();
+        const variant = rand();
         const tx = x + jx;
         const tz = z + jz;
         const d = distanceToRect(tx, tz, OUTER);
@@ -152,6 +155,7 @@ export function scatterTrees(): { near: Tree[]; far: Tree[] } {
           scale: 0.8 + size * 0.6,
           kind: kind < 0.7 ? 'pine' : 'round',
           shade: 0.75 + shade * 0.4,
+          variant,
         });
       }
     }
@@ -159,4 +163,82 @@ export function scatterTrees(): { near: Tree[]; far: Tree[] } {
   grid(NEAR_STEP, NEAR_LIMIT, 'forest:near', (d) => d < NEAR_LIMIT, near);
   grid(FAR_STEP, FAR_LIMIT, 'forest:far', (d) => d >= NEAR_LIMIT && d < FAR_LIMIT, far);
   return { near, far };
+}
+
+// ---------------------------------------------------------------- KayKit models (near ring)
+
+/**
+ * KayKit Forest models for the near pines. Tree_4_C (almost 11 m, towering over the forest)
+ * is left out on purpose.
+ */
+export const PINE_MODELS = ['Tree_4_A_Color1', 'Tree_4_A_Color1', 'Tree_4_B_Color1'] as const;
+/** KayKit Forest models for the near broadleaf trees, a dead tree now and then. */
+export const LEAFY_MODELS = [
+  'Tree_1_A_Color1',
+  'Tree_1_B_Color1',
+  'Tree_3_A_Color1',
+  'Tree_3_B_Color1',
+  'Tree_2_A_Color1',
+  'Tree_2_B_Color1',
+  'Tree_1_A_Color1',
+  'Tree_3_A_Color1',
+  'Tree_Bare_1_A_Color1',
+  'Tree_Bare_2_A_Color1',
+] as const;
+export const BUSH_MODELS = ['Bush_1_E_Color1', 'Bush_2_F_Color1', 'Bush_3_C_Color1', 'Bush_4_F_Color1'] as const;
+export const ROCK_MODELS = ['Rock_1_H_Color1', 'Rock_3_G_Color1'] as const;
+
+/** The model whose material (the pack's one, shared by every model) the near forest copies. */
+export const FOREST_MATERIAL_SOURCE = 'Tree_4_A_Color1';
+
+/** KayKit trees are drawn a little taller than ours: they are scaled down by this factor. */
+export const KAYKIT_TREE_SCALE = 0.8;
+
+function choose<T>(list: readonly T[], t: number): T {
+  return list[Math.min(list.length - 1, Math.floor(t * list.length))];
+}
+
+/** The KayKit model drawn for a near tree. */
+export function nearModel(tree: Tree): string {
+  return choose(tree.kind === 'pine' ? PINE_MODELS : LEAFY_MODELS, tree.variant);
+}
+
+/** A bush or a rock on the forest floor. */
+export interface Undergrowth {
+  x: number;
+  z: number;
+  rotY: number;
+  scale: number;
+  model: string;
+}
+
+const UNDERGROWTH_STEP = 3.4;
+
+/** Bushes and a few rocks between the near trees, on the same free ground. Deterministic. */
+export function scatterUndergrowth(): Undergrowth[] {
+  const path = pathPoints();
+  const rand = seeded('forest:undergrowth');
+  const out: Undergrowth[] = [];
+  for (let x = OUTER.x0 - NEAR_LIMIT; x <= OUTER.x1 + NEAR_LIMIT; x += UNDERGROWTH_STEP) {
+    for (let z = OUTER.z0 - NEAR_LIMIT; z <= OUTER.z1 + NEAR_LIMIT; z += UNDERGROWTH_STEP) {
+      const jx = (rand() - 0.5) * UNDERGROWTH_STEP;
+      const jz = (rand() - 0.5) * UNDERGROWTH_STEP;
+      const what = rand();
+      const rot = rand();
+      const size = rand();
+      const variant = rand();
+      const tx = x + jx;
+      const tz = z + jz;
+      if (what > 0.45 || distanceToRect(tx, tz, OUTER) >= NEAR_LIMIT || !treeAllowed(tx, tz, path)) continue;
+      const rock = what < 0.08;
+      out.push({
+        x: tx,
+        z: tz,
+        rotY: rot * Math.PI * 2,
+        scale: rock ? 0.5 + size * 0.5 : 0.6 + size * 0.6,
+        model: choose(rock ? ROCK_MODELS : BUSH_MODELS, variant),
+      });
+    }
+  }
+  return out;
 }

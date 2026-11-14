@@ -11,6 +11,10 @@ import {
   KIT_SCALE,
   LARGE_TILE,
   OUTER,
+  PERIMETER_INNER,
+  PERIMETER_LINE,
+  PERIMETER_PILLAR_EXTRA,
+  PERIMETER_T,
   SMALL_TILE,
   WALL_INSET,
   WALL_T,
@@ -18,6 +22,7 @@ import {
   edgeRuns,
   foundation,
   inForeground,
+  perimeterSides,
   roomFloor,
   seeded,
   sharedSides,
@@ -215,11 +220,23 @@ function sideOfRotation(rotY: number): Side | undefined {
   return FACE_IN.find(([, r]) => Math.abs(Math.atan2(Math.sin(rotY - r), Math.cos(rotY - r))) < TOL)?.[0];
 }
 
+/** The BOUNDS line of each side of the map. */
+const BOUND_LINE: Record<Side, number> = { n: BOUNDS.z0, s: BOUNDS.z1, w: BOUNDS.x0, e: BOUNDS.x1 };
+
+/** Sides of a room lying on the map edge, derived independently from BOUNDS. */
+function onMapEdge(r: RoomDef): Set<Side> {
+  const b = rect(r);
+  const at: Record<Side, number> = { n: b.z0, s: b.z1, w: b.x0, e: b.x1 };
+  return new Set((['n', 's', 'w', 'e'] as Side[]).filter((s) => Math.abs(at[s] - BOUND_LINE[s]) < TOL));
+}
+
 /**
- * Coordinate of the wall line of a side: WALL_INSET inside the room edge, except for a
- * shared 'e' or 's' side, whose single wall stands on the common edge itself.
+ * Coordinate of the wall line of a side: the thick outer wall's middle line on a map-edge
+ * side, else WALL_INSET inside the room edge, except for a shared 'e' or 's' side, whose
+ * single wall stands on the common edge itself.
  */
 function wallLine(r: RoomDef, side: Side, rooms: RoomDef[] = WALLED): number {
+  if (onMapEdge(r).has(side)) return PERIMETER_LINE[side];
   const b = rect(r);
   const shared = sharedSides(r, rooms).has(side);
   switch (side) {
@@ -234,15 +251,29 @@ function wallLine(r: RoomDef, side: Side, rooms: RoomDef[] = WALLED): number {
   }
 }
 
-/** Coordinate of the edge-of-map wall line of a side: BOUNDS moved WALL_INSET inwards. */
-const EDGE_LINE: Record<Side, number> = {
-  n: BOUNDS.z0 + WALL_INSET,
-  s: BOUNDS.z1 - WALL_INSET,
-  w: BOUNDS.x0 + WALL_INSET,
-  e: BOUNDS.x1 - WALL_INSET,
-};
-
 const horizontalSide = (s: Side) => s === 'n' || s === 's';
+
+/**
+ * Span of a room's run of a side along its own axis: from inset to inset, except that an
+ * end meeting a map-edge side stops at that outer wall's inner face.
+ */
+function runSpan(r: RoomDef, side: Side): [number, number] {
+  const b = rect(r);
+  const edge = onMapEdge(r);
+  if (horizontalSide(side)) {
+    return [edge.has('w') ? PERIMETER_INNER.w : b.x0 + WALL_INSET, edge.has('e') ? PERIMETER_INNER.e : b.x1 - WALL_INSET];
+  }
+  return [edge.has('n') ? PERIMETER_INNER.n : b.z0 + WALL_INSET, edge.has('s') ? PERIMETER_INNER.s : b.z1 - WALL_INSET];
+}
+
+/** True when a wall piece (by its facing and centre) stands on a perimeter wall line. */
+function onPerimeterLine(item: KitItem): boolean {
+  const side = sideOfRotation(item.rotY);
+  if (!side) return false;
+  return horizontalSide(side)
+    ? Math.abs(item.z - PERIMETER_LINE.n) < TOL || Math.abs(item.z - PERIMETER_LINE.s) < TOL
+    : Math.abs(item.x - PERIMETER_LINE.w) < TOL || Math.abs(item.x - PERIMETER_LINE.e) < TOL;
+}
 
 /** Range covered by a run along its own axis. */
 function runRange(run: WallRun): [number, number] {
@@ -276,16 +307,30 @@ const TALL: { name: string; item: CutItem }[] = [...LAYOUT.tall].flatMap(([name,
 const EDGE_RUNS = edgeRuns();
 const LOW = entries(LAYOUT.low);
 
-// The castle gate in the south edge: its jambs stand on the edge wall line, on the wall
-// lines of the two rooms either side of the opening.
+// The castle gate in the south edge: its jambs stand on the outer wall's middle line, in
+// line with the wall lines of the two rooms either side of the opening.
 const GATE_LO = GATE.lo - WALL_INSET;
 const GATE_HI = GATE.hi + WALL_INSET;
 const GATE_MID = (GATE_LO + GATE_HI) / 2;
+// Pillars as deep as the south outer wall (jambs, seam slots) reach a little further inwards:
+// their middle line and depth, their outer face still on the map edge.
+const DEEP_T = PERIMETER_T + PERIMETER_PILLAR_EXTRA;
+const DEEP_Z = OUTER.z1 - DEEP_T / 2;
+/** The lintel is a little thinner than the outer wall, so it never fights with the jambs. */
+const LINTEL_T = PERIMETER_T - 0.04;
 
 /** True for the gate's own decor: torches that sink with the lintel (anchored on its middle). */
 function isGateDecor(t: { name: string; item: CutItem }): boolean {
-  return t.name === 'torch_mounted' && Math.abs(t.item.ax - GATE_MID) < 1e-9 && Math.abs(t.item.az - EDGE_LINE.s) < 1e-9;
+  return t.name === 'torch_mounted' && Math.abs(t.item.ax - GATE_MID) < 1e-9 && Math.abs(t.item.az - PERIMETER_LINE.s) < 1e-9;
 }
+
+/** The four map corners, as (x side, z side) pairs. */
+const MAP_CORNERS: [Side, Side][] = [
+  ['w', 'n'],
+  ['e', 'n'],
+  ['w', 's'],
+  ['e', 's'],
+];
 
 /** Corridor ends lying in the gate opening, on the south edge. */
 function gateCorridorEnds(): Point[] {
@@ -296,10 +341,18 @@ function gateCorridorEnds(): Point[] {
 
 describe('kit manifest', () => {
   /**
-   * Verifies that the manifest declares the three packs the scene loads from
+   * Verifies that the manifest declares every pack the scene loads from, forest included
    */
   it('declares the dungeon, tools, weapons and adventurers packs with safe names', () => {
-    expect(Object.keys(MANIFEST).sort()).toEqual(['adventurers', 'adventurers_anim', 'adventurers_props', 'dungeon', 'tools', 'weapons']);
+    expect(Object.keys(MANIFEST).sort()).toEqual([
+      'adventurers',
+      'adventurers_anim',
+      'adventurers_props',
+      'dungeon',
+      'forest',
+      'tools',
+      'weapons',
+    ]);
     for (const pack of Object.keys(MANIFEST)) expect(pack).toMatch(SAFE_NAME);
   });
 
@@ -313,7 +366,7 @@ describe('kit manifest', () => {
   it('gives every pack the gltf (default) or glb format', () => {
     for (const [pack, spec] of packs) expect(['gltf', 'glb'], pack).toContain(formatOf(spec));
     expect(glbPacks.map(([p]) => p).sort()).toEqual(['adventurers', 'adventurers_anim']);
-    expect(gltfPacks.map(([p]) => p).sort()).toEqual(['adventurers_props', 'dungeon', 'tools', 'weapons']);
+    expect(gltfPacks.map(([p]) => p).sort()).toEqual(['adventurers_props', 'dungeon', 'forest', 'tools', 'weapons']);
   });
 
   /**
@@ -939,8 +992,9 @@ describe('wallRuns', () => {
    */
   it.each(WALLED_CASES)('%s door wall is the side length minus the door gap', (_id, r) => {
     const side = r.door.side;
-    const horizontal = side === 'n' || side === 's';
-    const full = (horizontal ? r.w : r.d) - 2 * WALL_INSET;
+    // From inset to inset, or to the inner face of an outer wall the run meets.
+    const [lo, hi] = runSpan(r, side);
+    const full = hi - lo;
     const len = wallRuns(r)
       .filter((x) => x.side === side)
       .reduce((s, x) => s + Math.hypot(x.b[0] - x.a[0], x.b[1] - x.a[1]), 0);
@@ -960,30 +1014,58 @@ describe('wallRuns', () => {
         continue;
       }
       expect(mine).toHaveLength(1);
-      const full = (horizontalSide(side) ? r.w : r.d) - 2 * WALL_INSET;
-      expect(Math.hypot(mine[0].b[0] - mine[0].a[0], mine[0].b[1] - mine[0].a[1])).toBeCloseTo(full, 6);
+      const [lo, hi] = runSpan(r, side);
+      expect(runRange(mine[0])[0], `${side} start`).toBeCloseTo(lo, 6);
+      expect(runRange(mine[0])[1], `${side} end`).toBeCloseTo(hi, 6);
     }
   });
 
   /**
-   * Verifies that runs lie WALL_INSET inside the room, or on the edge for an owned shared side
+   * Verifies that runs lie on their wall line (outer, inset or shared), within the run span
    */
   it.each(WALLED_CASES)('%s runs lie on their wall line, within the room span', (_id, r) => {
-    const b = rect(r);
     for (const run of wallRuns(r)) {
       expect(run.room).toBe(r);
       const line = wallLine(r, run.side);
-      for (const [x, z] of [run.a, run.b]) {
-        if (horizontalSide(run.side)) {
-          expect(z).toBeCloseTo(line, 9);
-          expect(x).toBeGreaterThanOrEqual(b.x0 + WALL_INSET - TOL);
-          expect(x).toBeLessThanOrEqual(b.x1 - WALL_INSET + TOL);
-        } else {
-          expect(x).toBeCloseTo(line, 9);
-          expect(z).toBeGreaterThanOrEqual(b.z0 + WALL_INSET - TOL);
-          expect(z).toBeLessThanOrEqual(b.z1 - WALL_INSET + TOL);
-        }
+      const [lo, hi] = runSpan(r, run.side);
+      const k = horizontalSide(run.side) ? 0 : 1;
+      for (const p of [run.a, run.b]) {
+        expect(p[1 - k], `${run.side} line`).toBeCloseTo(line, 9);
+        expect(p[k]).toBeGreaterThanOrEqual(lo - TOL);
+        expect(p[k]).toBeLessThanOrEqual(hi + TOL);
       }
+    }
+  });
+
+  /**
+   * Verifies that map-edge runs are PERIMETER_T thick and every other run WALL_T thick
+   */
+  it.each(WALLED_CASES)('%s runs are PERIMETER_T thick on the map edge, WALL_T elsewhere', (_id, r) => {
+    const edge = onMapEdge(r);
+    for (const run of wallRuns(r)) {
+      expect(run.thick, `${run.side}`).toBe(edge.has(run.side) ? PERIMETER_T : WALL_T);
+    }
+  });
+
+  /**
+   * Verifies that a room on the west edge alone gets the user-specified run geometry
+   */
+  it('lays the west wall of a west-edge room on the outer line, n and s from its inner face', () => {
+    // On the west edge only: n and s are plain sides, so the w run spans the z insets.
+    const r = makeRoom('west-edge', BOUNDS.x0 + 2, 0, 4, 4, { door: { side: 'e', at: 0 } });
+    expect([...perimeterSides(r)]).toEqual(['w']);
+    const runs = wallRuns(r, [r]);
+    const west = runs.filter((x) => x.side === 'w');
+    expect(west).toHaveLength(1);
+    expect(west[0].a[0]).toBeCloseTo(PERIMETER_LINE.w, 9);
+    expect(west[0].thick).toBe(PERIMETER_T);
+    expect(runRange(west[0])[0]).toBeCloseTo(-2 + WALL_INSET, 9);
+    expect(runRange(west[0])[1]).toBeCloseTo(2 - WALL_INSET, 9);
+    for (const side of ['n', 's'] as Side[]) {
+      const [run] = runs.filter((x) => x.side === side);
+      expect(run.thick).toBe(WALL_T);
+      expect(runRange(run)[0], side).toBeCloseTo(PERIMETER_INNER.w, 9);
+      expect(runRange(run)[1], side).toBeCloseTo(BOUNDS.x0 + 4 - WALL_INSET, 9);
     }
   });
 
@@ -1072,16 +1154,31 @@ describe('edgeRuns', () => {
   });
 
   /**
-   * Verifies that edge runs belong to no room and lie on the edge rooms' wall line
+   * Verifies that edge runs belong to no room, lie on PERIMETER_LINE and are PERIMETER_T thick
    */
-  it('lies on BOUNDS moved WALL_INSET inwards, without a room', () => {
+  it('lies on the outer wall line, PERIMETER_T thick, without a room', () => {
     for (const run of EDGE_RUNS) {
       expect(run.room).toBeUndefined();
+      expect(run.thick).toBe(PERIMETER_T);
       const k = horizontalSide(run.side) ? 1 : 0;
-      expect(run.a[k]).toBeCloseTo(EDGE_LINE[run.side], 9);
-      expect(run.b[k]).toBeCloseTo(EDGE_LINE[run.side], 9);
+      expect(run.a[k]).toBeCloseTo(PERIMETER_LINE[run.side], 9);
+      expect(run.b[k]).toBeCloseTo(PERIMETER_LINE[run.side], 9);
       const [lo, hi] = runRange(run);
       expect(hi - lo).toBeGreaterThan(0.5);
+    }
+  });
+
+  /**
+   * Verifies that the outer middle line and inner face sit T/2 and T inside the OUTER edge
+   */
+  it('puts PERIMETER_LINE T/2 and PERIMETER_INNER T inside the OUTER edge', () => {
+    expect(OUTER).toEqual({ x0: BOUNDS.x0 - 0.5, x1: BOUNDS.x1 + 0.5, z0: BOUNDS.z0 - 0.5, z1: BOUNDS.z1 + 0.5 });
+    const outer: Record<Side, number> = { n: OUTER.z0, s: OUTER.z1, w: OUTER.x0, e: OUTER.x1 };
+    for (const side of ['n', 's', 'w', 'e'] as Side[]) {
+      const [ix, iz] = INWARD[side];
+      const inward = ix + iz;
+      expect(PERIMETER_LINE[side], side).toBeCloseTo(outer[side] + inward * (PERIMETER_T / 2), 9);
+      expect(PERIMETER_INNER[side], side).toBeCloseTo(outer[side] + inward * PERIMETER_T, 9);
     }
   });
 
@@ -1142,17 +1239,19 @@ describe('edgeRuns', () => {
   it('closes each whole side of the map when there is no room, the gate left open', () => {
     const runs = edgeRuns([]);
     expect(runs.map((r) => r.side).sort()).toEqual(['e', 'n', 's', 's', 'w']);
+    // Each side runs between the inner faces of the two outer walls it meets.
+    for (const run of runs) expect(run.thick).toBe(PERIMETER_T);
     for (const run of runs.filter((r) => r.side !== GATE.side)) {
       const [lo, hi] = runRange(run);
-      const [l0, l1] = horizontalSide(run.side) ? [BOUNDS.x0, BOUNDS.x1] : [BOUNDS.z0, BOUNDS.z1];
-      expect(lo).toBeCloseTo(l0 + WALL_INSET, 9);
-      expect(hi).toBeCloseTo(l1 - WALL_INSET, 9);
+      const [l0, l1] = horizontalSide(run.side) ? [PERIMETER_INNER.w, PERIMETER_INNER.e] : [PERIMETER_INNER.n, PERIMETER_INNER.s];
+      expect(lo).toBeCloseTo(l0, 9);
+      expect(hi).toBeCloseTo(l1, 9);
     }
     const south = runs.filter((r) => r.side === GATE.side).map(runRange).sort((p, q) => p[0] - q[0]);
-    expect(south[0][0]).toBeCloseTo(BOUNDS.x0 + WALL_INSET, 9);
+    expect(south[0][0]).toBeCloseTo(PERIMETER_INNER.w, 9);
     expect(south[0][1]).toBeCloseTo(GATE_LO, 9);
     expect(south[1][0]).toBeCloseTo(GATE_HI, 9);
-    expect(south[1][1]).toBeCloseTo(BOUNDS.x1 - WALL_INSET, 9);
+    expect(south[1][1]).toBeCloseTo(PERIMETER_INNER.e, 9);
   });
 
   /**
@@ -1172,22 +1271,35 @@ describe('edgeRuns', () => {
 
 describe('wallLayout', () => {
   /**
-   * Verifies that tall wall pieces keep the WALL_T thickness, whatever their length
+   * Verifies that outer wall pieces are PERIMETER_T thick and inner ones WALL_T, any length
    */
-  it('keeps every tall wall piece WALL_T thick', () => {
+  it('keeps every tall wall piece PERIMETER_T thick on the map edge, WALL_T inside', () => {
     const walls = TALL.filter((t) => t.name.startsWith('wall'));
-    expect(walls.length).toBeGreaterThan(0);
-    for (const { name, item } of walls) expect(item.scale?.[2], name).toBe(WALL_T);
+    const outer = walls.filter((t) => onPerimeterLine(t.item));
+    const inner = walls.filter((t) => !onPerimeterLine(t.item));
+    expect(outer.length).toBeGreaterThan(0);
+    expect(inner.length).toBeGreaterThan(0);
+    for (const { name, item } of outer) {
+      expect(item.scale![2], `${name} (${item.x}, ${item.z})`).toBeCloseTo(item.y > TOL ? LINTEL_T : PERIMETER_T, 9);
+    }
+    for (const { name, item } of inner) expect(item.scale?.[2], `${name} (${item.x}, ${item.z})`).toBe(WALL_T);
   });
 
   /**
-   * Verifies that low barriers are thinner than the tall walls they hide in
+   * Verifies that each low barrier is thinner than the tall wall it hides in
    */
-  it('makes every low barrier thinner than WALL_T', () => {
-    const barriers = LOW.filter(([n]) => n === 'barrier');
+  it('makes every low barrier thinner than its own tall wall', () => {
+    const walls = TALL.filter((t) => t.name.startsWith('wall') && t.item.y < TOL).map((t) => t.item);
+    const barriers = LOW.filter(([n]) => n === 'barrier').map(([, b]) => b);
     expect(barriers.length).toBeGreaterThan(0);
-    // A barrier is 0.5 m thick in the pack.
-    for (const [, b] of barriers) expect(b.scale![2] * 0.5).toBeLessThan(WALL_T);
+    for (const b of barriers) {
+      const wall = walls.find((w) => Math.abs(w.x - b.x) < TOL && Math.abs(w.z - b.z) < TOL && Math.abs(w.rotY - b.rotY) < TOL);
+      expect(wall, `barrier (${b.x}, ${b.z})`).toBeDefined();
+      // A barrier is 0.5 m thick in the pack; the tall wall's z scale is its thickness.
+      expect(b.scale![2] * 0.5).toBeLessThan(wall!.scale![2]);
+      // Inside the castle, still thinner than an ordinary wall.
+      if (!onPerimeterLine(b)) expect(b.scale![2] * 0.5).toBeLessThan(WALL_T);
+    }
   });
 
   /**
@@ -1217,7 +1329,7 @@ describe('wallLayout', () => {
    * Verifies that every wall piece and every pillar sinks or stands on its own position
    */
   it('anchors walls and pillars on their own centre, the gate jambs aside', () => {
-    const onGate = (it: CutItem) => Math.abs(it.ax - GATE_MID) < 1e-9 && Math.abs(it.az - EDGE_LINE.s) < 1e-9;
+    const onGate = (it: CutItem) => Math.abs(it.ax - GATE_MID) < 1e-9 && Math.abs(it.az - PERIMETER_LINE.s) < 1e-9;
     const pieces = TALL.filter(
       (t) => (t.name.startsWith('wall') || t.name === 'pillar') && !(t.name === 'pillar' && onGate(t.item)),
     );
@@ -1232,14 +1344,14 @@ describe('wallLayout', () => {
    * Verifies that every gate piece (jambs, lintel, torches) shares the gate middle anchor, so the gate sinks as one piece
    */
   it('anchors every gate piece on the gate middle', () => {
-    const near = (it: CutItem) => Math.abs(it.z - EDGE_LINE.s) < 0.5 && it.x > GATE_LO - 1.5 && it.x < GATE_HI + 1.5;
+    const near = (it: CutItem) => Math.abs(it.z - PERIMETER_LINE.s) < 0.5 && it.x > GATE_LO - 1.5 && it.x < GATE_HI + 1.5;
     const jambs = TALL.filter((t) => t.name === 'pillar' && near(t.item) && Math.abs(t.item.scale![0] * 1.5 - GATE_JAMB) < 1e-9);
     const lintel = TALL.filter((t) => t.name.startsWith('wall') && t.item.y > 0 && near(t.item));
     const torches = TALL.filter(isGateDecor);
     expect([jambs.length, lintel.length, torches.length]).toEqual([2, 1, 2]);
     for (const { name, item } of [...jambs, ...lintel, ...torches]) {
       expect(item.ax, name).toBeCloseTo(GATE_MID, 9);
-      expect(item.az, name).toBeCloseTo(EDGE_LINE.s, 9);
+      expect(item.az, name).toBeCloseTo(PERIMETER_LINE.s, 9);
     }
   });
 
@@ -1268,14 +1380,109 @@ describe('wallLayout', () => {
     const garde = room('garde');
     const pillarsAt = (x: number, z: number) =>
       TALL.filter((t) => t.name === 'pillar' && Math.abs(t.item.x - x) < TOL && Math.abs(t.item.z - z) < TOL).map((t) => t.item);
-    for (const z of [garde.cz - garde.d / 2 + WALL_INSET, garde.cz + garde.d / 2 - WALL_INSET]) {
+    // North end on the rooms' inset wall line; south end, on the map edge, through the whole
+    // outer wall: on its middle line, PERIMETER_T deep.
+    const ends: [number, number][] = [
+      [garde.cz - garde.d / 2 + WALL_INSET, 0.3],
+      [DEEP_Z, DEEP_T],
+    ];
+    for (const [z, depth] of ends) {
       const here = pillarsAt(seam, z);
-      expect(here).toHaveLength(1);
-      // A 1.5 m pillar: its x scale times 1.5 is its width.
+      expect(here, `z ${z}`).toHaveLength(1);
+      // A 1.5 m pillar: its x and z scales times 1.5 are its width and depth.
       expect(here[0].scale![0] * 1.5).toBeCloseTo(0.6, 9);
+      expect(here[0].scale![2] * 1.5).toBeCloseTo(depth, 9);
       // The room to the east leaves the corner to its west neighbour: no pillar of its own.
       expect(pillarsAt(seam + WALL_INSET, z)).toEqual([]);
     }
+    // No leftover pillar at the old inset south corner of the seam.
+    expect(pillarsAt(seam, garde.cz + garde.d / 2 - WALL_INSET)).toEqual([]);
+  });
+
+  /**
+   * Verifies that each map corner holds one PERIMETER_T square pillar on the outer wall lines
+   */
+  it.each([
+    ['the real rooms', LAYOUT],
+    ['no room', wallLayout([])],
+  ])('puts a PERIMETER_T square pillar at each map corner with %s', (_label, layout) => {
+    const pillars = layout.tall.get('pillar')!;
+    for (const [xs, zs] of MAP_CORNERS) {
+      const x = PERIMETER_LINE[xs];
+      const z = PERIMETER_LINE[zs];
+      const here = pillars.filter((p) => Math.abs(p.x - x) < TOL && Math.abs(p.z - z) < TOL);
+      expect(here, `${zs}${xs}`).toHaveLength(1);
+      const [p] = here;
+      expect(p.scale![0] * 1.5).toBeCloseTo(PERIMETER_T, 9);
+      expect(p.scale![2] * 1.5).toBeCloseTo(PERIMETER_T, 9);
+      // It stands on its own centre and fills the map corner exactly.
+      expect(p.ax).toBeCloseTo(x, 9);
+      expect(p.az).toBeCloseTo(z, 9);
+      const outerX = xs === 'w' ? OUTER.x0 : OUTER.x1;
+      const outerZ = zs === 'n' ? OUTER.z0 : OUTER.z1;
+      expect(Math.abs(p.x - outerX)).toBeCloseTo(PERIMETER_T / 2, 9);
+      expect(Math.abs(p.z - outerZ)).toBeCloseTo(PERIMETER_T / 2, 9);
+    }
+  });
+
+  /**
+   * Verifies that no outer wall run, edge or room, intrudes on a map corner pillar
+   */
+  it('keeps every perimeter run clear of the map corner pillars', () => {
+    const runs = [...EDGE_RUNS, ...WALLED.flatMap((r) => wallRuns(r))].filter((r) => r.thick === PERIMETER_T);
+    expect(runs.length).toBeGreaterThan(0);
+    const clashes: string[] = [];
+    for (const run of runs) {
+      const [lo, hi] = runRange(run);
+      const line = horizontalSide(run.side) ? run.a[1] : run.a[0];
+      const h = run.thick! / 2;
+      const box = horizontalSide(run.side)
+        ? { x0: lo, x1: hi, z0: line - h, z1: line + h }
+        : { x0: line - h, x1: line + h, z0: lo, z1: hi };
+      for (const [xs, zs] of MAP_CORNERS) {
+        const px = PERIMETER_LINE[xs];
+        const pz = PERIMETER_LINE[zs];
+        const ox = Math.min(box.x1, px + PERIMETER_T / 2) - Math.max(box.x0, px - PERIMETER_T / 2);
+        const oz = Math.min(box.z1, pz + PERIMETER_T / 2) - Math.max(box.z0, pz - PERIMETER_T / 2);
+        if (ox > TOL && oz > TOL) clashes.push(`${run.room?.id ?? 'edge'} ${run.side} ${lo}..${hi} over ${zs}${xs} corner`);
+      }
+    }
+    expect(clashes).toEqual([]);
+  });
+
+  /**
+   * Verifies that every outer wall piece has its outer face exactly on the OUTER edge
+   */
+  it('puts the outer face of every perimeter wall piece on the OUTER edge', () => {
+    const outer = TALL.filter((t) => t.name.startsWith('wall') && t.item.scale![2] === PERIMETER_T);
+    expect(outer.length).toBeGreaterThan(0);
+    // Every map edge gets some outer wall.
+    const sides = new Set(outer.map((t) => sideOfRotation(t.item.rotY)));
+    expect([...sides].sort()).toEqual(['e', 'n', 's', 'w']);
+    const off: string[] = [];
+    for (const { name, item } of outer) {
+      const side = sideOfRotation(item.rotY)!;
+      const t = item.scale![2];
+      const face = { n: item.z - t / 2, s: item.z + t / 2, w: item.x - t / 2, e: item.x + t / 2 }[side];
+      const edge = { n: OUTER.z0, s: OUTER.z1, w: OUTER.x0, e: OUTER.x1 }[side];
+      if (Math.abs(face - edge) > 1e-9) off.push(`${name} ${side} (${item.x}, ${item.z}) face ${face} vs ${edge}`);
+    }
+    expect(off).toEqual([]);
+  });
+
+  /**
+   * Verifies that a plain corner beside an outer wall puts its 0.3 m pillar against the inner face
+   */
+  it.each([
+    ['n', PERIMETER_INNER.n + 0.15],
+    ['s', PERIMETER_INNER.s - 0.15],
+  ] as [Side, number][])('stands the taverne %s-w corner pillar against the outer inner face', (_zs, z) => {
+    const taverne = room('taverne');
+    const x = taverne.cx - taverne.w / 2 + WALL_INSET;
+    const here = TALL.filter((t) => t.name === 'pillar' && Math.abs(t.item.x - x) < TOL && Math.abs(t.item.z - z) < TOL);
+    expect(here).toHaveLength(1);
+    expect(here[0].item.scale![0] * 1.5).toBeCloseTo(0.3, 9);
+    expect(here[0].item.scale![2] * 1.5).toBeCloseTo(0.3, 9);
   });
 
   /**
@@ -1295,8 +1502,8 @@ describe('wallLayout', () => {
       const [ix, iz] = INWARD[side];
       const r = roomFacedBy(item);
       // The decor point projected onto its wall line: the room's own line, or for a corridor
-      // end the edge-of-map line. On a shared wall, the line is the common edge itself.
-      const line = r ? wallLine(r, side) : EDGE_LINE[side];
+      // end the outer wall's middle line. On a shared wall, the line is the common edge itself.
+      const line = r ? wallLine(r, side) : PERIMETER_LINE[side];
       const wall = horizontalSide(side) ? { x: item.x, z: line } : { x: line, z: item.z };
       const front = { x: wall.x + ix * 0.6, z: wall.z + iz * 0.6 };
       if (!r) {
@@ -1352,23 +1559,28 @@ describe('wallLayout', () => {
     expect(names.some((n) => n.startsWith('wall'))).toBe(true);
     for (const n of names) expect(n === 'torch_mounted' || n === 'pillar' || n.startsWith('wall'), n).toBe(true);
     expect([...empty.low.keys()].sort()).toEqual(['barrier', 'column']);
-    // The only pillars are the two gate jambs, each with its low column.
-    const pillars = empty.tall.get('pillar')!.map((p) => [p.x, p.z]).sort((p, q) => p[0] - q[0]);
-    expect(pillars).toHaveLength(2);
-    expect(pillars[0][0]).toBeCloseTo(GATE_LO, 9);
-    expect(pillars[1][0]).toBeCloseTo(GATE_HI, 9);
-    for (const [, z] of pillars) expect(z).toBeCloseTo(EDGE_LINE.s, 9);
-    expect(empty.low.get('column')).toHaveLength(2);
-    // Every wall chunk lies on one of the four edge lines.
+    // The only pillars are the two gate jambs and the four map corners, each with its column.
+    const pillars = empty.tall.get('pillar')!;
+    expect(pillars).toHaveLength(6);
+    const corners = pillars.filter((p) =>
+      MAP_CORNERS.some(([xs, zs]) => Math.abs(p.x - PERIMETER_LINE[xs]) < TOL && Math.abs(p.z - PERIMETER_LINE[zs]) < TOL),
+    );
+    expect(corners).toHaveLength(4);
+    const jambs = pillars
+      .filter((p) => !corners.includes(p))
+      .map((p) => [p.x, p.z])
+      .sort((p, q) => p[0] - q[0]);
+    expect(jambs).toHaveLength(2);
+    expect(jambs[0][0]).toBeCloseTo(GATE_LO, 9);
+    expect(jambs[1][0]).toBeCloseTo(GATE_HI, 9);
+    for (const [, z] of jambs) expect(z).toBeCloseTo(DEEP_Z, 9);
+    expect(empty.low.get('column')).toHaveLength(6);
+    // Every wall chunk lies on one of the four outer wall lines.
     for (const [n, items] of empty.tall) {
       if (!n.startsWith('wall')) continue;
       for (const w of items) {
-        const onLine =
-          Math.abs(w.z - EDGE_LINE.n) < TOL ||
-          Math.abs(w.z - EDGE_LINE.s) < TOL ||
-          Math.abs(w.x - EDGE_LINE.w) < TOL ||
-          Math.abs(w.x - EDGE_LINE.e) < TOL;
-        expect(onLine, `${n} (${w.x}, ${w.z})`).toBe(true);
+        expect(onPerimeterLine(w), `${n} (${w.x}, ${w.z})`).toBe(true);
+        expect(w.scale![2], `${n} (${w.x}, ${w.z})`).toBeCloseTo(w.y > TOL ? LINTEL_T : PERIMETER_T, 9);
       }
     }
   });
@@ -1439,7 +1651,7 @@ describe('castle gate', () => {
   it('leaves the corridor end at the gate open', () => {
     const [end] = gateCorridorEnds();
     const southRuns = [...EDGE_RUNS, ...WALLED.flatMap((r) => wallRuns(r))].filter(
-      (run) => run.side === 's' && Math.abs(run.a[1] - EDGE_LINE.s) < 0.6,
+      (run) => run.side === 's' && Math.abs(run.a[1] - PERIMETER_LINE.s) < 0.6,
     );
     const closing = southRuns.filter((run) => {
       const [lo, hi] = runRange(run);
@@ -1452,7 +1664,9 @@ describe('castle gate', () => {
    * Verifies that no wall piece or low barrier at floor level stands across the opening
    */
   it('keeps the opening clear of floor-level walls and barriers', () => {
-    const onSouthLine = (item: KitItem) => Math.abs(item.z - EDGE_LINE.s) < 0.3 && horizontalSide(sideOfRotation(item.rotY) ?? 'w');
+    // Anything across the south strip, from the outer wall back to the rooms' inset line.
+    const onSouthLine = (item: KitItem) =>
+      item.z > BOUNDS.z1 - 1 && item.z < OUTER.z1 + TOL && horizontalSide(sideOfRotation(item.rotY) ?? 'w');
     const walls = TALL.filter((t) => t.name.startsWith('wall') && t.item.y < TOL && onSouthLine(t.item)).map((t) => t.item);
     const barriers = LOW.filter(([n, b]) => n === 'barrier' && onSouthLine(b)).map(([, b]) => b);
     expect(walls.filter((w) => overlapsOpening(spanX(w))).map((w) => `wall (${w.x}, ${w.z})`)).toEqual([]);
@@ -1465,17 +1679,19 @@ describe('castle gate', () => {
   it.each([
     ['west', GATE_LO],
     ['east', GATE_HI],
-  ])('puts a %s jamb GATE_JAMB wide on the edge wall line', (_side, x) => {
-    const at = (item: KitItem) => Math.abs(item.x - x) < TOL && Math.abs(item.z - EDGE_LINE.s) < TOL;
+  ])('puts a %s jamb GATE_JAMB wide, PERIMETER_T deep, on the outer wall line', (_side, x) => {
+    const at = (item: KitItem) => Math.abs(item.x - x) < TOL && Math.abs(item.z - DEEP_Z) < TOL;
     // A 1.5 m pillar: its x and z scales times 1.5 are its width and depth.
     const jambs = TALL.filter(
       (t) =>
         t.name === 'pillar' &&
         at(t.item) &&
         Math.abs(t.item.scale![0] * 1.5 - GATE_JAMB) < TOL &&
-        Math.abs(t.item.scale![2] * 1.5 - GATE_JAMB) < TOL,
+        Math.abs(t.item.scale![2] * 1.5 - DEEP_T) < TOL,
     );
     expect(jambs).toHaveLength(1);
+    // Deeper than the wall inwards only: the outer face stays on the map edge.
+    expect(jambs[0].item.z + (jambs[0].item.scale![2] * 1.5) / 2).toBeCloseTo(OUTER.z1, 9);
     expect(jambs[0].item.y).toBe(0);
     expect(LOW.some(([n, c]) => n === 'column' && at(c))).toBe(true);
   });
@@ -1489,7 +1705,7 @@ describe('castle gate', () => {
     const { item } = found[0];
     expect(item.y).toBeCloseTo(GATE_H, 9);
     expect(item.x).toBeCloseTo(GATE_MID, 9);
-    expect(item.z).toBeCloseTo(EDGE_LINE.s, 9);
+    expect(item.z).toBeCloseTo(PERIMETER_LINE.s, 9);
     expect(sideOfRotation(item.rotY)).toBe('s');
     // It reaches from jamb to jamb, over the whole opening.
     const [lo, hi] = spanX(item);
@@ -1499,7 +1715,8 @@ describe('castle gate', () => {
     expect(hi).toBeGreaterThanOrEqual(GATE.hi);
     // A wall is 4 pack units high, drawn at KIT_SCALE: the lintel's top meets the walls' top.
     expect(GATE_H + 4 * item.scale![1]).toBeCloseTo(4 * KIT_SCALE, 9);
-    expect(item.scale![2]).toBe(WALL_T);
+    expect(item.scale![2]).toBeCloseTo(LINTEL_T, 9);
+    expect(item.scale![2]).toBeLessThan(DEEP_T);
     expect(GATE_H).toBeGreaterThan(0);
     expect(GATE_H).toBeLessThan(4 * KIT_SCALE);
   });
@@ -1513,7 +1730,9 @@ describe('castle gate', () => {
     for (const t of torches) {
       // Rotation 0 turns the decorated face towards +z: out of the castle, to the forest.
       expect(Math.cos(t.rotY)).toBeCloseTo(1, 9);
-      expect(t.z).toBeCloseTo(EDGE_LINE.s + WALL_T / 2, 9);
+      // On the outer face of the outer wall, which is the map edge itself.
+      expect(t.z).toBeCloseTo(PERIMETER_LINE.s + PERIMETER_T / 2, 9);
+      expect(t.z).toBeCloseTo(OUTER.z1, 9);
       expect(t.y).toBeGreaterThan(0);
       expect(t.y).toBeLessThan(4 * KIT_SCALE);
     }
@@ -1598,6 +1817,57 @@ describe('sharedSides', () => {
     const sliver = makeRoom('c', 4, 3.6, 4, 4); // edges overlap 0.4 m only
     expect(sharedSides(a, [a, corner]).size).toBe(0);
     expect(sharedSides(a, [a, sliver]).size).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------- perimeter sides
+
+describe('perimeterSides', () => {
+  /**
+   * Verifies that no room door opens in an outer wall: door pillars stand on the inset line, which suits inner walls only
+   */
+  it('puts no room door on a map-edge side', () => {
+    for (const r of ROOMS.filter((x) => !x.insideOf)) {
+      expect(perimeterSides(r).has(r.door.side), r.id).toBe(false);
+    }
+  });
+
+  /**
+   * Verifies that the sides lying on the BOUNDS lines are reported for sample rooms
+   */
+  it.each([
+    ['observatoire', ['n', 'w']],
+    ['taverne', ['e', 'n', 's']],
+    ['atelier', ['n']],
+    ['autel', []],
+    ['garde', ['s', 'w']],
+    ['heraut', ['s']],
+    ['concierge', ['s']],
+  ] as [RoomId, Side[]][])('%s lies on the map edge on sides %j', (id, sides) => {
+    expect([...perimeterSides(room(id))].sort()).toEqual([...sides].sort());
+  });
+
+  /**
+   * Verifies that perimeterSides agrees with the BOUNDS edges for every walled room
+   */
+  it.each(WALLED_CASES)('%s matches its edges on BOUNDS', (_id, r) => {
+    expect([...perimeterSides(r)].sort()).toEqual([...onMapEdge(r)].sort());
+  });
+
+  /**
+   * Verifies that a room covering the whole map has all four sides on the perimeter
+   */
+  it('reports all four sides for a room covering BOUNDS', () => {
+    const r = makeRoom('all', (BOUNDS.x0 + BOUNDS.x1) / 2, (BOUNDS.z0 + BOUNDS.z1) / 2, BOUNDS.x1 - BOUNDS.x0, BOUNDS.z1 - BOUNDS.z0);
+    expect([...perimeterSides(r)].sort()).toEqual(['e', 'n', 's', 'w']);
+  });
+
+  /**
+   * Verifies that a room set back 0.3 m from the edge is not on the perimeter
+   */
+  it('reports nothing for a room just short of the map edge', () => {
+    const r = makeRoom('near', BOUNDS.x0 + 2.3, BOUNDS.z0 + 2.3, 4, 4);
+    expect(perimeterSides(r).size).toBe(0);
   });
 });
 

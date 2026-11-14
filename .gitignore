@@ -3,3 +3,6 @@ dist/
 .env.local
 *.log
 assets-src/
+
+# Captures Playwright locales (peuvent montrer des noms de sessions)
+.playwright-mcp/

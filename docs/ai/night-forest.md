@@ -19,9 +19,24 @@ description: Use when changing the night environment around the castle — fores
 - Trees: `scatterTrees()` returns `{ near, far }` from two jittered seeded grids: near
   detailed ring inside `NEAR_LIMIT` 26 m, far simplified trees out to `FAR_LIMIT` 150 m.
   `treeAllowed` excludes `CLEARING` 3.5 m from `OUTER`, `MOAT_CLEARANCE` and
-  `PATH_CLEARANCE`. Kinds: `pine`, `round`.
-- Trees are procedural low-poly (cones / icosahedra merged with vertex colours), instanced
-  in `TreeInstances`: one draw call per kind × detail level. They are NOT KayKit.
+  `PATH_CLEARANCE`. Kinds: `pine`, `round`. `Tree.variant` (0–1) picks the near model;
+  `Tree.shade` applies to far trees only.
+- Near ring = KayKit Forest Nature Pack 1.0 (free tier, CC0), manifest pack `forest`: 16
+  models, all `_Color1`, one shared pack material `forest` with `forest_texture.png`
+  (tested). `forest.ts` lists `PINE_MODELS` (Tree_4_A twice, Tree_4_B), `LEAFY_MODELS`
+  (Tree_1/2/3 A/B with repeats, two bare trees), `BUSH_MODELS` (4), `ROCK_MODELS` (2);
+  `nearModel(tree)` chooses by kind and `variant`; trees are scaled by
+  `KAYKIT_TREE_SCALE` 0.8. `scatterUndergrowth()` puts bushes and a few rocks in the near
+  ring with the same `treeAllowed` exclusions.
+- `NearForest` renders through `<KitInstances pack="forest">` with its own night-shaded
+  `MeshLambertMaterial` reusing the pack texture (colour 0.6), copied from
+  `FOREST_MATERIAL_SOURCE`; the kit's shared material is never modified. One instanced set
+  per model AND per quadrant around the castle, so frustum culling drops the sides out of
+  view. `shadow={false}`, `receiveShadow={false}`. Wrapped in `ForestBoundary` (error
+  boundary, `null` fallback) + `Suspense`: a failed forest load only removes the near trees
+  and undergrowth.
+- Far ring = `FarTrees`: procedural low-poly cones / icosahedra merged with vertex colours,
+  one instanced mesh per kind (KayKit there would cost about 5× the triangles).
 - Horizon: a tileable pine silhouette painted on a canvas (no image file) on an inner
   cylinder r=280.
 - Night look, castle untouched: `nightify(material)` patches `onBeforeCompile` after
@@ -36,9 +51,14 @@ description: Use when changing the night environment around the castle — fores
 - `packages/web/src/scene/forest.ts` — pure, no three.js: `GROUND_Y`, `WATER_Y`,
   `NIGHT_SKY`, `Rect`, `MOAT`, `BRIDGE`, `distanceToRect`, `PATH_HALF_WIDTH`, `pathPoints`,
   `distanceToPath`, `Tree`, `TreeKind`, the clearance / limit constants, `treeAllowed`,
-  `scatterTrees`.
+  `scatterTrees`, the KayKit model lists, `FOREST_MATERIAL_SOURCE`, `KAYKIT_TREE_SCALE`,
+  `nearModel`, `Undergrowth`, `scatterUndergrowth`.
 - `packages/web/src/scene/Forest.tsx` — `Forest` plus module-private `inject`, `nightify`,
-  shared materials `MAT`, `useGeometry`, `TreeInstances`, `Ground`, `Moat`, `Path`, `Horizon`.
+  shared materials `MAT`, `useGeometry`, `FarTrees`, `quadrant`, `ForestBoundary`,
+  `NearForest`, `Ground`, `Moat`, `Drawbridge`, `Path`, `Horizon`.
+- `packages/web/src/scene/KitInstances.tsx` — optional `material` (override) and
+  `receiveShadow` props, used by `NearForest`.
+- `packages/web/src/scene/kit-manifest.json` (`forest` pack), `packages/web/public/kaykit/forest/`.
 - `packages/web/src/scene/Office.tsx` — mounts `<Forest />`, background colour, pan clamp.
 - `packages/web/test/forest.test.ts`.
 
@@ -48,14 +68,15 @@ description: Use when changing the night environment around the castle — fores
 - Any new scenery material goes in `MAT` (module-level, shared) and through `nightify`, with
   `toneMapped = false`. Build geometries with `useGeometry` so they are freed on unmount.
 - `inject` warns in dev when a shader chunk is missing: check it after a three.js upgrade.
-- Switching trees to KayKit (open item below): add a `forest` pack to `kit-manifest.json`,
-  run the import (`docs/ai/dungeon-scene.md`), and replace the `TreeInstances` geometry with
-  `<KitInstances>`.
+- New forest model: add it to the `forest` pack in `kit-manifest.json` (source files
+  unzipped by the user in `assets-src/forest/`) and run `npm run kaykit:import`
+  (`docs/ai/dungeon-scene.md`); keep `_Color1` variants so the single-material assumption
+  holds. Near-ring scenery reuses `NearForest`'s material and per-quadrant placement;
+  never pass the kit's shared material to `nightify`.
 - Preview: `docs/ai/dungeon-scene.md` (Usage).
 
 ## Notes
-- Open item: the user chose the KayKit Forest Nature Pack (CC0, free tier, gltf) for trees,
-  but it was not available in `assets-src/`, so procedural trees stand in.
+- Never use `Tree_4_C` (about 10.8 m tall): the user rejected it as towering over the forest.
 - Accepted limits (review suggestions not done): far trees are not culled (one bounding
   sphere per instanced set); low camera angles may let near trees hide part of the castle;
   a faint bluish band below the horizon silhouette (partial fade) was kept.

@@ -1,28 +1,42 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { OUTER } from '../src/scene/dungeon.ts';
 import {
   BRIDGE,
+  BUSH_MODELS,
   CLEARING,
   FAR_LIMIT,
+  FOREST_MATERIAL_SOURCE,
   GROUND_Y,
+  KAYKIT_TREE_SCALE,
+  LEAFY_MODELS,
   MOAT,
   MOAT_CLEARANCE,
   NEAR_LIMIT,
   NIGHT_SKY,
   PATH_CLEARANCE,
   PATH_HALF_WIDTH,
+  PINE_MODELS,
+  ROCK_MODELS,
   WATER_Y,
   distanceToPath,
   distanceToRect,
+  nearModel,
   pathPoints,
   scatterTrees,
+  scatterUndergrowth,
   treeAllowed,
   type Rect,
   type Tree,
+  type TreeKind,
+  type Undergrowth,
 } from '../src/scene/forest.ts';
 import { GATE, type Point } from '../src/scene/layout.ts';
 
-// forest.ts is pure geometry: Forest.tsx (three.js) is not imported here.
+// forest.ts is pure geometry: Forest.tsx (three.js) and kit.ts (drei, import.meta.env) are
+// not imported here. The manifest is read as plain JSON, like dungeon.test.ts does.
 
 const TOL = 1e-6;
 
@@ -30,6 +44,34 @@ const TOL = 1e-6;
 const PATH = pathPoints();
 const TREES = scatterTrees();
 const ALL_TREES: Tree[] = [...TREES.near, ...TREES.far];
+const UNDERGROWTH: Undergrowth[] = scatterUndergrowth();
+
+interface PackSpec {
+  source: string;
+  license: string | null;
+  format?: string;
+  textures: string[];
+  models: string[];
+}
+
+const MANIFEST: Record<string, PackSpec> = JSON.parse(
+  fs.readFileSync(fileURLToPath(new URL('../src/scene/kit-manifest.json', import.meta.url)), 'utf8'),
+);
+const FOREST_DIR = fileURLToPath(new URL('../public/kaykit/forest/', import.meta.url));
+const FOREST_TEXTURE = 'forest_texture.png';
+
+const TREE_MODELS: readonly string[] = [...PINE_MODELS, ...LEAFY_MODELS];
+const ALL_FOREST_MODELS: readonly string[] = [...TREE_MODELS, ...BUSH_MODELS, ...ROCK_MODELS];
+const BUSHES = new Set<string>(BUSH_MODELS);
+const ROCKS = new Set<string>(ROCK_MODELS);
+
+/** A near tree with the given kind and variant, other fields fixed. */
+function tree(kind: TreeKind, variant: number): Tree {
+  return { x: 0, z: 0, rotY: 0, scale: 1, kind, shade: 1, variant };
+}
+
+/** Variants spread evenly over [0, 1), dense enough to hit every slot of every list. */
+const VARIANTS = Array.from({ length: 1000 }, (_, i) => i / 1000);
 
 /** Number of bends of the path minus one, derived from the coarsest sampling (one point per bend). */
 const KNOTS = pathPoints(1);
@@ -418,5 +460,300 @@ describe('scatterTrees', () => {
   it('mixes pines and round trees', () => {
     const kinds = new Set(ALL_TREES.map((t) => t.kind));
     expect([...kinds].sort()).toEqual(['pine', 'round']);
+  });
+
+  /**
+   * Verifies that every tree gets a model variant in [0, 1)
+   */
+  it('gives every tree a variant in [0, 1)', () => {
+    const bad = ALL_TREES.filter((t) => !(t.variant >= 0 && t.variant < 1));
+    expect(bad).toEqual([]);
+  });
+
+  /**
+   * Verifies that variants actually vary, so the near ring mixes several models
+   */
+  it('spreads the variants and uses several near models', () => {
+    expect(new Set(TREES.near.map((t) => t.variant)).size).toBeGreaterThan(TREES.near.length / 2);
+    const models = new Set(TREES.near.map(nearModel));
+    expect(models.size).toBeGreaterThan(3);
+    expect([...models].some((m) => (PINE_MODELS as readonly string[]).includes(m))).toBe(true);
+    expect([...models].some((m) => (LEAFY_MODELS as readonly string[]).includes(m))).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------- KayKit forest pack
+
+describe('KayKit forest pack', () => {
+  const spec = MANIFEST.forest;
+
+  /**
+   * Verifies that the manifest declares the forest pack as gltf with its texture and license
+   */
+  it('declares a gltf forest pack with forest_texture.png and a license', () => {
+    expect(spec).toBeDefined();
+    expect(spec.format ?? 'gltf').toBe('gltf');
+    expect(spec.textures).toEqual([FOREST_TEXTURE]);
+    expect(spec.license).toBeTruthy();
+  });
+
+  /**
+   * Verifies that every model the forest code draws is in the manifest forest pack
+   */
+  it('contains every pine, leafy, bush and rock model', () => {
+    const models = new Set(spec.models);
+    expect(ALL_FOREST_MODELS.filter((m) => !models.has(m))).toEqual([]);
+  });
+
+  /**
+   * Verifies that every forest model uses one same material, the one the near forest copies from FOREST_MATERIAL_SOURCE
+   */
+  it('shares one material across every model, taken from a manifest model', () => {
+    expect(spec.models).toContain(FOREST_MATERIAL_SOURCE);
+    const names = spec.models.map((m) => {
+      const gltf = JSON.parse(fs.readFileSync(path.join(FOREST_DIR, `${m}.gltf`), 'utf8')) as { materials?: { name?: string }[] };
+      expect(gltf.materials ?? [], m).toHaveLength(1);
+      return gltf.materials![0].name;
+    });
+    expect(new Set(names).size).toBe(1);
+  });
+
+  /**
+   * Verifies that the forest pack ships no model that none of the lists uses
+   */
+  it('ships only models used by one of the lists', () => {
+    const used = new Set(ALL_FOREST_MODELS);
+    expect(spec.models.filter((m) => !used.has(m))).toEqual([]);
+  });
+
+  /**
+   * Verifies that each forest model has its .gltf and .bin in public/kaykit/forest
+   */
+  it('has a .gltf and a .bin per model, the texture and License.txt in public', () => {
+    const expected = [...spec.models.flatMap((m) => [`${m}.gltf`, `${m}.bin`]), FOREST_TEXTURE, 'License.txt'];
+    expect(expected.filter((f) => !fs.existsSync(path.join(FOREST_DIR, f)))).toEqual([]);
+  });
+
+  /**
+   * Verifies that public/kaykit/forest holds no stray file besides the expected ones
+   */
+  it('holds no stray file in public/kaykit/forest', () => {
+    const expected = new Set([...spec.models.flatMap((m) => [`${m}.gltf`, `${m}.bin`]), FOREST_TEXTURE, 'License.txt']);
+    expect(fs.readdirSync(FOREST_DIR).filter((f) => !expected.has(f))).toEqual([]);
+  });
+
+  /**
+   * Verifies that each forest .gltf references only its own .bin and the forest texture
+   */
+  it.each((spec?.models ?? []).map((m) => [m]))('%s.gltf references only its own .bin and the texture, no extension', (name) => {
+    const file = path.join(FOREST_DIR, `${name}.gltf`);
+    const gltf = JSON.parse(fs.readFileSync(file, 'utf8')) as {
+      extensionsUsed?: string[];
+      extensionsRequired?: string[];
+      buffers?: { uri?: string }[];
+      images?: { uri?: string }[];
+    };
+    expect(gltf.extensionsUsed ?? []).toEqual([]);
+    expect(gltf.extensionsRequired ?? []).toEqual([]);
+    expect((gltf.buffers ?? []).length).toBeGreaterThan(0);
+    for (const b of gltf.buffers ?? []) expect(b.uri).toBe(`${name}.bin`);
+    for (const i of gltf.images ?? []) expect(i.uri).toBe(FOREST_TEXTURE);
+  });
+});
+
+// ---------------------------------------------------------------- model lists
+
+describe('forest model lists', () => {
+  /**
+   * Verifies that each model list is non-empty and every name has the _Color1 suffix
+   */
+  it.each([
+    ['PINE_MODELS', PINE_MODELS],
+    ['LEAFY_MODELS', LEAFY_MODELS],
+    ['BUSH_MODELS', BUSH_MODELS],
+    ['ROCK_MODELS', ROCK_MODELS],
+  ] as const)('%s is non-empty with _Color1 names', (_label, list) => {
+    expect(list.length).toBeGreaterThan(0);
+    for (const m of list) expect(m).toMatch(/^[A-Za-z0-9_]+_Color1$/);
+  });
+
+  /**
+   * Verifies that trees, bushes and rocks use disjoint model sets
+   */
+  it('keeps trees, bushes and rocks apart', () => {
+    const trees = new Set(TREE_MODELS);
+    expect([...BUSHES].filter((m) => trees.has(m) || ROCKS.has(m))).toEqual([]);
+    expect([...ROCKS].filter((m) => trees.has(m))).toEqual([]);
+    expect((PINE_MODELS as readonly string[]).filter((m) => (LEAFY_MODELS as readonly string[]).includes(m))).toEqual([]);
+  });
+
+  /**
+   * Verifies that the KayKit tree scale factor shrinks the models a little, never flips them
+   */
+  it('scales KayKit trees by a positive factor no larger than 1', () => {
+    expect(KAYKIT_TREE_SCALE).toBeGreaterThan(0);
+    expect(KAYKIT_TREE_SCALE).toBeLessThanOrEqual(1);
+  });
+});
+
+// ---------------------------------------------------------------- nearModel
+
+describe('nearModel', () => {
+  /**
+   * Verifies that a pine always gets a pine model, whatever its variant
+   */
+  it('returns a pine model for a pine', () => {
+    for (const v of VARIANTS) expect(PINE_MODELS).toContain(nearModel(tree('pine', v)));
+  });
+
+  /**
+   * Verifies that a round tree always gets a leafy model, whatever its variant
+   */
+  it('returns a leafy model for a round tree', () => {
+    for (const v of VARIANTS) expect(LEAFY_MODELS).toContain(nearModel(tree('round', v)));
+  });
+
+  /**
+   * Verifies that variants from 0 to 1 reach every entry of each list
+   */
+  it.each([
+    ['pine', PINE_MODELS],
+    ['round', LEAFY_MODELS],
+  ] as const)('covers every model of the %s list across variants', (kind, list) => {
+    const seen = new Set(VARIANTS.map((v) => nearModel(tree(kind, v))));
+    expect([...seen].sort()).toEqual([...new Set<string>(list)].sort());
+  });
+
+  /**
+   * Verifies that slot i of the list is picked for a variant in [i/n, (i+1)/n)
+   */
+  it.each([
+    ['pine', PINE_MODELS],
+    ['round', LEAFY_MODELS],
+  ] as const)('maps each equal slice of [0, 1) to its list entry for %s', (kind, list) => {
+    const n = list.length;
+    list.forEach((model, i) => {
+      expect(nearModel(tree(kind, (i + 0.5) / n)), `slot ${i}`).toBe(model);
+    });
+  });
+
+  /**
+   * Verifies that variant 0 picks the first entry of the list
+   */
+  it('picks the first model for variant 0', () => {
+    expect(nearModel(tree('pine', 0))).toBe(PINE_MODELS[0]);
+    expect(nearModel(tree('round', 0))).toBe(LEAFY_MODELS[0]);
+  });
+
+  /**
+   * Verifies that a variant just below 1 picks the last entry, never past the end
+   */
+  it.each([0.999, 1 - 1e-12, 1 - Number.EPSILON / 2])('picks the last model for variant %s', (v) => {
+    expect(nearModel(tree('pine', v))).toBe(PINE_MODELS[PINE_MODELS.length - 1]);
+    expect(nearModel(tree('round', v))).toBe(LEAFY_MODELS[LEAFY_MODELS.length - 1]);
+  });
+
+  /**
+   * Verifies that a variant of exactly 1 is clamped to the last entry
+   */
+  it('clamps variant 1 to the last model', () => {
+    expect(nearModel(tree('pine', 1))).toBe(PINE_MODELS[PINE_MODELS.length - 1]);
+    expect(nearModel(tree('round', 1))).toBe(LEAFY_MODELS[LEAFY_MODELS.length - 1]);
+  });
+
+  /**
+   * Verifies that every near tree of the real scatter gets a model from the manifest pack
+   */
+  it('gives every scattered near tree a model of the forest pack', () => {
+    const models = new Set(MANIFEST.forest.models);
+    const bad = TREES.near.map(nearModel).filter((m) => !models.has(m));
+    expect(bad).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------- scatterUndergrowth
+
+describe('scatterUndergrowth', () => {
+  /**
+   * Verifies that two calls give exactly the same bushes and rocks
+   */
+  it('is deterministic', () => {
+    expect(scatterUndergrowth()).toEqual(UNDERGROWTH);
+  });
+
+  /**
+   * Verifies that the forest floor gets some undergrowth
+   */
+  it('is not empty', () => {
+    expect(UNDERGROWTH.length).toBeGreaterThan(10);
+  });
+
+  /**
+   * Verifies that all undergrowth stays within NEAR_LIMIT of the castle
+   */
+  it('stays within NEAR_LIMIT of the castle', () => {
+    const bad = UNDERGROWTH.filter((u) => distanceToRect(u.x, u.z, OUTER) >= NEAR_LIMIT);
+    expect(bad).toEqual([]);
+  });
+
+  /**
+   * Verifies that no bush or rock lies in the clearing, the moat, its banks or on the path
+   */
+  it('only places undergrowth where treeAllowed accepts it', () => {
+    expect(UNDERGROWTH.filter((u) => !treeAllowed(u.x, u.z, PATH))).toEqual([]);
+  });
+
+  /**
+   * Verifies that no bush or rock lies on the drawbridge
+   */
+  it('keeps the drawbridge free', () => {
+    expect(UNDERGROWTH.filter((u) => distanceToRect(u.x, u.z, BRIDGE) === 0)).toEqual([]);
+  });
+
+  /**
+   * Verifies that every item has a positive scale and a rotation in [0, 2π)
+   */
+  it('gives every item a positive scale and a rotation in range', () => {
+    for (const u of UNDERGROWTH) {
+      expect(u.scale).toBeGreaterThan(0);
+      expect(u.rotY).toBeGreaterThanOrEqual(0);
+      expect(u.rotY).toBeLessThan(Math.PI * 2);
+    }
+  });
+
+  /**
+   * Verifies that every model comes from the bush or rock lists
+   */
+  it('uses only bush and rock models', () => {
+    expect(UNDERGROWTH.filter((u) => !BUSHES.has(u.model) && !ROCKS.has(u.model))).toEqual([]);
+  });
+
+  /**
+   * Verifies that both bushes and rocks appear on the forest floor
+   */
+  it('mixes bushes and rocks, bushes being the majority', () => {
+    const bushes = UNDERGROWTH.filter((u) => BUSHES.has(u.model)).length;
+    const rocks = UNDERGROWTH.filter((u) => ROCKS.has(u.model)).length;
+    expect(bushes).toBeGreaterThan(0);
+    expect(rocks).toBeGreaterThan(0);
+    expect(bushes).toBeGreaterThan(rocks);
+  });
+
+  /**
+   * Verifies that every undergrowth model is in the manifest forest pack
+   */
+  it('uses only models of the forest pack', () => {
+    const models = new Set(MANIFEST.forest.models);
+    expect(UNDERGROWTH.filter((u) => !models.has(u.model))).toEqual([]);
+  });
+
+  /**
+   * Verifies that undergrowth surrounds the castle on every side
+   */
+  it('surrounds the castle on every side', () => {
+    expect(UNDERGROWTH.some((u) => u.z < OUTER.z0)).toBe(true);
+    expect(UNDERGROWTH.some((u) => u.z > MOAT.z1)).toBe(true);
+    expect(UNDERGROWTH.some((u) => u.x < OUTER.x0)).toBe(true);
+    expect(UNDERGROWTH.some((u) => u.x > OUTER.x1)).toBe(true);
   });
 });

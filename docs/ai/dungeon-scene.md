@@ -9,21 +9,35 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cast
   Weapons Bits 1.0, free tiers), grouped in three packs: `dungeon`, `tools`, `weapons`.
   Agents use KayKit Adventurers 2.0 (CC0): packs `adventurers` (character bodies),
   `adventurers_anim` (shared `Rig_Medium_General`, `Rig_Medium_MovementBasic` clips) and
-  `adventurers_props` (8 held props, gltf + 4 textures).
+  `adventurers_props` (8 held props, gltf + 4 textures). Pack `forest` (trees around the
+  castle): `docs/ai/night-forest.md`.
 - KayKit is about 1.33x our scene: every model is scaled by `KIT_SCALE = 0.75`. After
   scaling: small floor tile 1.5 m, wall 3 m high per 3 m chunk, table 0.75 m.
 - Rooms (`RoomDef` in `layout.ts`) carry `floorKind` (`stone`, `stoneFancy`, `grate`, `wood`,
   `woodDark`, `dirt`) and `accent` (one of 6 KayKit banner colours). Decor `PropKind`s
   `crates`, `barrels`, `chest`, `coins`, `candle` have footprints.
-- Walls: wall line `WALL_INSET` (0.15 m) inside the room edge, thickness `WALL_T` (0.25 m).
-  Back-to-back rooms (garde / epreuves / heraut) share ONE wall on the common edge, drawn
-  by the west/north room; wide pillars bridge corners. `edgeRuns` closes corridor ends at
-  the map edge in line with room walls, never doubling a room wall.
+- Inner walls: wall line `WALL_INSET` (0.15 m) inside the room edge, thickness `WALL_T`
+  (0.25 m). Back-to-back rooms (garde / epreuves / heraut) share ONE wall on the common
+  edge, drawn by the west/north room; wide pillars bridge corners.
+- Outer walls (user request): thickness `PERIMETER_T` 0.6, outer face flush with the map
+  edge (`OUTER`), centre on `PERIMETER_LINE` (OUTER ± T/2), inner face `PERIMETER_INNER`
+  (OUTER ± T), about 0.1 m inside the room edge. `BOUND_LINE` is the `BOUNDS` line per side;
+  `perimeterSides(room)` gives a room's sides on it. Those room sides and `edgeRuns` (corridor
+  ends) lie on `PERIMETER_LINE` with `WallRun.thick = PERIMETER_T`; `edgeRuns` skips rooms'
+  stretches with the same `perimeterSides` predicate, so nothing is doubled. Any run meeting
+  an outer wall stops at its inner face. `placeRun` uses `run.thick` for wall, barrier and
+  decor depth; `wallIsFree` measures `FREE_AHEAD` from the inner face.
+- Perimeter pillars: map corners always get a T×T pillar; room corners on two outer sides are
+  skipped; a slot pillar between two edge rooms goes through the wall; other edge corners
+  stand against the inner face. Pillars as deep as the wall (gate jambs, slots) are
+  T + `PERIMETER_PILLAR_EXTRA` (0.06) deep, extending inward only, and the gate lintel is
+  T − 0.04 deep, to avoid coplanar z-fighting.
+- No room door may sit on a map-edge side (tested): door pillars assume the inset wall line.
 - Castle gate: `GATE` in `layout.ts` (south side only, x 4→7, end of the x=5 corridor).
   `edgeRuns` leaves it open; `gate()` in `dungeon.ts` adds two `GATE_JAMB` (0.6 m) jambs, a
-  lintel at `GATE_H` 2.2 (squashed wall model) and two outward torches. Every gate piece
-  shares the gate-middle anchor so the gate sinks as one piece with the cutaway; room
-  corner pillars on a jamb spot are skipped (`isGateJamb`). The Concierge (cx 10.5, w 7)
+  lintel at `GATE_H` 2.2 (squashed wall model) and two outward torches, all on
+  `PERIMETER_LINE.s`. Every gate piece shares the gate-middle anchor so the gate sinks as
+  one piece with the cutaway. The Concierge (cx 10.5, w 7)
   has its door on the north (z=5.5 corridor). Not verified: gate jambs vs the nearby
   Concierge wall seat / Héraut chest overlap.
 - Outside the castle (forest, moat, drawbridge, night shading, pan clamp):
@@ -141,11 +155,14 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cast
 ## Relevant Files
 - `packages/web/src/scene/dungeon.ts` — pure geometry, no three scene: `KIT_SCALE`,
   `KitItem`, `Placement` (`Map<model, KitItem[]>`), `roomFloor`, `corridorFloor`,
-  `foundation`, `OUTER`, `wallRuns`, `edgeRuns`, `wallLayout`, `GATE_JAMB`, `GATE_H`,
-  `WALL_T`, `WALL_INSET`, `CUT_CURVE`, `inForeground`.
+  `foundation`, `OUTER`, `PERIMETER_T`, `BOUND_LINE`, `PERIMETER_LINE`, `PERIMETER_INNER`,
+  `PERIMETER_PILLAR_EXTRA`, `perimeterSides`, `WallRun`, `wallRuns`, `edgeRuns`,
+  `sharedSides`, `wallLayout`, `GATE_JAMB`, `GATE_H`, `WALL_T`, `WALL_INSET`, `CUT_CURVE`,
+  `inForeground`.
 - `packages/web/src/scene/Structure.tsx` — `Floors` (instanced) and `Walls`.
 - `packages/web/src/scene/KitInstances.tsx` — `<KitInstances>` (one InstancedMesh per model
-  part, for repeated pieces) and `<Kit>` (single model, for furniture).
+  part, for repeated pieces; optional `material` override and `receiveShadow`) and `<Kit>`
+  (single model, for furniture).
 - `packages/web/src/scene/props.tsx` — `PROPS` renderer per `PropKind` (KayKit models plus
   simple shapes in a KayKit-matched palette).
 - `packages/web/src/scene/kit.ts` — `useKitGLTF` (drei `useGLTF(url, false)`: Draco off, so
@@ -199,6 +216,8 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cast
 - Agent motion logic goes in `walk.ts`, clip choice in `clipFor` (both tested), never
   inline in `AgentFigure`'s `useFrame`, which only calls them.
 - New decor must not cover seats or a door entry (tested in `dungeon.test.ts`).
+- Anything placed against or through the outer wall uses `perimeterSides` and the
+  `PERIMETER_*` constants (never `WALL_INSET` there); new runs carry `thick`.
 - New `RoomId` or new seat post (`StationId`, not the clickable `PostId`): add an `ICONS` entry (the `Record` type fails
   typecheck otherwise) and keep its name distinct from every room id (tested). Reuse
   `DestinationIcon` for any other place icon; never add a translated label for it.
@@ -234,6 +253,7 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cast
   verification. Headless Playwright renders about 1–2 fps (software GL): wait about 2 s
   before checking rAF-driven effects (focus return, highlight screenshots). Give Playwright
   file outputs absolute paths inside the worktree; relative paths resolve elsewhere.
+  `.playwright-mcp/` is gitignored because captures may show real session names; keep it so.
 - Where figures rest, wait, appear and leave (tavern, altar, roster):
   `docs/ai/agent-lifecycle.md`.
 
@@ -249,7 +269,11 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cast
   folders.
 - Some manifest models are unused on purpose, kept for upcoming 3D work (user decision).
   Do not prune them as dead code.
-- Wall footprint matches the pre-KayKit one, so seat positions are unaffected.
+- Inner wall footprint matches the pre-KayKit one, so seat positions are unaffected.
+- Accepted limits of the thick outer walls: wall variants with relief (`wall_shelves`,
+  `wall_arched`) are stretched by the 0.6 depth scale (not yet checked visually); props near
+  outer walls may stand up to 0.175 m off the inner face, which moved outward from 0.275 m
+  to 0.1 m inside the room edge.
 - Orientation-based cutaway was tried and rejected; keep the cursor parabola.
 - Tests must not import `kit.ts` or any `.tsx` file (drei / `import.meta.env`); test
   `dungeon.ts`, `layout.ts`, `walk.ts`, `characters.ts`, `destinations.ts`, `forest.ts` and
