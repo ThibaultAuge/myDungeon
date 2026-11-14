@@ -81,6 +81,13 @@ export interface SessionView {
   cwd: string;
   /** True while a Claude Code process runs it. */
   live: boolean;
+  /**
+   * True once the session did real work: a work hook (prompt, tool, permission, subagent,
+   * stop), a busy process, or a non-empty transcript on disk when it was found. Never goes
+   * back to false. Desktop sessions are always true. A stopped cli session that never was
+   * active is drawn as a wandering ghost.
+   */
+  everActive: boolean;
   archived: boolean;
   createdAt: number;
   lastActivityAt: number;

@@ -1,5 +1,5 @@
 ---
-description: Use when changing where agents rest or wait (tavern, altar queue), how agent figures appear, leave or return (subagent tavern cycle, main agents walking in from the forest, the skeleton ambush when a session ends, stopped sessions), the agent roster (snapshot.roster, agent definitions, seen types), or when testing the scene with fake hooks.
+description: Use when changing where agents rest or wait (tavern, altar queue), how agent figures appear, leave or return (subagent tavern cycle, main agents walking in from the forest, the skeleton ambush when a session ends, stopped sessions, ghosts of sessions that never worked, everActive), the agent roster (snapshot.roster, agent definitions, seen types), or when testing the scene with fake hooks.
 ---
 
 # Agent life cycle: tavern, altar, forest entry, ambush, roster
@@ -27,7 +27,44 @@ description: Use when changing where agents rest or wait (tavern, altar queue), 
   (`setWaiting` in `reducer.ts`). User decision.
 - Stopped sessions (`live: false`, not archived) keep their main agent visible, resting in
   the tavern in the session colour, but NOT selectable: the side panel lists live sessions
-  only (accessibility decision: no 3D-only clickable target).
+  only (accessibility decision: no 3D-only clickable target). Exception: ghosts below.
+
+### Ghosts: stopped sessions that never worked
+User design: `plans/plan-fantomes-2026-11-15.md` (French).
+- `SessionView.everActive` (shared): desktop sessions start true; a `cli` session becomes
+  true on a work hook (`ACTIVITY_EVENTS` in `reducer.ts` `applyHook`: UserPromptSubmit,
+  PreToolUse, PostToolUse, PostToolUseFailure, PermissionRequest, SubagentStart,
+  SubagentStop, Stop, StopFailure — NOT SessionStart, SessionEnd, Notification), a busy
+  process (`mainFromLiveStatus`), or `LiveProcess.transcript` (`applyInventory`); ORed in
+  `absorb`. Never goes back to false.
+- `hasTranscript(projectsDir, cwd, cliSessionId)` (`inventory.ts`): one `lstat` per live
+  process per tick of `<projects>/<projectDirName(cwd)>/<id>.jsonl`; true only for a
+  non-empty regular file; id must match `/^[\w-]{1,128}$/`; `isInside` checked before the
+  lstat; no link followed.
+- Client rule (`isGhost` in `ghost.ts`): origin `cli` && !live && !archived && !everActive.
+  Ghost mains are excluded from `visibleAgents` in `Office.tsx`, so they get no seat, no
+  `Stage` departure and no ambush.
+- `Ghosts` class (`ghost.ts`, render-time, idempotent, like `Stage.leaving` without the
+  ambush): tracks shown ghosts and evaporating ones; clears and shows nothing while
+  `snapshotReceived` is false. Ghost list memoised on sessions / `snapshotReceived` /
+  `goneCount`; React key `ghost:<sessionId>`. A ghost that comes back to life evaporates
+  (`EVAPORATE_MS` 1500, rise `EVAPORATE_RISE` 1.6, ease-out) and the knight reappears at
+  its spot.
+- Wandering (`GhostFigure.tsx`, state in a ref): starts from the replaced knight's
+  `agentPositions.get(bodyId)` if still mounted that render (best effort), else a random
+  corridor end (`wanderStart`, `seededRandom` = FNV-1a + mulberry32 seeded by session id).
+  Goes straight to the nearest corridor (`nearestOnCorridor`, through walls), then corridor
+  end to corridor end (`nextWander`: a `WANDER_POINTS` end ≥ 4 m away via `corridorPath`,
+  fallback to all) at `GHOST_SPEED` 0.7 m/s with bob and sway. Reduced motion: snaps once
+  to the nearest corridor and stays still; evaporation is instant.
+- Figure: procedural, no KayKit model (`docs/ai/dungeon-scene.md` for models): a
+  `LatheGeometry` dome with wavy hem and two flattened sphere eyes; geometries shared at
+  module scope; a cloned `MeshStandardMaterial` per ghost (transparent, `depthWrite`
+  false, `DoubleSide`, emissive tinted by session colour). Raycast disabled, not
+  selectable, no disc or ring. Tag `agent-tag agent-tag--ghost` (dashed, italic,
+  `styles.css`), `aria-hidden`, hidden while evaporating.
+- Accessibility decision (accepted): ghosts are 3D-only like stopped sessions; motion stops
+  only through the OS `prefers-reduced-motion`.
 
 ### Main agents entering and leaving the castle
 User design: `plans/plan-entree-sortie-session-2026-11-14.md` (French). Only MAIN agents
@@ -120,6 +157,9 @@ do this; subagents keep the tavern cycle above.
   `skeletonSpawns`, `nearestTree`, `victimClip`, `victimSink`, `skeletonClip`,
   `skeletonDepth`, `skeletonScale`, timing constants.
 - `packages/web/src/scene/Ambush.tsx` — skeleton rendering (`SkeletonFigure`).
+- `packages/web/src/scene/ghost.ts` — pure: `isGhost`, `seededRandom`, `WANDER_POINTS`,
+  `nearestOnCorridor`, `wanderStart`, `nextWander`, `Ghosts`, evaporation constants.
+- `packages/web/src/scene/GhostFigure.tsx` — procedural ghost mesh, wandering, tag.
 - `packages/web/src/scene/Office.tsx` — `useStarts`, `arrived` set, memoised resting
   figures, `Stage` / `Ambush` instances, doomed figures in the children array.
 - `packages/web/src/scene/AgentFigure.tsx` — `React.memo`; `onArrive` when a done subagent
@@ -131,12 +171,12 @@ do this; subagents keep the tavern cycle above.
   roster in the snapshot.
 - `packages/server/src/inventory.ts` — `AGENT_NAME`, `AGENT_ID`, `HOOK_AGENT_TYPE`,
   `agentNameFromDefinition`, `listAgentTypes`, `isRemotePath`, `linkedBelow`,
-  `AgentsCache`.
+  `AgentsCache`, `hasTranscript` (uses `paths.ts`: `docs/ai/dialogue.md`).
 - `packages/server/src/reducer.ts` — `hookEventSchema`, `validOrNull`, `findOrCreateSub`,
   `pendingSpawns`, `noteSeenType`, `absorb`, `applyInventory`, `seenTypes`, `rosterView`,
-  `setWaiting`.
+  `setWaiting`, `ACTIVITY_EVENTS`, `mainFromLiveStatus` (`everActive`).
 - `packages/server/src/store.ts`, `packages/server/src/index.ts`.
-- Tests: `packages/web/test/{tavern,layout,stage,outside,ambush}.test.ts`,
+- Tests: `packages/web/test/{tavern,layout,stage,outside,ambush,ghost,ghost-fallback}.test.ts`,
   `packages/server/test/{reducer,inventory}.test.ts`.
 
 ## Usage
@@ -158,7 +198,12 @@ do this; subagents keep the tavern cycle above.
   `/hooks` with header `x-agent-office-token`. Without `AGENT_OFFICE_TOKEN`, the server reads
   the token from `relay.env` (`config.ts`). Fake sessions with no live process are ended by
   the inventory after about 30 s, so screenshot quickly. A hidden Browser pane renders no
-  frames, so figures do not move there: keep it shown.
+  frames, so figures do not move there: keep it shown. Ghosts: a fake session with only
+  `SessionStart` becomes a ghost once the inventory ends it; add `UserPromptSubmit` and it
+  stays a knight. Fake-hook sessions may land in the "hors-environnement" group. A real
+  pre-warmed, idle desktop-launched process with no transcript also shows as a ghost.
+- Ghost logic goes in `ghost.ts` (pure, tested); reuse `isGhost` wherever a stopped main
+  must be told apart, and reuse `corridorPath` for any new corridor wandering.
 
 ## Notes
 - A 3D altar bubble was tried and rejected: the HTML tags and room signs are drawn over the
@@ -169,6 +214,10 @@ do this; subagents keep the tavern cycle above.
   - Hook agent types are validated (`HOOK_AGENT_TYPE`) before reaching `seenTypes`, which is
     broadcast to every client, and before `pendingSpawns`. Hook `agent_id` must keep
     excluding `:` and `#` (`AGENT_ID`) so it cannot impersonate `rest:` or `#main` ids.
+  - `hasTranscript` keeps the id regex, `isInside` before `lstat`, and never follows links.
+    Accepted (informational): intermediate components (`projects/<seg>`) are not
+    junction-checked, same posture as the dialogue route; `~/.claude/projects` is trusted
+    as a same-user location.
   - Agent folder reads skip UNC/device paths (`isRemotePath`; `\\?\C:\` stays local) and,
     for environment folders, refuse `.claude` or `.claude/agents` when either is a
     symlink/junction (`linkedBelow`, lstat only, never resolves the target: a repo link to

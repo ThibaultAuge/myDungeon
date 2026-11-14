@@ -52,8 +52,11 @@ description: Use when changing the agent conversation box (AgentDialog), how tra
   `prependOlder`); tested in `packages/web/test/dialogue.test.ts`.
 - `packages/web/src/store.ts` — `dialogOpen`, `closeDialog`, `select`.
 - `packages/web/src/ui/SessionList.tsx` — row reopen / `aria-pressed`.
-- `packages/server/src/transcript.ts` — `projectDirName`, `isInside`, `findTranscript`,
-  `entriesOfLine`, `readTranscriptPage`, `transcriptEtag`.
+- `packages/server/src/transcript.ts` — `findTranscript`, `entriesOfLine`,
+  `readTranscriptPage`, `transcriptEtag`; re-exports `projectDirName` and `isInside`.
+- `packages/server/src/paths.ts` — leaf module (no imports from `transcript.ts` or
+  `inventory.ts`, which both use it): `projectDirName`, `isInside`. Keep path helpers here
+  to avoid an import cycle.
 - `packages/server/src/app.ts` — global Host/Origin `onRequest` hook, framing headers,
   `/api/transcript`.
 - `packages/server/src/index.ts` — `127.0.0.1` bind, `projectsDir`.

@@ -29,7 +29,8 @@ Un **donjon de fantasy coloré et joyeux**, pas sombre : proportions trapues, co
 - les places par pièce, les postes attitrés, le débordement le long des murs ;
 - la file d'attente à l'autel, réservée aux permissions, questions et erreurs ;
 - le cycle de vie de la taverne : un exemplaire neutre de chaque type au repos, appel, appels simultanés depuis les casiers, retour et disparition, et l'agent principal au repos pendant l'attente d'un prompt ;
-- l'entrée et la sortie du chevalier de l'agent principal : arrivée à pied par le chemin, pont-levis et porte ; chevalier endormi à la taverne pour une session arrêtée ; à la suppression d'une session, embuscade de trois squelettes (pack KayKit Skeletons 1.1, CC0), avec les départs multiples et le retour pendant une mort ;
+- l'entrée et la sortie du chevalier de l'agent principal : arrivée à pied par le chemin, pont-levis et porte ; chevalier endormi à la taverne pour une session arrêtée qui a travaillé ; à la suppression d'une session, embuscade de trois squelettes (pack KayKit Skeletons 1.1, CC0), avec les départs multiples et le retour pendant une mort ;
+- le fantôme d'une session arrêtée sans avoir jamais travaillé : dessiné dans le code, il erre dans les couloirs et s'évapore au départ de la session ;
 - la bulle de requête à l'autel (« … », « ? », « ! ») et le losange ambre de l'attente d'un prompt ;
 - les icônes d'état (marteau, sablier, bulle rouge « … », « Zzz ») dans la liste latérale et la fiche d'agent ;
 - le pictogramme de destination au-dessus d'un agent qui marche ;

@@ -43,6 +43,7 @@ function session(overrides: Partial<SessionView> = {}): SessionView {
     title: 'alpha',
     cwd: CWD,
     live: true,
+    everActive: true,
     archived: false,
     info: {},
     servers: [],

@@ -22,9 +22,9 @@ Les tenues prévues selon le mode de travail ne sont pas encore en place. Elles 
 
 Seul l'agent principal de chaque session entre et sort du château, sous la forme d'un chevalier. Les sous-agents suivent toujours le cycle de la taverne, décrit dans [lieux.md](lieux.md#la-taverne-et-le-cycle-de-vie-dun-agent).
 
-- **Arrivée.** Quand une nouvelle session apparaît, son chevalier arrive à pied par le chemin de la forêt, juste au-delà de la zone visible. Il traverse le pont-levis, passe la porte du château, puis marche jusqu'à son poste. Au chargement de la page, ou quand on change d'environnement, les agents déjà présents restent à leur place.
-- **Session arrêtée.** Une session dont le processus Claude est fermé, mais qui peut encore être reprise, garde son chevalier endormi à la taverne, dans la couleur de la session. Ce chevalier ne se sélectionne pas en 3D : la liste latérale ne montre que les sessions actives.
-- **Départ.** Quand une session disparaît (supprimée, archivée, purgée au bout de 60 minutes une fois terminée, ou repoussée hors de l'historique des 30 dernières sessions), son chevalier quitte le château par la porte et marche jusqu'à un point du chemin, en dehors du donjon.
+- **Arrivée.** Quand une nouvelle session apparaît, son chevalier arrive à pied par le chemin de la forêt, juste au-delà de la zone visible. Il traverse le pont-levis, passe la porte du château, puis marche jusqu'à son poste. Une session qui n'a encore rien fait apparaît en fantôme, et non en chevalier (voir [Le fantôme](#le-fantôme)). Au chargement de la page, ou quand on change d'environnement, les agents déjà présents restent à leur place.
+- **Session arrêtée.** Une session dont le processus Claude est fermé, mais qui peut encore être reprise, garde son chevalier endormi à la taverne, dans la couleur de la session, si elle a déjà fait du travail réel. Une session qui n'en a jamais fait est un fantôme (voir [Le fantôme](#le-fantôme)). Ce chevalier ne se sélectionne pas en 3D : la liste latérale ne montre que les sessions actives.
+- **Départ.** Quand une session disparaît (supprimée, archivée, purgée au bout de 60 minutes une fois terminée, ou repoussée hors de l'historique des 30 dernières sessions), son chevalier quitte le château par la porte et marche jusqu'à un point du chemin, en dehors du donjon. Un fantôme ne sort pas du château : il s'estompe (voir [Le fantôme](#le-fantôme)).
 - **Embuscade.** Trois squelettes au plus sortent du sol autour du chevalier et le frappent. Ce sont des `Skeleton_Minion` nus, armés d'une épée, d'une hache et d'une épée (pack KayKit Skeletons 1.1, voir [modeles-3d.md](modeles-3d.md)). Le chevalier tombe, puis son corps s'enfonce dans le sol. Chaque squelette marche ensuite vers l'arbre le plus proche, s'il est assez près, et s'y fond. Sinon, il retourne sous terre.
 - **Plusieurs départs à la fois.** Les squelettes sont partagés : chaque chevalier en a au moins un. Les autres victimes attendent debout sur le chemin.
 - **Retour pendant une mort.** Si la session revient pendant que son chevalier meurt, la mort se termine d'abord. Un nouveau chevalier arrive ensuite par le chemin.
@@ -65,6 +65,29 @@ stateDiagram-v2
     Disparu --> [*]
 ```
 *Figure : États du chevalier de l'agent principal, de l'entrée à la disparition.*
+
+### Le fantôme
+
+Une session du terminal qui s'arrête sans avoir jamais travaillé n'a pas de chevalier. Elle est représentée par un **fantôme**. C'est le cas d'un processus préparé à l'avance par l'app de bureau, ou du reste d'une session de bureau que tu viens de supprimer. Une session qui a fait du travail réel (prompt, outil, tour de parole) garde son chevalier. Une session de bureau n'est jamais un fantôme.
+
+- **Apparence.** Un drap translucide, teinté de la couleur de la session, avec une étiquette au nom de la session en italique et en tirets. Il est dessiné dans le code, sans modèle 3D.
+- **Déplacement.** Il apparaît à la dernière position connue du chevalier, ou à défaut à un point de couloir. Il erre lentement le long des couloirs, d'un point à l'autre. Pour rejoindre un couloir, il peut traverser un mur.
+- **Pas de clic.** Il ne se sélectionne pas en 3D et n'apparaît pas dans la liste latérale, comme les autres sessions arrêtées.
+- **Départ.** Quand la session disparaît (suppression, archivage, purge au bout de 60 minutes), le fantôme s'estompe en montant, puis disparaît. Il n'y a pas d'embuscade.
+- **Retour.** Si la session redevient active, le fantôme s'évapore et le chevalier reprend sa place habituelle.
+- **Mouvement réduit.** Avec le réglage « réduire les animations » du système, le fantôme reste immobile dans un couloir et disparaît d'un coup.
+
+Le schéma suivant résume les états d'un fantôme.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Fantome : jamais active, arrêtée
+    [*] --> Chevalier : déjà active
+    Fantome --> Chevalier : redevient active
+    Fantome --> Disparu : session disparue
+    Disparu --> [*]
+```
+*Figure : États d'une session sans activité, du fantôme au retour du chevalier ou à la disparition.*
 
 ## Les sous-agents spécialisés
 

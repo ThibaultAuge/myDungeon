@@ -100,6 +100,8 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cast
 - Post texts: `docs/ai/i18n.md`.
 
 ### Agent figures
+- Ghosts (stopped `cli` sessions that never worked) are procedural meshes, not KayKit
+  figures: `docs/ai/agent-lifecycle.md`.
 - Looks (`characters.ts`): a `Look` is a body (`pack`: `'adventurers'` by default, or
   `'skeletons'`) plus optional `right` / `left` held props
   (`PropRef { pack: 'adventurers_props' | 'tools' | 'skeleton_props'; model }`).

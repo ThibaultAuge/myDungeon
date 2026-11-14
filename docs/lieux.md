@@ -110,6 +110,8 @@ La taverne montre l'équipe disponible, même quand rien ne tourne.
 
 **L'agent principal fait exception.** Il représente la session elle-même. Quand elle attend ton prochain prompt, il se repose à la taverne, dans la couleur de sa session, avec un losange ambre au-dessus de son étiquette. Il ne fait la queue à l'autel que pour une permission, une question ou une erreur. Il entre au château et en sort par le pont-levis : voir [personnages.md](personnages.md#entrée-et-sortie-du-chevalier).
 
+Une session arrêtée qui n'a jamais travaillé n'a pas de chevalier à la taverne. Elle est représentée par un fantôme qui erre dans les couloirs : voir [Le fantôme](personnages.md#le-fantôme).
+
 ### Liste des types au repos
 
 Elle regroupe :

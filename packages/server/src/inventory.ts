@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { z } from 'zod';
 import type { SessionInfo } from '@agent-office/shared';
-import type { ClaudePaths } from './paths.ts';
+import { isInside, projectDirName, type ClaudePaths } from './paths.ts';
 
 // The desktop app's files are internal and undocumented: every schema below is lenient,
 // keeps only the fields we use, and a file that does not parse is skipped, never fatal.
@@ -43,6 +43,8 @@ export interface LiveProcess {
   version?: string;
   /** True when `cwd` holds a `.git` file, i.e. a git worktree (terminal sessions only use it). */
   worktree?: boolean;
+  /** True when a non-empty transcript `<projects>/<project dir>/<cliSessionId>.jsonl` exists. */
+  transcript?: boolean;
 }
 
 export interface Inventory {
@@ -473,6 +475,26 @@ export function isWorktree(cwd: string): boolean {
   }
 }
 
+/** Session ids (UUIDs in practice): an id with a separator or a dot never becomes part of a file name. */
+const TRANSCRIPT_ID = /^[\w-]{1,128}$/;
+
+/**
+ * True when `<projectsDir>/<project dir of cwd>/<cliSessionId>.jsonl` is a non-empty regular
+ * file. One `lstat`, no read, no link followed (same rule as transcript.ts): it runs for every
+ * live process on every inventory tick. Same folder rule and guard as the dialogue route.
+ */
+export function hasTranscript(projectsDir: string, cwd: string, cliSessionId: string): boolean {
+  if (!cwd || !TRANSCRIPT_ID.test(cliSessionId)) return false;
+  const file = path.join(projectsDir, projectDirName(cwd), `${cliSessionId}.jsonl`);
+  if (!isInside(projectsDir, file)) return false;
+  try {
+    const st = fs.lstatSync(file, { throwIfNoEntry: false });
+    return st !== undefined && st.isFile() && st.size > 0;
+  } catch {
+    return false;
+  }
+}
+
 function readArchivedIndex(dir: string): Set<string> {
   const raw = readJson(path.join(dir, 'archived-sessions.idx')) as { archived?: unknown } | undefined;
   return new Set(Array.isArray(raw?.archived) ? raw.archived.filter((x): x is string => typeof x === 'string') : []);
@@ -480,7 +502,8 @@ function readArchivedIndex(dir: string): Set<string> {
 
 /**
  * Reads the whole local inventory. Only these files are ever opened: the presets file,
- * `local_*.json`, `archived-sessions.idx`, `~/.claude/sessions/<pid>.json`, and the first
+ * `local_*.json`, `archived-sessions.idx`, `~/.claude/sessions/<pid>.json`, an `lstat` (never a read) of each live
+ * session's transcript `~/.claude/projects/<dir>/<id>.jsonl`, and the first
  * 4 KB of the `*.md` agent definitions in `~/.claude/agents/` and `<env folder>/.claude/agents/`. Never
  * `config.json` (OAuth caches) nor the `*.key` peer tokens.
  */
@@ -517,11 +540,14 @@ export function readInventory(
   }
 
   const live: LiveProcess[] = [];
+  // Same folder the dialogue route reads transcripts from (index.ts).
+  const projectsDir = path.join(paths.claudeHome, 'projects');
   try {
     for (const f of fs.readdirSync(paths.liveDir).filter((f) => /^\d+\.json$/.test(f))) {
       const p = parseLiveProcess(readJson(path.join(paths.liveDir, f)));
       if (p && isAlive(p.pid)) {
         p.worktree = isWorktree(p.cwd);
+        p.transcript = hasTranscript(projectsDir, p.cwd, p.cliSessionId);
         live.push(p);
       }
     }

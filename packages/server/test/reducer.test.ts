@@ -1967,7 +1967,7 @@ describe('tavern follow-ups: events with a refused agent_id', () => {
   it('still refreshes the session activity', () => {
     const state = stateWithEnvs();
     const s = applyHook(state, parsed('PreToolUse', { agent_id: 42, agent_type: 'neo', tool_name: 'Read' }), 700);
-    expect(s).toMatchObject({ id: CLI_KEY, live: true, lastActivityAt: 700 });
+    expect(s).toMatchObject({ id: CLI_KEY, live: true, lastActivityAt: 700, everActive: true });
     expect(state.lastHookAt.get(CLI_KEY)).toBe(700);
     // A new session's main agent stays as created: nothing was applied to it.
     expect(s.main.state).toBe('done');
@@ -2361,5 +2361,153 @@ describe('agent info: session info, live pids and servers', () => {
     applyInventory(state, inventory(), LATER);
     expect(s.live).toBe(false);
     expect(s.servers).toEqual([]);
+  });
+});
+
+describe('everActive', () => {
+  const idleCli = () => proc({ hostSessionId: undefined, status: 'idle' });
+
+  /**
+   * Verifies that a cli session seen only as an idle live process is not active
+   */
+  it('stays false for a cli session from an idle process only', () => {
+    const state = createState();
+    applyInventory(state, inventory({ live: [idleCli()] }), 1000);
+    expect(state.sessions.get(CLI_KEY)).toMatchObject({ origin: 'cli', live: true, everActive: false });
+  });
+
+  /**
+   * Verifies that an idle session closed by SessionEnd ends stopped and still inactive (a ghost)
+   */
+  it('stays false after SessionEnd when nothing happened', () => {
+    const state = createState();
+    applyInventory(state, inventory({ live: [idleCli()] }), 1000);
+    applyHook(state, hook('SessionEnd'), 1100);
+    applyInventory(state, inventory(), 1000 + HOOK_AUTHORITY_MS + 200);
+    expect(state.sessions.get(CLI_KEY)).toMatchObject({ live: false, everActive: false });
+  });
+
+  /**
+   * Verifies that SessionStart and Notification alone do not count as work
+   */
+  it.each(['SessionStart', 'Notification', 'SessionEnd'])('stays false after %s alone', (name) => {
+    const state = stateWithEnvs();
+    const s = applyHook(state, hook(name, { notification_type: 'idle_prompt' }), 500);
+    expect(s.everActive).toBe(false);
+  });
+
+  /**
+   * Verifies that every work hook marks the session active
+   */
+  it.each([
+    'UserPromptSubmit',
+    'PreToolUse',
+    'PostToolUse',
+    'PostToolUseFailure',
+    'PermissionRequest',
+    'SubagentStart',
+    'SubagentStop',
+    'Stop',
+    'StopFailure',
+  ])('becomes true on %s', (name) => {
+    const state = stateWithEnvs();
+    const s = applyHook(state, hook(name, { tool_name: 'Read', agent_id: 'ag-1', agent_type: 'Explore' }), 500);
+    expect(s.everActive).toBe(true);
+  });
+
+  /**
+   * Verifies that a work hook of an ignored internal subagent still counts for the session
+   */
+  it('becomes true on a work hook of an ignored subagent', () => {
+    const state = stateWithEnvs();
+    const s = applyHook(state, hook('PreToolUse', { tool_name: 'Read', agent_id: 'ag-internal' }), 500);
+    expect(s.subagents).toEqual([]);
+    expect(s.everActive).toBe(true);
+  });
+
+  /**
+   * Verifies that a busy process marks the session active
+   */
+  it('becomes true for a busy process', () => {
+    const state = createState();
+    applyInventory(state, inventory({ live: [proc({ hostSessionId: undefined, status: 'busy' })] }), 1000);
+    expect(state.sessions.get(CLI_KEY)?.everActive).toBe(true);
+  });
+
+  /**
+   * Verifies that an idle live session turning busy (hooks silent) becomes active
+   */
+  it('becomes true for a busy process seen later on a live session', () => {
+    const state = createState();
+    const t0 = 10 * HOOK_AUTHORITY_MS;
+    applyInventory(state, inventory({ live: [idleCli()] }), t0);
+    expect(state.sessions.get(CLI_KEY)?.everActive).toBe(false);
+    applyInventory(state, inventory({ live: [proc({ hostSessionId: undefined, status: 'busy' })] }), t0 + 1000);
+    expect(state.sessions.get(CLI_KEY)?.everActive).toBe(true);
+  });
+
+  /**
+   * Verifies that a transcript found on disk marks an idle session active
+   */
+  it('becomes true for an idle process with a transcript', () => {
+    const state = createState();
+    applyInventory(state, inventory({ live: [proc({ hostSessionId: undefined, status: 'idle', transcript: true })] }), 1000);
+    expect(state.sessions.get(CLI_KEY)?.everActive).toBe(true);
+  });
+
+  /**
+   * Verifies that a process of unknown status does not mark the session active
+   */
+  it('stays false for a process of unknown status', () => {
+    const state = createState();
+    applyInventory(state, inventory({ live: [proc({ hostSessionId: undefined, status: 'unknown' as 'busy' })] }), 1000);
+    expect(state.sessions.get(CLI_KEY)?.everActive).toBe(false);
+  });
+
+  /**
+   * Verifies that a transcript appearing on a later tick marks a known idle session active
+   */
+  it('becomes true when a transcript appears on a later tick', () => {
+    const state = createState();
+    applyInventory(state, inventory({ live: [idleCli()] }), 1000);
+    expect(state.sessions.get(CLI_KEY)?.everActive).toBe(false);
+    applyInventory(state, inventory({ live: [proc({ hostSessionId: undefined, status: 'idle', transcript: true })] }), 2000);
+    expect(state.sessions.get(CLI_KEY)?.everActive).toBe(true);
+  });
+
+  /**
+   * Verifies that desktop sessions are always active, even without any process
+   */
+  it('is true for a desktop session', () => {
+    const state = createState();
+    applyInventory(state, inventory({ desktopSessions: [desk()] }), 1000);
+    expect(state.sessions.get(LOCAL_A)).toMatchObject({ origin: 'desktop', live: false, everActive: true });
+  });
+
+  /**
+   * Verifies that a desktop session absorbing an inactive cli session stays active
+   */
+  it('stays true when a desktop session absorbs an inactive cli session', () => {
+    const state = stateWithEnvs();
+    applyHook(state, hook('SessionStart'), 500);
+    expect(state.sessions.get(CLI_KEY)?.everActive).toBe(false);
+    applyInventory(state, inventory({ desktopSessions: [desk()] }), 600);
+    expect(state.sessions.has(CLI_KEY)).toBe(false);
+    expect(state.sessions.get(LOCAL_A)?.everActive).toBe(true);
+  });
+
+  /**
+   * Verifies that once active, a session never goes back to inactive
+   */
+  it('never goes back to false', () => {
+    const state = createState();
+    applyInventory(state, inventory({ live: [idleCli()] }), 1000);
+    applyHook(state, hook('UserPromptSubmit', { prompt: 'Go' }), 1100);
+    applyHook(state, hook('Stop'), 1200);
+    applyInventory(state, inventory({ live: [idleCli()] }), 1300);
+    applyHook(state, hook('SessionEnd'), 1400);
+    applyInventory(state, inventory(), 1400 + HOOK_AUTHORITY_MS + 200);
+    prune(state, 1400 + HOOK_AUTHORITY_MS + 300);
+    expect(state.sessions.get(CLI_KEY)).toMatchObject({ live: false, everActive: true });
   });
 });

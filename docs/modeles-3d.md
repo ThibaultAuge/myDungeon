@@ -24,7 +24,7 @@ Les modèles utilisés sont déjà dans le dépôt.
 
 Les personnages utilisent KayKit Adventurers 2.0, et les squelettes utilisent KayKit Skeletons 1.1. Tous ces packs sont sous licence CC0 : le crédit n'est pas obligatoire, on le donne quand même (voir `packages/web/public/kaykit/LICENSE.txt`).
 
-Le son de claque `packages/web/public/sounds/slap.wav` est un effet gratuit fourni par le responsable du projet, dont la source et la licence restent à consigner (voir `packages/web/public/sounds/LICENSE.txt`). La main de la baffe n'est pas un modèle : elle est dessinée dans le code à partir de formes simples.
+Le son de claque `packages/web/public/sounds/slap.wav` est un effet gratuit fourni par le responsable du projet, dont la source et la licence restent à consigner (voir `packages/web/public/sounds/LICENSE.txt`). La main de la baffe n'est pas un modèle : elle est dessinée dans le code à partir de formes simples. Le fantôme d'une session sans activité suit la même règle : c'est un drap translucide construit dans le code, sans modèle 3D (voir [personnages.md](personnages.md#le-fantôme)).
 
 Le dépôt est public : on n'y met que des paliers gratuits en CC0. Les paliers payants (EXTRA, SOURCE) ne peuvent pas être redistribués. Les images d'aperçu des Mixed Bag montrent des objets EXTRA (borne d'arcade, lampes à lave…) absents du zip gratuit : ne les ajoute pas.
 
