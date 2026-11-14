@@ -9,7 +9,7 @@ import type {
   WaitReason,
 } from '@agent-office/shared';
 import { NO_ENV_ID } from '@agent-office/shared';
-import { matchEnvironment, type DefinedAgents, type Environment, type Inventory, type LiveProcess } from './inventory.ts';
+import { AGENT_NAME, matchEnvironment, type DefinedAgents, type Environment, type Inventory, type LiveProcess } from './inventory.ts';
 
 // State machine of the office. No I/O here: every function takes the state and `now`,
 // so the whole behaviour is testable with fixtures.
@@ -417,6 +417,8 @@ const MAX_SEEN_TYPES = 32;
 
 /** Remembers that an agent type worked in this session's environment. */
 function noteSeenType(state: OfficeState, s: SessionView, agentType: string): void {
+  // The type comes from the hook payload and is broadcast in every snapshot: same rule as the definitions on disk.
+  if (!AGENT_NAME.test(agentType)) return;
   const key = envKey(s);
   const list = state.seenTypes.get(key) ?? [];
   if (list.some((t) => t.toLowerCase() === agentType.toLowerCase())) return;

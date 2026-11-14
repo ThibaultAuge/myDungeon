@@ -1602,6 +1602,18 @@ describe('tavern cycle: seen types and rosterView', () => {
   });
 
   /**
+   * Verifies that a hook type that is not a valid agent name never reaches the broadcast roster
+   */
+  it('ignores an invalid hook agent type', () => {
+    const state = stateWithEnvs();
+    run(state, [
+      [1, hook('SubagentStart', { agent_id: 'ag-1', agent_type: 'x'.repeat(65) })],
+      [2, hook('SubagentStart', { agent_id: 'ag-2', agent_type: '<script>' })],
+    ]);
+    expect(rosterView(state, 'env-alpha')).toEqual([]);
+  });
+
+  /**
    * Verifies that a subagent created from its first tool call also joins the roster
    */
   it('records the type when SubagentStart was missed', () => {
