@@ -8,6 +8,8 @@ import { STATE_COLORS } from '../format.ts';
 import { reducedMotion } from '../motion.ts';
 import { clipFor, CLIPS, gripFor, lookFor, SPAWN_TIME_SCALE, type ClipName, type Look, type PropRef } from './characters.ts';
 import { CLICK_MAX_DRAG_PX, setPointerHover, TARGET_USER_DATA } from './cursor.ts';
+import { DestinationBadge } from './DestinationIcon.tsx';
+import { destinationOf } from './destinations.ts';
 import { KIT_SCALE } from './dungeon.ts';
 import { useKitGLTF } from './kit.ts';
 import { reroute, routeBetween, SPAWN, type Point, type Spot } from './layout.ts';
@@ -238,6 +240,10 @@ function AgentFigureImpl({ agent, name, color, spot, start, selected, onSelect, 
   const group = useRef<Group>(null);
   const ring = useRef<Mesh>(null);
   const bubble = useRef<Mesh>(null);
+  /** The tag's HTML anchor: `data-travelling` shows the destination badge while walking. */
+  const anchor = useRef<HTMLDivElement>(null);
+  const badge = useRef<HTMLSpanElement>(null);
+  const destination = destinationOf(spot);
   // drei's Html loses the content of a tag mounted before the canvas is connected to its
   // events (its target changes and the new root is never rendered): wait for the connection.
   const connected = useThree((s) => !!s.events.connected);
@@ -306,6 +312,12 @@ function AgentFigureImpl({ agent, name, color, spot, start, selected, onSelect, 
       g.rotation.y = turnToward(g.rotation.y, spot.facing, turnFraction(REST_TURN_RATE, dt, still));
     }
     m.kneeling = path.current.length === 0 && !!spot.kneel;
+    // Touch the DOM only when walking starts or stops: no React render per frame. The tag
+    // is a separate React root that renders a little later: until it shows the new
+    // destination's icon, show none rather than the previous one.
+    const tag = anchor.current;
+    const travelling = m.moving && badge.current?.dataset.destination === destination;
+    if (tag && tag.hasAttribute('data-travelling') !== travelling) tag.toggleAttribute('data-travelling', travelling);
     g.position.copy(pos);
 
     if (bubble.current) {
@@ -372,12 +384,15 @@ function AgentFigureImpl({ agent, name, color, spot, start, selected, onSelect, 
       )}
       {connected && (
         <Html
+          ref={anchor}
           position={[0, TAG_Y, 0]}
           center
           className="agent-tag-anchor"
           style={{ '--session-color': color } as CSSProperties}
           zIndexRange={[10, 0]}
         >
+          {/* While walking, the destination badge takes the request bubble's place (CSS). */}
+          <DestinationBadge ref={badge} kind={destination} />
           {urgent && <RequestBubble reason={agent.waitReason} />}
           {/* Same name as in the side list, which is the accessible one: not announced twice. */}
           <span className={`agent-tag${selected ? ' agent-tag--selected' : ''}`} aria-hidden="true">

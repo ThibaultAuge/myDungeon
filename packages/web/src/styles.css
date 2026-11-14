@@ -371,6 +371,42 @@ select,
   pointer-events: none;
 }
 
+/* Where a walking agent is heading, above its name tag. Shown only while the figure walks
+   (AgentFigure sets data-travelling), in place of the altar request bubble. */
+.destination-badge {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 3px);
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  color: #2c2c2a;
+  background: #fffdf6;
+  /* The session colour, as on the tag, the floor disc and the session card. */
+  border: 2px solid var(--session-color, #2c2c2a);
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.45));
+  visibility: hidden;
+}
+
+.destination-badge__icon {
+  width: 18px;
+  height: 18px;
+}
+
+.agent-tag-anchor[data-travelling] .destination-badge {
+  visibility: visible;
+  animation: request-bob 1.6s ease-in-out infinite;
+}
+
+.agent-tag-anchor[data-travelling] .request-bubble {
+  visibility: hidden;
+}
+
 .agent-tag {
   display: block;
   font-size: 12px;
@@ -429,12 +465,18 @@ select,
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .request-bubble {
+  .request-bubble,
+  .agent-tag-anchor[data-travelling] .destination-badge {
     animation: none;
   }
 }
 
 @media (forced-colors: active) {
+  .destination-badge {
+    color: CanvasText;
+    background: Canvas;
+    border-color: CanvasText;
+  }
   .request-bubble__shape {
     fill: Canvas;
     stroke: CanvasText;
