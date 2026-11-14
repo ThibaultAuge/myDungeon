@@ -75,10 +75,16 @@ function useSpots(placed: Placed[], resting: AgentView[], returned: AgentView[])
  * Where each figure appearing now starts walking from: the seat of the resting figure of
  * its type, the lockers, or its own spot. `AgentFigure` reads it on mount only.
  */
-function useStarts(shown: AgentView[], resting: AgentView[], spots: Map<string, Spot>): Map<string, Spot> {
+function useStarts(
+  shown: AgentView[],
+  resting: AgentView[],
+  spots: Map<string, Spot>,
+  snapshotReceived: boolean,
+): Map<string, Spot> {
   const mounted = useRef(new Set<string>());
   const previous = useRef<{ resting: Set<string>; spots: Map<string, Spot> }>({ resting: new Set(), spots: new Map() });
-  // The first agents shown (page load, environment change) are already in place: nobody walks in.
+  // The agents of the route's first snapshot (page load, environment change) are already in
+  // place: nobody walks in. Only the ones appearing in later snapshots walk.
   const loaded = useRef(false);
   const newcomers = shown.filter((a) => !mounted.current.has(a.id));
   const origins = startOrigins(newcomers, previous.current.resting);
@@ -90,7 +96,7 @@ function useStarts(shown: AgentView[], resting: AgentView[], spots: Map<string, 
   }
   useEffect(() => {
     mounted.current = new Set(shown.map((a) => a.id));
-    loaded.current = shown.length > 0 || resting.length > 0;
+    loaded.current = snapshotReceived;
     previous.current = { resting: new Set(resting.map((a) => a.agentType.toLowerCase())), spots };
   });
   return starts;
@@ -134,6 +140,7 @@ function SunLight() {
 export function OfficeScene() {
   const sessions = useOffice((s) => s.sessions);
   const roster = useOffice((s) => s.roster);
+  const snapshotReceived = useOffice((s) => s.snapshotReceived);
   const selected = useOffice((s) => s.selectedAgentId);
   const select = useOffice((s) => s.select);
   const now = useNow();
@@ -149,10 +156,12 @@ export function OfficeScene() {
 
   const placed = visibleAgents(sessions, now).filter((p) => !(p.agent.state === 'done' && arrived.has(p.agent.id)));
   const shown = placed.map((p) => p.agent);
-  const resting = restingTypes(roster, shown).map(restingAgent);
+  // Stable objects while the resting types do not change, so memoised figures skip renders.
+  const restingKey = restingTypes(roster, shown).join('\n');
+  const resting = useMemo(() => (restingKey ? restingKey.split('\n').map(restingAgent) : []), [restingKey]);
   const returned = sessions.flatMap((s) => s.subagents.filter((a) => arrived.has(a.id)));
   const spots = useSpots(placed, resting, returned);
-  const starts = useStarts(shown, resting, spots);
+  const starts = useStarts(shown, resting, spots, snapshotReceived);
 
   return (
     <Canvas

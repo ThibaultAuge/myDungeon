@@ -42,7 +42,8 @@ par exemple, *Characters – Fantasy Races* de Quaternius n'est pas en CC0.
   genre « Warcraft » sans en reprendre les modèles. On s'inspire du *métier* que le nom
   évoque, jamais du look du personnage d'origine : pas de blob rose pour Barbapapa, pas
   de baguette ni de robe de sorcier pour Hermione. C'est aussi ce qui permet d'utiliser
-  des modèles CC0.
+  des modèles CC0. Exception acceptée pour l'instant : Hermione porte le corps Mage du
+  pack KayKit (chapeau et robe), faute d'un modèle d'érudite.
 
 ## Les lieux
 
@@ -196,35 +197,41 @@ plan). Il devrait suffire pour choisir la tenue, mais ce n'est pas encore testé
 Ce sont les agents définis dans `~/.claude/agents/`. Le hook `SubagentStart` donne leur
 type dans `agent_type`, ce qui permet de choisir la silhouette.
 
-| Agent | Rôle | Cliché visuel | Accessoire | Poste |
-|---|---|---|---|---|
-| **barbapapa** | Découpe des maquettes en templates HTML/CSS | Enlumineur : béret, blouse tachée de couleurs | Palette et pinceau | Atelier, coin de l'enlumineur |
-| **butt-stallion** | Idées loufoques, brainstorming | Bouffon : chapeau à grelots, habit bariolé | Marotte, ampoule magique qui s'allume au-dessus de la tête | Coin détente |
-| **samuel-morse** | Teste les API externes | Colombophile messager : sacoche, gants de cuir | Pigeon sur l'épaule, rouleaux de messages | Pigeonnier |
-| **neo** | Audit sécurité | Garde de la herse : armure légère, capuche | Lanterne, trousseau de clés | Poste de garde |
-| **oracle** | Recherche sur Internet | Astrologue voyante : robe étoilée, châle | Boule de cristal qui affiche des pages, lunette | Observatoire |
-| **dexter** | Écrit les tests | Alchimiste : tablier brûlé, lunettes de protection | Fioles qui fument en vert (réussi) ou en rouge (échec) | Salle des épreuves, laboratoire |
-| **hermione** | Revue de code | Érudite relectrice : lunettes, pile de grimoires | Plume rouge | Salle des épreuves, table de relecture |
-| **gatsby** | Audit SEO (référencement) | Héraut : tabard, chapeau à plume | Trompette et bannière (« faire connaître ») | Salle Accessibilité / SEO, estrade |
-| **timmy** | Audit accessibilité | Inspecteur : manteau, besace | Loupe, cornet acoustique (lecteur d'écran) | Salle Accessibilité / SEO |
-| **hancock** | Nettoyage du code mort | Concierge : tablier, foulard | Balai et seau | Réduit du concierge, tournées dans l'Atelier |
-| **curator** | Documentation pour les IA | Archiviste : robe de moine, gants | Registres et trousseau de clés des archives | Scriptorium |
-| **otis** | Documentation pour les humains | Scribe copiste : bonnet, manches retroussées | Plume d'oie et parchemin | Scriptorium |
-| **turing** | Calculs (exécute du Python) | Arithméticien : toque, craie à la main | Boulier géant, ardoise couverte de chiffres | Cabinet de l'arithméticien |
+| Agent | Rôle | Cliché visuel | Accessoire | Poste | Aujourd'hui (KayKit) |
+|---|---|---|---|---|---|
+| **barbapapa** | Découpe des maquettes en templates HTML/CSS | Enlumineur : béret, blouse tachée de couleurs | Palette et pinceau | Atelier, coin de l'enlumineur | Voleur, marteau |
+| **butt-stallion** | Idées loufoques, brainstorming | Bouffon : chapeau à grelots, habit bariolé | Marotte, ampoule magique qui s'allume au-dessus de la tête | Coin détente | Barbare, chope pleine |
+| **samuel-morse** | Teste les API externes | Colombophile messager : sacoche, gants de cuir | Pigeon sur l'épaule, rouleaux de messages | Pigeonnier | Rôdeur, carte roulée (message) |
+| **neo** | Audit sécurité | Garde de la herse : armure légère, capuche | Lanterne, trousseau de clés | Poste de garde | Barbare, lanterne et bouclier à pointes |
+| **oracle** | Recherche sur Internet | Astrologue voyante : robe étoilée, châle | Boule de cristal qui affiche des pages, lunette | Observatoire | Mage, bâton |
+| **dexter** | Écrit les tests | Alchimiste : tablier brûlé, lunettes de protection | Fioles qui fument en vert (réussi) ou en rouge (échec) | Salle des épreuves, laboratoire | Voleur, fiole |
+| **hermione** | Revue de code | Érudite relectrice : lunettes, pile de grimoires | Plume rouge | Salle des épreuves, table de relecture | Mage, grimoire ouvert |
+| **gatsby** | Audit SEO (référencement) | Héraut : tabard, chapeau à plume | Trompette et bannière (« faire connaître ») | Salle Accessibilité / SEO, estrade | Voleur, bouclier à blason |
+| **timmy** | Audit accessibilité | Inspecteur : manteau, besace | Loupe, cornet acoustique (lecteur d'écran) | Salle Accessibilité / SEO | Rôdeur, loupe |
+| **hancock** | Nettoyage du code mort | Concierge : tablier, foulard | Balai et seau | Réduit du concierge, tournées dans l'Atelier | Barbare, seau |
+| **curator** | Documentation pour les IA | Archiviste : robe de moine, gants | Registres et trousseau de clés des archives | Scriptorium | Mage, grimoire fermé |
+| **otis** | Documentation pour les humains | Scribe copiste : bonnet, manches retroussées | Plume d'oie et parchemin | Scriptorium | Voleur encapuchonné, journal ouvert |
+| **turing** | Calculs (exécute du Python) | Arithméticien : toque, craie à la main | Boulier géant, ardoise couverte de chiffres | Cabinet de l'arithméticien | Mage, compas |
 
 ### Les agents intégrés à Claude Code
 
 Ils n'ont pas de fichier dans `~/.claude/agents/` mais apparaissent souvent, Explore en
 particulier.
 
-| Agent | Rôle | Cliché visuel | Comportement |
-|---|---|---|---|
-| **Explore** | Fouille le code local | Éclaireur : lanterne, carnet de notes | Se déplace selon l'outil, surtout Bibliothèque |
-| **Plan** | Conçoit un plan d'implémentation | Cartographe : compas, cartes roulées | Salle des cartes |
-| **general-purpose** | Tâches variées | Apprenti compagnon : besace d'outils | Se déplace selon l'outil |
-| **fork** | Copie de l'agent principal | Même tenue que l'agent principal, un peu fantomatique | Se déplace selon l'outil |
-| **claude-code-guide** | Répond aux questions sur Claude Code | Sacristain : lanterne, livre de règles | À côté de l'autel |
-| **Type inconnu** | Agent d'un autre projet, d'un plugin, ou ajouté plus tard | Villageois neutre avec une étiquette au nom du type | Se déplace selon l'outil |
+| Agent | Rôle | Cliché visuel | Comportement | Aujourd'hui (KayKit) |
+|---|---|---|---|---|
+| **Explore** | Fouille le code local | Éclaireur : lanterne, carnet de notes | Se déplace selon l'outil, surtout Bibliothèque | Rôdeur, lanterne |
+| **Plan** | Conçoit un plan d'implémentation | Cartographe : compas, cartes roulées | Salle des cartes | Voleur encapuchonné, carte |
+| **general-purpose** | Tâches variées | Apprenti compagnon : besace d'outils | Se déplace selon l'outil | Voleur encapuchonné, dague |
+| **fork** | Copie de l'agent principal | Même tenue que l'agent principal, un peu fantomatique | Se déplace selon l'outil | Corps tiré du nom du type, mains vides |
+| **claude-code-guide** | Répond aux questions sur Claude Code | Sacristain : lanterne, livre de règles | À côté de l'autel | Voleur encapuchonné, lanterne |
+| **statusline-setup** | — | — | — | Voleur, clé |
+| **Type inconnu** | Agent d'un autre projet, d'un plugin, ou ajouté plus tard | Villageois neutre avec une étiquette au nom du type | Se déplace selon l'outil | Corps tiré du nom du type, mains vides |
+
+Les packs KayKit ne donnent que 5 corps aux sous-agents : le rôle se lit donc dans le corps
+et l'objet en main. Le cliché visuel reste la cible. Pour changer une tenue, modifie `LOOKS`
+dans `packages/web/src/scene/characters.ts`. Un outil de RPG Tools doit aussi avoir sa
+prise (`PROP_GRIP`), réglée à l'œil.
 
 Le type inconnu est indispensable : chaque environnement peut avoir ses propres agents
 dans son `.claude/agents/`, et les plugins en ajoutent.
@@ -251,7 +258,7 @@ dans son `.claude/agents/`, et les plugins en ajoutent.
 
 Fait :
 
-- les personnages animés KayKit Adventurers 2.0 (un chevalier pour l'agent principal, un voyou encapuchonné pour les sous-agents), avec marche, course, travail, attente, agenouillement à l'autel et pose calme, et une couleur de session sur le disque au sol et l'étiquette ;
+- les personnages animés KayKit Adventurers 2.0 : un chevalier pour l'agent principal, et une tenue par type de sous-agent (table `LOOKS`), identique pour la figure au repos de la taverne. Marche, course, travail, attente, agenouillement à l'autel et pose calme, et une couleur de session sur le disque au sol et l'étiquette ;
 - le plan du donjon, ses 14 lieux et ses couloirs (`packages/web/src/scene/layout.ts`, rendu dans
   `Room.tsx`) ;
 - les déplacements par les portes et les couloirs, y compris quand un agent change de destination en
@@ -271,6 +278,6 @@ Reste à faire :
 
 - la zone de saisie dans la boîte de dialogue, pour répondre depuis la 3D. La connexion posée
   aujourd'hui servira à cette phase ;
-- les silhouettes par type d'agent (aujourd'hui, tous les sous-agents ont le même modèle) ;
+- rapprocher les tenues du cliché visuel quand des modèles plus proches existent (lunettes, plume, pinceau, pigeon…) ;
 - la tenue de l'agent principal selon le mode plan (`permission_mode`, toujours à vérifier) ;
 - les badges de skills.

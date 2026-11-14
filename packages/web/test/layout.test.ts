@@ -289,6 +289,176 @@ describe('candidateSeats', () => {
   });
 });
 
+/** Station of each agent type with a dedicated post (keys in lower case). */
+const STATION_OF: Record<string, string> = {
+  oracle: 'lunette',
+  barbapapa: 'chevalet',
+  hermione: 'relecture',
+  dexter: 'labo',
+  gatsby: 'estrade',
+  timmy: 'inspection',
+  curator: 'ia',
+  otis: 'humains',
+  turing: 'boulier',
+  'claude-code-guide': 'sacristain',
+};
+
+/** The documented candidate order: own post, shared seats, then wall seats, with their ids. */
+function expectedCandidates(r: RoomDef, type: string): { id: string; seat: unknown }[] {
+  const key = type.toLowerCase();
+  const station = Object.hasOwn(STATION_OF, key) ? STATION_OF[key] : undefined;
+  const own = station ? (r.stations?.[station] ?? []) : [];
+  return [
+    ...own.map((seat, i) => ({ id: `${r.id}:${station}:${i}`, seat })),
+    ...r.seats.map((seat, i) => ({ id: `${r.id}:seat:${i}`, seat })),
+    ...wallSeats(r).map((seat, i) => ({ id: `${r.id}:wall:${i}`, seat })),
+  ];
+}
+
+const SAMPLE_TYPES = [
+  'general-purpose',
+  'Explore',
+  'constructor',
+  '__proto__',
+  'hermione',
+  'Hermione',
+  'DEXTER',
+  'oracle',
+  'curator',
+  'otis',
+  'gatsby',
+  'timmy',
+  'turing',
+  'barbapapa',
+  'claude-code-guide',
+];
+
+describe('wallSeats: memoisation', () => {
+  /**
+   * Verifies that repeated calls for a room return the very same array
+   */
+  it.each(ROOMS.map((r) => [r.id, r] as const))('%s returns the same instance on every call', (_id, r) => {
+    const first = wallSeats(r);
+    expect(wallSeats(r)).toBe(first);
+    expect(wallSeats(r)).toBe(first);
+  });
+
+  /**
+   * Verifies that a fresh copy of a room computes equal wall seats in a distinct array
+   */
+  it.each(ROOMS.map((r) => [r.id, r] as const))('%s copy gets equal seats in its own array', (_id, r) => {
+    const copy = structuredClone(r);
+    const seats = wallSeats(copy);
+    expect(seats).not.toBe(wallSeats(r));
+    expect(seats).toEqual(wallSeats(r));
+  });
+
+  /**
+   * Verifies that the nested Scriptorium has no wall seats of its own
+   */
+  it('gives the scriptorium no wall seats', () => {
+    expect(wallSeats(room('scriptorium'))).toEqual([]);
+  });
+});
+
+describe('candidateSeats: memoisation', () => {
+  /**
+   * Verifies that repeated calls with the same room and type return the very same array
+   */
+  it.each(SAMPLE_TYPES)('returns the same instance for %s on repeated calls', (type) => {
+    const r = room('epreuves');
+    const first = candidateSeats(r, type);
+    expect(candidateSeats(r, type)).toBe(first);
+  });
+
+  /**
+   * Verifies that the type is matched case-insensitively, sharing a single list
+   */
+  it('shares one list across spellings of the same type', () => {
+    const r = room('epreuves');
+    const list = candidateSeats(r, 'hermione');
+    expect(candidateSeats(r, 'Hermione')).toBe(list);
+    expect(candidateSeats(r, 'HERMIONE')).toBe(list);
+  });
+
+  /**
+   * Verifies that every type without a station shares the generic list of a room
+   */
+  it('shares one list between types without a station', () => {
+    const r = room('atelier');
+    const generic = candidateSeats(r, 'general-purpose');
+    for (const type of ['Explore', 'statusline-setup', 'neo', 'constructor', '__proto__', 'toString', '']) {
+      expect(candidateSeats(r, type), type).toBe(generic);
+    }
+  });
+
+  /**
+   * Verifies that two stations of the same room keep separate lists
+   */
+  it('keeps separate lists for different stations', () => {
+    const r = room('epreuves');
+    const relecture = candidateSeats(r, 'hermione');
+    const labo = candidateSeats(r, 'dexter');
+    expect(labo).not.toBe(relecture);
+    expect(relecture[0].id).toBe('epreuves:relecture:0');
+    expect(labo[0].id).toBe('epreuves:labo:0');
+    expect(candidateSeats(r, 'general-purpose')[0].id).toBe('epreuves:seat:0');
+  });
+
+  /**
+   * Verifies that the cache is per room: the same type gets each room's own seats
+   */
+  it('keeps separate lists per room', () => {
+    const a = candidateSeats(room('atelier'), 'general-purpose');
+    const b = candidateSeats(room('biblio'), 'general-purpose');
+    expect(a).not.toBe(b);
+    expect(a[0].id).toBe('atelier:seat:0');
+    expect(b[0].id).toBe('biblio:seat:0');
+  });
+
+  /**
+   * Verifies that every room and type yields the documented candidate list
+   */
+  it.each(ROOMS.map((r) => [r.id, r] as const))('%s candidates match post, shared then wall seats', (_id, r) => {
+    for (const type of SAMPLE_TYPES) {
+      expect(candidateSeats(r, type), type).toEqual(expectedCandidates(r, type));
+    }
+  });
+
+  /**
+   * Verifies that a station agent outside its room gets the same seats as a generic agent
+   */
+  it('gives a station agent outside its room the generic seats', () => {
+    const r = room('atelier');
+    expect(candidateSeats(r, 'hermione')).toEqual(candidateSeats(r, 'general-purpose'));
+  });
+
+  /**
+   * Verifies that the results do not depend on which type asked first for a room
+   */
+  it.each(ROOMS.map((r) => [r.id, r] as const))('%s results do not depend on call order', (_id, r) => {
+    const forward = structuredClone(r);
+    const backward = structuredClone(r);
+    const one = SAMPLE_TYPES.map((t) => candidateSeats(forward, t));
+    const other = [...SAMPLE_TYPES].reverse().map((t) => candidateSeats(backward, t)).reverse();
+    expect(one).toEqual(other);
+    expect(one).toEqual(SAMPLE_TYPES.map((t) => candidateSeats(r, t)));
+  });
+
+  /**
+   * Verifies that seat assignment still gives the same spots once the lists are cached
+   */
+  it('assigns the same spots on repeated calls with cached lists', () => {
+    const reqs = [req('h', 'epreuves', { agentType: 'hermione' }), req('g', 'epreuves'), req('e', 'epreuves', { agentType: 'Explore' })];
+    const first = assignSpots(reqs, new Map());
+    const second = assignSpots(reqs, new Map());
+    expect([...second.entries()]).toEqual([...first.entries()]);
+    expect(first.get('h')!.id).toBe('epreuves:relecture:0');
+    expect(first.get('g')!.id).toBe('epreuves:seat:0');
+    expect(first.get('e')!.id).toBe('epreuves:seat:1');
+  });
+});
+
 describe('queueSpot', () => {
   /**
    * Verifies that the first in the altar queue kneels at the head of the aisle facing north

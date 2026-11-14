@@ -3,9 +3,12 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import {
+  AGENT_ID,
   AGENTS_CACHE_MS,
   agentNameFromDefinition,
   type AgentsCache,
+  HOOK_AGENT_TYPE,
+  isRemotePath,
   isWithin,
   matchEnvironment,
   normPath,
@@ -462,13 +465,36 @@ describe('agentNameFromDefinition', () => {
    */
   it.each([
     ['---\nname: dexter\n'],
-    ['---\nname: dexter'],
     ['---\r\ndescription: long\r\nname: dexter\r\n'],
     ['﻿---\ndescription: x\nname: "dexter"\nmodel: opus'],
   ])('reads the name of an unclosed frontmatter %j', (text) => {
     expect(agentNameFromDefinition(text, true)).toBe('dexter');
     // A complete text must close its frontmatter.
     expect(agentNameFromDefinition(text)).toBeUndefined();
+  });
+
+  /**
+   * Verifies that the last, possibly partial line of a truncated head is never read
+   */
+  it.each([['---\nname: dexter'], ['---\nname: herm'], ['---\ndescription: x\nname: "dexter"'], ['---\nname: dexter\r']])(
+    'ignores a name on the final unterminated line of a truncated head %j',
+    (text) => {
+      expect(agentNameFromDefinition(text, true)).toBeUndefined();
+    },
+  );
+
+  /**
+   * Verifies that a truncated head without any line break yields no name
+   */
+  it.each([['---'], ['name: dexter'], ['']])('returns undefined for a truncated head without line break %j', (text) => {
+    expect(agentNameFromDefinition(text, true)).toBeUndefined();
+  });
+
+  /**
+   * Verifies that a closed frontmatter in a truncated head is still read, partial tail ignored
+   */
+  it('reads a closed frontmatter of a truncated head despite a partial last line', () => {
+    expect(agentNameFromDefinition('---\nname: dexter\n---\nBody that was cu', true)).toBe('dexter');
   });
 
   /**
@@ -730,6 +756,30 @@ describe('readInventory: definedAgents', () => {
     expect([...defs.global].sort()).toEqual(['dexter', 'oracle']);
     expect(defs.byEnv.size).toBe(0);
   });
+
+  /**
+   * Verifies that a repository whose `.claude` or `.claude/agents` is a link (symlink or
+   * junction) defines no agent: the link could lead to a network share
+   */
+  it.each([['.claude'], ['.claude/agents']])('skips an environment whose %s is a link', (linked) => {
+    const repo = fs.mkdtempSync(path.join(root, 'linked-'));
+    const target = fs.mkdtempSync(path.join(root, 'target-'));
+    const agentsInTarget = linked === '.claude' ? path.join(target, 'agents') : target;
+    define(agentsInTarget, 'evil.md', '---\nname: evil-agent\n---\n');
+    if (linked === '.claude/agents') fs.mkdirSync(path.join(repo, '.claude'));
+    // A junction needs no privilege on Windows; elsewhere the type is ignored (directory symlink).
+    fs.symlinkSync(target, path.join(repo, ...linked.split('/')), 'junction');
+    const presets = path.join(repo, 'presets.json');
+    fs.writeFileSync(
+      presets,
+      JSON.stringify({ byAccount: { acct: { presets: [{ id: 'env-l', name: 'L', target: { cwd: repo } }] } } }),
+      'utf8',
+    );
+    const inv = readInventory(pathsFor(presets), () => true);
+    expect(inv.definedAgents!.byEnv.get('env-l')).toEqual([]);
+    // The global folder itself is the user's own and is not checked.
+    expect([...inv.definedAgents!.global].sort()).toEqual(['dexter', 'oracle']);
+  });
 });
 
 describe('readInventory: agents cache', () => {
@@ -874,5 +924,464 @@ describe('readInventory: agents cache', () => {
     fs.writeFileSync(path.join(projAgents, 'q.md'), '---\nname: other\n---\n', 'utf8');
     expect(readInventory(withEnv, () => true, cache, 2000).definedAgents!.byEnv.get('env-p')).toEqual(['proj-agent']);
     expect(cache.has(projAgents)).toBe(true);
+  });
+});
+
+describe('AGENT_ID', () => {
+  /**
+   * Verifies that hook subagent ids made of letters, digits, dots, dashes and underscores match
+   */
+  it.each([['ag-1'], ['a0f3c9e1b2d4'], ['A.b_c-9'], ['7'], ['a'.repeat(128)]])('accepts %s', (id) => {
+    expect(AGENT_ID.test(id)).toBe(true);
+  });
+
+  /**
+   * Verifies that ids able to impersonate a resting or main figure, or malformed ones, never match
+   */
+  it.each([
+    ['rest:dexter'],
+    ['x#main'],
+    ['-lead'],
+    ['.hidden'],
+    ['_x'],
+    ['a b'],
+    ['a/b'],
+    ['é'],
+    [''],
+    ['a'.repeat(129)],
+    ['ag-1\n'],
+  ])('rejects %j', (id) => {
+    expect(AGENT_ID.test(id)).toBe(false);
+  });
+});
+
+describe('HOOK_AGENT_TYPE', () => {
+  /**
+   * Verifies that plain names and one plugin namespace (plugin:agent) are accepted
+   */
+  it.each([
+    ['Explore'],
+    ['general-purpose'],
+    ['v1.2'],
+    ['a'.repeat(64)],
+    ['my-plugin:reviewer'],
+    ['rest:dexter'],
+    ['P1:a_b.c-d'],
+    [`${'p'.repeat(64)}:${'r'.repeat(64)}`],
+  ])('accepts %s', (type) => {
+    expect(HOOK_AGENT_TYPE.test(type)).toBe(true);
+  });
+
+  /**
+   * Verifies that extra colons, empty or invalid parts, over-long parts and # are rejected
+   */
+  it.each([
+    [''],
+    [':'],
+    [':a'],
+    ['a:'],
+    ['a::b'],
+    ['a:b:c'],
+    ['a:-b'],
+    ['-a:b'],
+    ['a:.b'],
+    ['a#b'],
+    ['a:b#main'],
+    ['my agent'],
+    ['é:x'],
+    ['a'.repeat(65)],
+    [`p:${'r'.repeat(65)}`],
+    [`${'p'.repeat(65)}:r`],
+    ['a:b\n'],
+  ])('rejects %j', (type) => {
+    expect(HOOK_AGENT_TYPE.test(type)).toBe(false);
+  });
+
+  /**
+   * Verifies that crafted ~10 KB types are rejected in linear time (no catastrophic backtracking)
+   */
+  it('rejects crafted long types without backtracking', () => {
+    const crafted = [
+      ('a'.repeat(63) + ':').repeat(160) + '!',
+      'a'.repeat(10_000) + '!',
+      'a:' + 'b'.repeat(10_000) + ':',
+      ':'.repeat(10_000),
+      ('a.' + '-'.repeat(30) + ':').repeat(300) + '#',
+    ];
+    const start = performance.now();
+    for (const t of crafted) expect(HOOK_AGENT_TYPE.test(t)).toBe(false);
+    expect(performance.now() - start).toBeLessThan(200);
+  });
+});
+
+describe('isRemotePath', () => {
+  /**
+   * Verifies that UNC shares and device paths, in either slash style, are reported remote
+   */
+  it.each([
+    ['\\\\server\\share'],
+    ['\\\\server\\share\\proj\\.claude\\agents'],
+    ['//server/share'],
+    ['\\\\?\\UNC\\server\\share\\x'],
+    ['\\\\.\\pipe\\x'],
+  ])('%s is remote', (p) => {
+    expect(isRemotePath(p)).toBe(true);
+  });
+
+  /**
+   * Verifies that local drive paths, long-path drive prefixes and POSIX paths are not remote
+   */
+  it.each([['\\\\?\\C:\\x'], ['\\\\?\\c:\\x'], ['//?/C:/x'], ['C:\\x'], ['C:/x'], ['/home/x'], ['\\x'], ['relative\\x'], ['']])(
+    '%j is local',
+    (p) => {
+      expect(isRemotePath(p)).toBe(false);
+    },
+  );
+});
+
+describe('readAgentTypes: follow-up limits', () => {
+  let root: string;
+  let counter = 0;
+
+  beforeAll(() => {
+    root = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-office-limits-'));
+  });
+
+  afterAll(() => {
+    fs.rmSync(root, { recursive: true, force: true });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  /** Creates a fresh agents folder under the temporary root with the given files. */
+  function agentsDir(files: Record<string, string>): string {
+    const dir = path.join(root, `dir-${counter++}`);
+    fs.mkdirSync(dir, { recursive: true });
+    for (const [file, content] of Object.entries(files)) fs.writeFileSync(path.join(dir, file), content, 'utf8');
+    return dir;
+  }
+
+  /** Makes `dir` list exactly `names`, in that order, as regular files; other folders list normally. */
+  function listAs(dir: string, names: string[]): { closed: () => boolean } {
+    const realOpendir = fs.opendirSync;
+    let closed = false;
+    vi.spyOn(fs, 'opendirSync').mockImplementation(((p: fs.PathLike, opts?: unknown) => {
+      if (String(p) !== dir) return (realOpendir as (p: fs.PathLike, o?: unknown) => unknown)(p, opts);
+      let i = 0;
+      return {
+        readSync: () => (i < names.length ? { name: names[i++], isFile: () => true } : null),
+        closeSync: () => {
+          closed = true;
+        },
+      };
+    }) as unknown as typeof fs.opendirSync);
+    return { closed: () => closed };
+  }
+
+  const filler = (n: number) => Array.from({ length: n }, (_, i) => `f${String(i).padStart(4, '0')}.txt`);
+
+  /**
+   * Verifies that a definition listed as the 1024th entry of its folder is still read
+   */
+  it('reads a definition at the 1024th folder entry', () => {
+    const dir = agentsDir({ 'late.md': '---\nname: Late\n---\n' });
+    listAs(dir, [...filler(1023), 'late.md']);
+    expect(readAgentTypes(dir)).toEqual(['Late']);
+  });
+
+  /**
+   * Verifies that entries past the first 1024 of a folder are never examined
+   */
+  it('stops listing after 1024 entries, .md or not', () => {
+    const dir = agentsDir({ 'late.md': '---\nname: Late\n---\n' });
+    const listing = listAs(dir, [...filler(1024), 'late.md']);
+    expect(readAgentTypes(dir)).toEqual([]);
+    expect(listing.closed()).toBe(true);
+  });
+
+  /**
+   * Verifies that a folder whose listing fails midway gives no type and is still closed
+   */
+  it('gives [] and closes the folder when reading an entry fails', () => {
+    const dir = agentsDir({ 'neo.md': '---\nname: neo\n---\n' });
+    let closed = false;
+    vi.spyOn(fs, 'opendirSync').mockImplementation((() => ({
+      readSync: () => {
+        throw Object.assign(new Error('EIO'), { code: 'EIO' });
+      },
+      closeSync: () => {
+        closed = true;
+      },
+    })) as unknown as typeof fs.opendirSync);
+    expect(readAgentTypes(dir)).toEqual([]);
+    expect(closed).toBe(true);
+  });
+
+  /**
+   * Verifies that a path swapped for a non-regular file after listing is skipped
+   */
+  it('skips an entry that is not a regular file once opened', () => {
+    const dir = agentsDir({ 'swapped.md': '---\nname: Swapped\n---\n', 'neo.md': '---\nname: neo\n---\n' });
+    const realOpen = fs.openSync;
+    const realFstat = fs.fstatSync as (fd: number) => fs.Stats;
+    let lastOpened = '';
+    vi.spyOn(fs, 'openSync').mockImplementation(((file: fs.PathLike, flags?: fs.OpenMode, mode?: fs.Mode) => {
+      lastOpened = String(file);
+      return realOpen(file, flags ?? 'r', mode);
+    }) as typeof fs.openSync);
+    vi.spyOn(fs, 'fstatSync').mockImplementation(((fd: number) => {
+      const st = realFstat(fd);
+      // A FIFO or a device in place of the definition: not a regular file.
+      return lastOpened.endsWith('swapped.md') ? Object.assign(Object.create(st) as fs.Stats, { isFile: () => false }) : st;
+    }) as unknown as typeof fs.fstatSync);
+    expect(readAgentTypes(dir)).toEqual(['neo']);
+  });
+
+  /**
+   * Verifies that a short file whose frontmatter is never closed defines no agent
+   */
+  it('skips a complete short file with an unclosed frontmatter', () => {
+    const dir = agentsDir({ 'open.md': '---\nname: dexter\ndescription: x\n', 'neo.md': '---\nname: neo\n---\n' });
+    expect(readAgentTypes(dir)).toEqual(['neo']);
+  });
+
+  /**
+   * Verifies that a name cut by the 4096-byte head (name: herm|ione) is not read as a shorter name
+   */
+  it('skips a file whose head ends inside its name value', () => {
+    const before = '---\ndescription: ';
+    const tail = '\nname: herm';
+    const text = before + 'x'.repeat(4096 - before.length - tail.length) + tail + 'ione\n---\nBody';
+    expect(text.indexOf('ione')).toBe(4096);
+    const dir = agentsDir({ 'cut.md': text, 'neo.md': '---\nname: neo\n---\n' });
+    expect(readAgentTypes(dir)).toEqual(['neo']);
+  });
+
+  /** Makes `dir` list `names` through a fake handle whose closeSync throws. */
+  function listWithFailingClose(dir: string, names: string[], readFails = false): void {
+    const realOpendir = fs.opendirSync;
+    vi.spyOn(fs, 'opendirSync').mockImplementation(((p: fs.PathLike, opts?: unknown) => {
+      if (String(p) !== dir) return (realOpendir as (p: fs.PathLike, o?: unknown) => unknown)(p, opts);
+      let i = 0;
+      return {
+        readSync: () => {
+          if (readFails) throw Object.assign(new Error('EIO'), { code: 'EIO' });
+          return i < names.length ? { name: names[i++], isFile: () => true } : null;
+        },
+        closeSync: () => {
+          throw Object.assign(new Error('EBADF'), { code: 'EBADF' });
+        },
+      };
+    }) as unknown as typeof fs.opendirSync);
+  }
+
+  /**
+   * Verifies that a failing close of the folder handle does not change the listed types
+   */
+  it('keeps the result when closing the folder handle throws', () => {
+    const dir = agentsDir({ 'neo.md': '---\nname: neo\n---\n', 'oracle.md': '---\nname: oracle\n---\n' });
+    listWithFailingClose(dir, ['neo.md', 'oracle.md']);
+    expect(readAgentTypes(dir)).toEqual(['neo', 'oracle']);
+  });
+
+  /**
+   * Verifies that a failing close after a failed listing still gives [] without throwing
+   */
+  it('gives [] when both the listing and the close fail', () => {
+    const dir = agentsDir({ 'neo.md': '---\nname: neo\n---\n' });
+    listWithFailingClose(dir, ['neo.md'], true);
+    expect(() => readAgentTypes(dir)).not.toThrow();
+    expect(readAgentTypes(dir)).toEqual([]);
+  });
+
+  /**
+   * Verifies that readInventory does not throw when an agents folder handle fails to close
+   */
+  it('lets readInventory succeed when closing the global agents folder throws', () => {
+    const claudeHome = path.join(root, `home-${counter++}`);
+    const agents = path.join(claudeHome, 'agents');
+    fs.mkdirSync(agents, { recursive: true });
+    fs.writeFileSync(path.join(agents, 'neo.md'), '---\nname: neo\n---\n', 'utf8');
+    listWithFailingClose(agents, ['neo.md']);
+    const paths: ClaudePaths = { claudeHome, liveDir: path.join(claudeHome, 'sessions'), desktopData: null, presetsFile: null, sessionDirs: [] };
+    let inv: ReturnType<typeof readInventory> | undefined;
+    expect(() => {
+      inv = readInventory(paths, () => true);
+    }).not.toThrow();
+    expect(inv!.definedAgents!.global).toEqual(['neo']);
+  });
+
+  const head = '---\nname: Edge\ndescription: ';
+
+  /**
+   * Verifies that a file of exactly 4096 bytes is complete, so its unclosed frontmatter is rejected
+   */
+  it('rejects an unclosed frontmatter in a file of exactly 4096 bytes', () => {
+    const dir = agentsDir({ 'edge.md': head + 'x'.repeat(4096 - head.length) });
+    expect(fs.statSync(path.join(dir, 'edge.md')).size).toBe(4096);
+    expect(readAgentTypes(dir)).toEqual([]);
+  });
+
+  /**
+   * Verifies that a 4097-byte file is truncated, so its frontmatter may run to the end of the head
+   */
+  it('accepts an unclosed head in a file of 4097 bytes', () => {
+    const dir = agentsDir({ 'edge.md': head + 'x'.repeat(4097 - head.length) });
+    expect(fs.statSync(path.join(dir, 'edge.md')).size).toBe(4097);
+    expect(readAgentTypes(dir)).toEqual(['Edge']);
+  });
+
+  /**
+   * Verifies that a long file whose fence closes past byte 4096 yields its name from the head
+   */
+  it('reads the name of a long file whose frontmatter closes after byte 4096', () => {
+    const dir = agentsDir({ 'long.md': `---\nname: Far-Fence\nnotes: ${'y'.repeat(4500)}\n---\nBody` });
+    expect(readAgentTypes(dir)).toEqual(['Far-Fence']);
+  });
+
+  /**
+   * Verifies that an agents folder on a network share is skipped without being listed
+   */
+  it.each([['\\\\server\\share\\.claude\\agents'], ['//server/share/.claude/agents'], ['\\\\?\\UNC\\server\\share\\agents']])(
+    'returns [] for the remote folder %s without listing it',
+    (dir) => {
+      const spy = vi.spyOn(fs, 'opendirSync');
+      expect(readAgentTypes(dir)).toEqual([]);
+      expect(spy).not.toHaveBeenCalled();
+    },
+  );
+});
+
+describe('readInventory: remote and pruned agents folders', () => {
+  let root: string;
+  let counter = 0;
+
+  beforeAll(() => {
+    root = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-office-prune-'));
+  });
+
+  afterAll(() => {
+    fs.rmSync(root, { recursive: true, force: true });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  /** A claude home defining `global-agent`, two projects defining one agent each, and a presets writer. */
+  function setup() {
+    const base = path.join(root, `case-${counter++}`);
+    const claudeHome = path.join(base, 'home');
+    const globalAgents = path.join(claudeHome, 'agents');
+    fs.mkdirSync(globalAgents, { recursive: true });
+    fs.writeFileSync(path.join(globalAgents, 'g.md'), '---\nname: global-agent\n---\n', 'utf8');
+    const projA = path.join(base, 'proj-a');
+    const projB = path.join(base, 'proj-b');
+    const agentsOf = (folder: string) => path.join(folder, '.claude', 'agents');
+    for (const [folder, name] of [
+      [projA, 'agent-a'],
+      [projB, 'agent-b'],
+    ] as const) {
+      fs.mkdirSync(agentsOf(folder), { recursive: true });
+      fs.writeFileSync(path.join(agentsOf(folder), 'x.md'), `---\nname: ${name}\n---\n`, 'utf8');
+    }
+    const presetsFile = path.join(base, 'presets.json');
+    const writePresets = (envs: { id: string; cwd: string }[]) =>
+      fs.writeFileSync(
+        presetsFile,
+        JSON.stringify({ byAccount: { acct: { presets: envs.map((e) => ({ id: e.id, name: e.id, target: { cwd: e.cwd } })) } } }),
+        'utf8',
+      );
+    const paths: ClaudePaths = {
+      claudeHome,
+      liveDir: path.join(base, 'sessions'),
+      desktopData: null,
+      presetsFile,
+      sessionDirs: [],
+    };
+    return { paths, presetsFile, globalAgents, projA, projB, agentsOf, writePresets };
+  }
+
+  /**
+   * Verifies that folders of removed environments, and stray entries, leave the cache
+   */
+  it('prunes cache entries of folders no environment uses any more', () => {
+    const { paths, globalAgents, projA, projB, agentsOf, writePresets } = setup();
+    const cache: AgentsCache = new Map();
+    writePresets([{ id: 'env-a', cwd: projA }]);
+    readInventory(paths, () => true, cache, 1000);
+    expect([...cache.keys()].sort()).toEqual([globalAgents, agentsOf(projA)].sort());
+
+    cache.set(path.join(root, 'stale-folder'), { at: 1000, types: ['ghost'] });
+    writePresets([{ id: 'env-b', cwd: projB }]);
+    const inv = readInventory(paths, () => true, cache, 2000);
+
+    expect([...cache.keys()].sort()).toEqual([globalAgents, agentsOf(projB)].sort());
+    expect(cache.get(agentsOf(projB))?.types).toEqual(['agent-b']);
+    expect(inv.definedAgents!.byEnv).toEqual(new Map([['env-b', ['agent-b']]]));
+  });
+
+  /**
+   * Verifies that readable presets listing no environment keep only the global folder cached
+   */
+  it('keeps only the global folder when the presets list no environment', () => {
+    const { paths, presetsFile, globalAgents, projA, writePresets } = setup();
+    const cache: AgentsCache = new Map();
+    writePresets([{ id: 'env-a', cwd: projA }]);
+    readInventory(paths, () => true, cache, 1000);
+    fs.writeFileSync(presetsFile, JSON.stringify({ byAccount: {} }), 'utf8');
+    readInventory(paths, () => true, cache, 2000);
+    expect([...cache.keys()]).toEqual([globalAgents]);
+  });
+
+  /**
+   * Verifies that an unreadable presets file keeps the cached folders of the unknown environments
+   */
+  it('keeps cache entries when the presets file is unreadable', () => {
+    const { paths, presetsFile, globalAgents, projA, agentsOf, writePresets } = setup();
+    const cache: AgentsCache = new Map();
+    writePresets([{ id: 'env-a', cwd: projA }]);
+    readInventory(paths, () => true, cache, 1000);
+
+    fs.writeFileSync(presetsFile, '{not json', 'utf8');
+    const inv = readInventory(paths, () => true, cache, 2000);
+
+    expect(inv.presetsOk).toBe(false);
+    expect([...cache.keys()].sort()).toEqual([globalAgents, agentsOf(projA)].sort());
+    expect(cache.get(agentsOf(projA))).toEqual({ at: 1000, types: ['agent-a'] });
+
+    // Once the presets read again, the kept entry is still fresh and reused as is.
+    writePresets([{ id: 'env-a', cwd: projA }]);
+    expect(readInventory(paths, () => true, cache, 3000).definedAgents!.byEnv.get('env-a')).toEqual(['agent-a']);
+  });
+
+  /**
+   * Verifies that a missing presets path, like an unreadable file, keeps the cached folders
+   */
+  it('keeps cache entries when no presets file is configured', () => {
+    const { paths, globalAgents, projA, agentsOf, writePresets } = setup();
+    const cache: AgentsCache = new Map();
+    writePresets([{ id: 'env-a', cwd: projA }]);
+    readInventory(paths, () => true, cache, 1000);
+    readInventory({ ...paths, presetsFile: null }, () => true, cache, 2000);
+    expect([...cache.keys()].sort()).toEqual([globalAgents, agentsOf(projA)].sort());
+  });
+
+  /**
+   * Verifies that an environment on a network share gets no agents and its folder is never listed
+   */
+  it('skips the agents folder of an environment on a network share', () => {
+    const { paths, projA, writePresets } = setup();
+    writePresets([
+      { id: 'env-remote', cwd: '\\\\server\\share\\proj' },
+      { id: 'env-a', cwd: projA },
+    ]);
+    const spy = vi.spyOn(fs, 'opendirSync');
+    const byEnv = readInventory(paths, () => true).definedAgents!.byEnv;
+    expect(byEnv.get('env-remote')).toEqual([]);
+    expect(byEnv.get('env-a')).toEqual(['agent-a']);
+    expect(spy.mock.calls.some(([p]) => isRemotePath(String(p)))).toBe(false);
   });
 });

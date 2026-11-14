@@ -41,7 +41,7 @@ import {
   type RoomDef,
   type Side,
 } from '../src/scene/layout.ts';
-import { CHARACTERS, CLIPS } from '../src/scene/characters.ts';
+import { CLIPS, LOOKS, MAIN_BODY, SUB_BODIES, type PropRef } from '../src/scene/characters.ts';
 
 // kit.ts and the .tsx files need drei and import.meta.env: they are not imported here. The
 // manifest is read as plain JSON and the geometry is tested through dungeon.ts directly.
@@ -279,7 +279,7 @@ describe('kit manifest', () => {
    * Verifies that the manifest declares the three packs the scene loads from
    */
   it('declares the dungeon, tools, weapons and adventurers packs with safe names', () => {
-    expect(Object.keys(MANIFEST).sort()).toEqual(['adventurers', 'adventurers_anim', 'dungeon', 'tools', 'weapons']);
+    expect(Object.keys(MANIFEST).sort()).toEqual(['adventurers', 'adventurers_anim', 'adventurers_props', 'dungeon', 'tools', 'weapons']);
     for (const pack of Object.keys(MANIFEST)) expect(pack).toMatch(SAFE_NAME);
   });
 
@@ -293,7 +293,18 @@ describe('kit manifest', () => {
   it('gives every pack the gltf (default) or glb format', () => {
     for (const [pack, spec] of packs) expect(['gltf', 'glb'], pack).toContain(formatOf(spec));
     expect(glbPacks.map(([p]) => p).sort()).toEqual(['adventurers', 'adventurers_anim']);
-    expect(gltfPacks.map(([p]) => p).sort()).toEqual(['dungeon', 'tools', 'weapons']);
+    expect(gltfPacks.map(([p]) => p).sort()).toEqual(['adventurers_props', 'dungeon', 'tools', 'weapons']);
+  });
+
+  /**
+   * Verifies that the adventurers props pack is a .gltf pack with the character textures its props use
+   */
+  it('declares adventurers_props as a gltf pack sharing the character textures', () => {
+    const spec = MANIFEST.adventurers_props;
+    expect(spec).toBeDefined();
+    expect(formatOf(spec)).toBe('gltf');
+    expect([...spec.textures].sort()).toEqual(['barbarian_texture.png', 'knight_texture.png', 'mage_texture.png', 'rogue_texture.png']);
+    expect(spec.license).toBeTruthy();
   });
 
   /**
@@ -385,13 +396,48 @@ describe('kit manifest', () => {
   });
 
   /**
-   * Verifies that every character skin used by an agent kind is a model of the adventurers pack
+   * Verifies that the main body, every sub body and every LOOKS body is an adventurers model
    */
-  it('contains every character model used by the agents', () => {
+  it('contains every character body used by the agents', () => {
     const models = new Set(MANIFEST.adventurers.models);
-    const used = Object.values(CHARACTERS).flat();
-    expect(used.length).toBeGreaterThan(0);
+    const used = [MAIN_BODY, ...SUB_BODIES, ...Object.values(LOOKS).map((l) => l.body)];
+    expect(used.length).toBeGreaterThan(1);
     expect(used.filter((n) => !models.has(n))).toEqual([]);
+  });
+
+  /**
+   * Verifies that the adventurers pack ships no body that no agent can ever wear
+   */
+  it('ships only bodies the agents use', () => {
+    const used = new Set<string>([MAIN_BODY, ...SUB_BODIES]);
+    expect(MANIFEST.adventurers.models.filter((n) => !used.has(n))).toEqual([]);
+  });
+
+  /**
+   * Verifies that every prop held in LOOKS is a model of the pack it names
+   */
+  it('contains every prop held by a subagent look, in the pack it names', () => {
+    const held: { type: string; ref: PropRef }[] = Object.entries(LOOKS).flatMap(([type, l]) =>
+      [l.right, l.left].filter((p): p is PropRef => !!p).map((ref) => ({ type, ref })),
+    );
+    expect(held.length).toBeGreaterThan(0);
+    const missing = held
+      .filter(({ ref }) => !MANIFEST[ref.pack]?.models.includes(ref.model))
+      .map(({ type, ref }) => `${type}: ${ref.pack}/${ref.model}`);
+    expect(missing).toEqual([]);
+  });
+
+  /**
+   * Verifies that every adventurers_props model is held by some look (no unused import)
+   */
+  it('ships only adventurers props that a look holds', () => {
+    const held = new Set(
+      Object.values(LOOKS)
+        .flatMap((l) => [l.right, l.left])
+        .filter((p): p is PropRef => p?.pack === 'adventurers_props')
+        .map((p) => p.model),
+    );
+    expect(MANIFEST.adventurers_props.models.filter((m) => !held.has(m))).toEqual([]);
   });
 
   /**

@@ -9,7 +9,7 @@ import type {
   WaitReason,
 } from '@agent-office/shared';
 import { NO_ENV_ID } from '@agent-office/shared';
-import { AGENT_ID, AGENT_NAME, matchEnvironment, type DefinedAgents, type Environment, type Inventory, type LiveProcess } from './inventory.ts';
+import { AGENT_ID, HOOK_AGENT_TYPE, matchEnvironment, type DefinedAgents, type Environment, type Inventory, type LiveProcess } from './inventory.ts';
 
 // State machine of the office. No I/O here: every function takes the state and `now`,
 // so the whole behaviour is testable with fixtures.
@@ -58,13 +58,14 @@ export function createState(): OfficeState {
 }
 
 /**
- * A hook field that must match `pattern`: anything else (wrong type, crafted value) reads as
- * absent instead of rejecting the whole event, so the rest of the payload still counts.
+ * A hook field that must match `pattern`. Absent (or JSON null) stays undefined; present but invalid (wrong
+ * type, crafted value) becomes null instead of rejecting the whole event, so the rest of the
+ * payload still counts and the reducer can tell "no value" from "a value we refuse".
  */
-function validOrAbsent(pattern: RegExp) {
+function validOrNull(pattern: RegExp) {
   return z
     .unknown()
-    .transform((v) => (typeof v === 'string' && pattern.test(v) ? v : undefined))
+    .transform((v) => (v === undefined || v === null ? undefined : typeof v === 'string' && pattern.test(v) ? v : null))
     .optional();
 }
 
@@ -74,8 +75,8 @@ export const hookEventSchema = z
     session_id: z.string().min(1),
     cwd: z.string().optional(),
     // Both are broadcast to every client and become figure ids or roster entries.
-    agent_id: validOrAbsent(AGENT_ID),
-    agent_type: validOrAbsent(AGENT_NAME),
+    agent_id: validOrNull(AGENT_ID),
+    agent_type: validOrNull(HOOK_AGENT_TYPE),
     tool_name: z.string().optional(),
     tool_input: z.unknown().optional(),
     prompt: z.string().optional(),
@@ -268,10 +269,10 @@ function removeSession(state: OfficeState, s: SessionView): void {
  * record) into `target`. The most recent main agent wins and keeps its id, so the figure,
  * its colour and the selection survive; subagents are merged by id; `live` never goes down.
  */
-function absorb(state: OfficeState, target: SessionView, cliId: string): void {
+function absorb(state: OfficeState, target: SessionView, cliId: string): AgentView[] {
   const tmpId = `cli:${cliId}`;
   const tmp = state.sessions.get(tmpId);
-  if (!tmp || tmp === target) return;
+  if (!tmp || tmp === target) return [];
   const tmpHook = state.lastHookAt.get(tmpId) ?? 0;
   const targetHook = state.lastHookAt.get(target.id) ?? 0;
   if (tmpHook >= targetHook) {
@@ -279,7 +280,8 @@ function absorb(state: OfficeState, target: SessionView, cliId: string): void {
     if (tmpHook > 0) state.lastHookAt.set(target.id, tmpHook);
   }
   const known = new Set(target.subagents.map((a) => a.id));
-  for (const a of tmp.subagents) if (!known.has(a.id)) target.subagents.push({ ...a, sessionId: target.id });
+  const moved = tmp.subagents.filter((a) => !known.has(a.id)).map((a) => ({ ...a, sessionId: target.id }));
+  target.subagents.push(...moved);
   target.live = target.live || tmp.live;
   target.lastActivityAt = Math.max(target.lastActivityAt, tmp.lastActivityAt);
   const spawns = state.pendingSpawns.get(tmpId);
@@ -287,6 +289,7 @@ function absorb(state: OfficeState, target: SessionView, cliId: string): void {
   state.sessions.delete(tmpId);
   state.lastHookAt.delete(tmpId);
   state.pendingSpawns.delete(tmpId);
+  return moved;
 }
 
 /** Merges a fresh read of the local files into the state. */
@@ -316,8 +319,9 @@ export function applyInventory(state: OfficeState, inv: Inventory, now: number):
     }
     const hostLive = liveByHost.get(ds.localId);
     const cliIds = [...ds.cliSessionIds, ...(hostLive ? [hostLive.cliSessionId] : [])];
+    const absorbed: AgentView[] = [];
     for (const cid of cliIds) {
-      absorb(state, s, cid);
+      absorbed.push(...absorb(state, s, cid));
       state.cliIndex.set(cid, s.id);
     }
     Object.assign(s, {
@@ -332,7 +336,7 @@ export function applyInventory(state: OfficeState, inv: Inventory, now: number):
     });
     // An absorbed `cli:` session noted its types under its own environment key, matched
     // from its cwd: note them again under the desktop session's environment.
-    for (const a of s.subagents) noteSeenType(state, s, a.agentType);
+    for (const a of absorbed) noteSeenType(state, s, a.agentType);
     reconcileLive(state, s, hostLive ?? cliIds.map((c) => liveByCli.get(c)).find(Boolean), now);
   }
 
@@ -410,9 +414,11 @@ const TOOL_EVENTS = new Set(['PreToolUse', 'PostToolUse', 'PostToolUseFailure', 
 
 /**
  * The subagent an event belongs to. `undefined`: the event is the main agent's.
- * `'ignore'`: an internal agent (no type) that has no figure.
+ * `'ignore'`: an internal agent (no type) that has no figure, or an id we refuse: that
+ * event belongs to some subagent, never to the main agent.
  */
 function findOrCreateSub(state: OfficeState, s: SessionView, ev: HookEvent, now: number): AgentView | 'ignore' | undefined {
+  if (ev.agent_id === null) return 'ignore';
   if (!ev.agent_id) return undefined;
   let sub = s.subagents.find((a) => a.id === ev.agent_id);
   if (!sub && TOOL_EVENTS.has(ev.hook_event_name)) {
@@ -433,7 +439,7 @@ const MAX_SEEN_TYPES = 32;
 /** Remembers that an agent type worked in this session's environment. */
 function noteSeenType(state: OfficeState, s: SessionView, agentType: string): void {
   // The type comes from the hook payload and is broadcast in every snapshot: same rule as the definitions on disk.
-  if (!AGENT_NAME.test(agentType)) return;
+  if (!HOOK_AGENT_TYPE.test(agentType)) return;
   const key = envKey(s);
   const list = state.seenTypes.get(key) ?? [];
   if (list.some((t) => t.toLowerCase() === agentType.toLowerCase())) return;
@@ -498,7 +504,7 @@ export function applyHook(state: OfficeState, ev: HookEvent, now: number): Sessi
         const input = (ev.tool_input ?? {}) as Record<string, unknown>;
         const agentType = input.subagent_type === undefined ? 'general-purpose' : input.subagent_type;
         // An invalid type would never match a (validated) SubagentStart: nothing to remember.
-        if (typeof agentType === 'string' && AGENT_NAME.test(agentType)) {
+        if (typeof agentType === 'string' && HOOK_AGENT_TYPE.test(agentType)) {
           const list = state.pendingSpawns.get(s.id) ?? [];
           list.push({
             agentType,
@@ -631,8 +637,8 @@ export function summarize(ev: HookEvent, s: SessionView, now: number, seq = 0): 
     event: ev.hook_event_name,
     sessionId: s.id,
     envId: s.envId,
-    agentId: ev.agent_id,
-    agentType: ev.agent_type,
+    agentId: ev.agent_id ?? undefined,
+    agentType: ev.agent_type ?? undefined,
     tool: ev.tool_name,
     detail: toolDetail(ev.tool_input) ?? truncate(ev.prompt ?? ev.message, 120),
   };
