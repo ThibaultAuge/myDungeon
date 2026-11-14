@@ -1,6 +1,6 @@
 // Types shared by the server and the web client. Type-only module: import it with `import type`.
 
-/** The places of the dungeon. See docs/lieux-et-personnages.md. */
+/** The places of the dungeon. See docs/lieux.md. */
 export type RoomId =
   | 'autel'
   | 'cartes'

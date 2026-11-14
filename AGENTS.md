@@ -24,4 +24,6 @@ npm workspaces: `packages/server`, `packages/web`, `packages/shared`.
 - `docs/ai/dialogue.md` — Use when changing the agent conversation box (AgentDialog), how transcripts are found, parsed or paged (transcript.ts, /api/transcript, useTranscript), or adding any route that reads or changes conversations.
 - `docs/ai/agent-info.md` — Use when changing the selected-agent details card (AgentInfo), session details sent to the client (SessionView.info, worktree, branch, model, effort, permission mode, CLI version), or the detection of a session's local web servers (ports.ts, SessionView.servers).
 
-Human docs (French): `README.md` and `docs/`.
+Human docs (French): `README.md` (pitch, install, tests, doc index); in `docs/`:
+`utilisation.md`, `fonctionnement.md` (data flow, hooks, env vars), `securite.md`,
+`modeles-3d.md`, `lieux.md`, `personnages.md`, `conception.md`.

@@ -1,6 +1,6 @@
 import type { RoomId } from '@agent-office/shared';
 
-// Dungeon floor plan, following the reference drawing in docs/lieux-et-personnages.md.
+// Dungeon floor plan, following the reference drawing in docs/lieux.md.
 // Pure data and geometry, no three.js: the seat and route logic is testable in node.
 //
 // Five columns of rooms separated by 2 m corridors. x grows to the east, z to the south
