@@ -10,6 +10,7 @@ import { clipFor, CLIPS, gripFor, lookFor, SPAWN_TIME_SCALE, type ClipName, type
 import { KIT_SCALE } from './dungeon.ts';
 import { useKitGLTF } from './kit.ts';
 import { reroute, routeBetween, SPAWN, type Point, type Spot } from './layout.ts';
+import { RequestBubble } from './RequestBubble.tsx';
 import { advance, approach, nextSpeed, remainingDistance, turnToward } from './walk.ts';
 
 /** Live positions of the figures, read by the camera to follow the selected agent. */
@@ -368,22 +369,26 @@ function AgentFigureImpl({ agent, name, color, spot, start, selected, onSelect, 
         <torusGeometry args={[0.5, 0.06, 8, 32]} />
         <meshBasicMaterial color={STATE_COLORS[agent.state]} />
       </mesh>
-      {waiting && (
+      {/* Waiting for a prompt: the small amber gem. At the altar, a speech bubble rides on the name tag. */}
+      {waiting && !urgent && (
         <mesh ref={bubble} position={[0, BUBBLE_Y, 0]}>
-          <octahedronGeometry args={[urgent ? 0.24 : 0.16]} />
-          <meshBasicMaterial color={urgent ? '#E24B4A' : STATE_COLORS.waiting} />
+          <octahedronGeometry args={[0.16]} />
+          <meshBasicMaterial color={STATE_COLORS.waiting} />
         </mesh>
       )}
       {connected && (
         <Html
           position={[0, TAG_Y, 0]}
           center
-          className={`agent-tag${selected ? ' agent-tag--selected' : ''}`}
+          className="agent-tag-anchor"
           style={{ '--session-color': color } as CSSProperties}
           zIndexRange={[10, 0]}
         >
+          {urgent && <RequestBubble reason={agent.waitReason} />}
           {/* Same name as in the side list, which is the accessible one: not announced twice. */}
-          <span aria-hidden="true">{name}</span>
+          <span className={`agent-tag${selected ? ' agent-tag--selected' : ''}`} aria-hidden="true">
+            {name}
+          </span>
         </Html>
       )}
     </group>

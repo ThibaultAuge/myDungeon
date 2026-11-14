@@ -62,8 +62,9 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cuta
   fallback) clones the model with `SkeletonUtils`, animates through drei `useAnimations`
   with manual weight blending (`FADE` 0.2 s), hides the model until the first clip is
   applied, and disposes skeletons on unmount.
-- Tag (drei `<Html>`): name in `<span aria-hidden>` (the side list is the accessible
-  source); border = session colour via `--session-color`; selection = outline `#185fa5`
+- Tag (drei `<Html>`, wrapper class `agent-tag-anchor`): name in `<span class="agent-tag"
+  aria-hidden>` (the side list is the accessible source); waiting markers (gem, altar
+  request bubble): `docs/ai/agent-lifecycle.md`; border = session colour via `--session-color`; selection = outline `#185fa5`
   offset 2px + bold (not colour alone); forced-colors rules in `styles.css`. A floor disc
   in the session colour sits inside the state ring.
 

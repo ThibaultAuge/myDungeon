@@ -11,6 +11,7 @@ export function rowId(agentId: string): string {
 
 function AgentButton({ agent, session, now }: { agent: AgentView; session: SessionView; now: number }) {
   const selected = useOffice((s) => s.selectedAgentId === agent.id);
+  const dialogOpen = useOffice((s) => s.dialogOpen);
   const select = useOffice((s) => s.select);
   const { t } = useT();
   const name = agentName(agent, session, t);
@@ -19,9 +20,10 @@ function AgentButton({ agent, session, now }: { agent: AgentView; session: Sessi
       type="button"
       id={rowId(agent.id)}
       className={`agent-row${agent.kind === 'sub' ? ' agent-row--sub' : ''}`}
-      aria-pressed={selected}
+      aria-pressed={selected && dialogOpen}
       title={agent.description ? t.labelled(name, agent.description) : name}
-      onClick={() => select(selected ? null : agent.id)}
+      // Selected with its conversation closed: a press reopens it instead of deselecting.
+      onClick={() => select(selected && dialogOpen ? null : agent.id)}
     >
       <span className="dot" style={{ background: STATE_COLORS[agent.state] }} aria-hidden="true" />
       <span className="agent-row__text">
