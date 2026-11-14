@@ -27,7 +27,11 @@ Un petit bureau en 3D où chaque agent Claude Code du poste local est un personn
   - En attente, ils regardent autour d'eux, le losange ambre restant affiché. Le premier de la file s'agenouille devant l'autel.
   - Chaque personnage a un disque au sol de la couleur de sa session, et le bord de son étiquette porte cette même couleur. L'étiquette du personnage sélectionné a un contour bleu et du texte en gras.
   - Si la réduction des animations est activée dans le système, les personnages gardent une pose fixe et n'effectuent pas de surgissement, mais ils se déplacent toujours d'une pièce à l'autre.
-- **Un clic sur un personnage**, ou sur sa ligne dans la liste, affiche sa tâche, son outil, le temps écoulé et son dernier message, et ouvre sa [boîte de dialogue](#dialogue-avec-un-agent) en bas de la scène. La liste latérale est l'équivalent complet de la vue 3D au clavier et au lecteur d'écran.
+- **Un clic sur un personnage**, ou sur sa ligne dans la liste, ouvre sa **fiche** en haut à droite de la scène, dans le même style que la [boîte de dialogue](#dialogue-avec-un-agent) en bas. La fiche affiche :
+  - son état et depuis quand, sa tâche ou sa dernière requête, son outil, la session qui l'a lancé (« lancée depuis »), et son dernier message ;
+  - le contexte de sa session : origine (app Claude ou terminal, en cours ou terminée), worktree (oui ou non) et son nom, dossier, branche et branche d'origine, modèle, effort, mode de permission, heure de début (sessions de l'app), nombre de tours, sous-agents actifs, version de Claude Code ;
+  - les serveurs web que la session a lancés, sous forme de liens `http://localhost:<port>` qui s'ouvrent dans un nouvel onglet. Ils sont détectés toutes les 10 s : un port en écoute ouvert par un processus lancé par la session, ou un port déclaré dans `.claude/launch.json` du dossier de la session et servi depuis ce dossier. Un port ouvert par un outil ou un serveur MCP lancé par Claude apparaît aussi. Seules les adresses locales sont détectées.
+  - Le × de la fiche désélectionne l'agent : la fiche et la boîte de dialogue se ferment. La colonne latérale ne contient que la liste des sessions et l'historique. La liste latérale reste l'équivalent complet de la vue 3D au clavier et au lecteur d'écran.
 - **L'historique** liste les sessions terminées.
 - **`/debug`** montre le flux brut des événements reçus.
 

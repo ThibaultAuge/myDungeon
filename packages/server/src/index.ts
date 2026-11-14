@@ -6,9 +6,11 @@ import { AuthGate } from './auth.ts';
 import { loadConfig, WEB_DIST } from './config.ts';
 import { readInventory, type AgentsCache } from './inventory.ts';
 import { resolvePaths, type ClaudePaths } from './paths.ts';
+import { LaunchPortsCache, PortScanner } from './ports.ts';
 import { OfficeStore } from './store.ts';
 
 const RESCAN_MS = 10_000;
+const PORT_SCAN_MS = 10_000;
 const REDISCOVER_MS = 60_000;
 const DEBOUNCE_MS = 300;
 
@@ -51,6 +53,41 @@ setInterval(() => {
   rescan();
   store.tick();
 }, RESCAN_MS);
+const launchCache = new LaunchPortsCache();
+const portScanner = new PortScanner(config.port);
+let portScanRunning = false;
+let portScanFailed = false;
+/** Rounds still to skip after failures: 1, 2, 4… up to 6 rounds (one minute), reset on success. */
+let portScanSkip = 0;
+let portScanBackoff = 0;
+/** Finds the web servers of the live sessions. Never two scans at once; skipped with no live session. */
+async function scanPorts(): Promise<void> {
+  if (portScanRunning) return;
+  if (portScanSkip > 0) {
+    portScanSkip--;
+    return;
+  }
+  portScanRunning = true;
+  try {
+    const now = Date.now();
+    const targets = store.portTargets((cwd) => launchCache.get(cwd, now));
+    launchCache.keepOnly(targets.map((t) => t.cwd));
+    store.ingestServers(await portScanner.scan(targets));
+    portScanFailed = false;
+    portScanBackoff = 0;
+  } catch (err) {
+    // The previous result is kept; one line per failure streak, not one every 10 s.
+    if (!portScanFailed) console.error('[ports] détection impossible :', (err as Error).message.split('\n')[0].slice(0, 200));
+    portScanFailed = true;
+    portScanBackoff = Math.min(6, Math.max(1, portScanBackoff * 2));
+    portScanSkip = portScanBackoff;
+  } finally {
+    portScanRunning = false;
+  }
+}
+void scanPorts();
+setInterval(() => void scanPorts(), PORT_SCAN_MS);
+
 setInterval(() => {
   try {
     const next = resolvePaths();

@@ -44,6 +44,8 @@ function session(overrides: Partial<SessionView> = {}): SessionView {
     cwd: CWD,
     live: true,
     archived: false,
+    info: {},
+    servers: [],
     createdAt: 0,
     lastActivityAt: 0,
     main: agent(),

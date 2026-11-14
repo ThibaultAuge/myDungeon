@@ -474,33 +474,6 @@ select,
   white-space: nowrap;
 }
 
-.agent-panel {
-  border: 1px solid var(--accent);
-  border-radius: 12px;
-  padding: 12px 14px;
-}
-
-.agent-panel__head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 8px;
-}
-
-.agent-panel h2 {
-  font-size: 16px;
-}
-
-.icon-button {
-  border: 1px solid var(--control-border);
-  background: none;
-  border-radius: var(--radius);
-  width: 28px;
-  height: 28px;
-  cursor: pointer;
-  line-height: 1;
-}
-
 .link-button {
   border: none;
   background: none;
@@ -516,24 +489,6 @@ select,
   gap: 8px;
   font-size: 13px;
   margin: 4px 0 8px;
-}
-
-.agent-panel dl {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 4px 12px;
-  font-size: 13px;
-  margin: 0;
-}
-
-.agent-panel dt {
-  color: var(--text-2);
-}
-
-.agent-panel dd {
-  margin: 0;
-  min-width: 0;
-  overflow-wrap: anywhere;
 }
 
 .last-message {
@@ -572,19 +527,17 @@ select,
   vertical-align: top;
 }
 
-/* Conversation box, RPG style: same dark parchment in both themes. */
-.agent-dialog {
+/* Conversation box and info card, RPG style: same dark parchment in both themes. */
+.agent-dialog,
+.agent-info {
   --dlg-bg: rgba(28, 23, 17, 0.95);
   --dlg-text: #f3ead8;
   --dlg-muted: #cfc3a8;
   --dlg-gold: #c9a45c;
+  /* Height of the conversation box, which the info card must never cover. */
+  --dlg-height: max(180px, min(42%, 340px));
   position: absolute;
-  left: 12px;
-  right: 12px;
-  bottom: 12px;
   z-index: 20;
-  height: min(42%, 340px);
-  min-height: 180px;
   display: flex;
   flex-direction: column;
   padding: 22px 14px 10px;
@@ -595,11 +548,95 @@ select,
   box-shadow: 0 6px 24px rgba(0, 0, 0, 0.45), inset 0 0 0 1px rgba(201, 164, 92, 0.35);
 }
 
+.agent-dialog {
+  left: 12px;
+  right: 12px;
+  bottom: 12px;
+  height: min(42%, 340px);
+  min-height: 180px;
+}
+
 .office__scene:has(.agent-dialog) .legend {
   display: none;
 }
 
-.agent-dialog__plate {
+/* Info card, top right. The plate sticks out above it, hence the larger top margin. */
+.agent-info {
+  top: 24px;
+  right: 12px;
+  /* Clears the close button, so the scroll bar of the body never runs under it. */
+  padding-top: 38px;
+  width: min(360px, calc(100% - 24px));
+  max-height: calc(100% - 36px);
+}
+
+.office__scene:has(.agent-dialog) .agent-info {
+  /* Stops 12px above the plate of the conversation box, which sticks out 16px above it. */
+  max-height: calc(100% - 24px - var(--dlg-height) - 12px - 28px);
+}
+
+.agent-info__body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 2px 6px 4px 2px;
+}
+
+.agent-info h3 {
+  margin: 12px 0 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--dlg-gold);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.agent-info dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 12px;
+  font-size: 13px;
+  margin: 0;
+}
+
+.agent-info dt,
+.agent-info .muted,
+.agent-info .path {
+  color: var(--dlg-muted);
+}
+
+.agent-info dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.agent-info code {
+  font-size: 12px;
+}
+
+.agent-info a,
+.agent-info .link-button {
+  color: #e9c97f;
+}
+
+.agent-info__servers {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.agent-info__body:focus-visible,
+.agent-info__close:focus-visible,
+.agent-info a:focus-visible,
+.agent-info .link-button:focus-visible,
+.agent-info h2:focus-visible {
+  outline: 2px solid var(--dlg-gold);
+  outline-offset: 2px;
+}
+
+.agent-dialog__plate,
+.agent-info__plate {
   position: absolute;
   top: -16px;
   left: 18px;
@@ -614,7 +651,8 @@ select,
   border-radius: 6px;
 }
 
-.agent-dialog__plate h2 {
+.agent-dialog__plate h2,
+.agent-info__plate h2 {
   margin: 0;
   font-size: 15px;
   font-weight: 600;
@@ -629,7 +667,8 @@ select,
   white-space: nowrap;
 }
 
-.agent-dialog__close {
+.agent-dialog__close,
+.agent-info__close {
   position: absolute;
   top: 4px;
   right: 6px;
@@ -742,17 +781,37 @@ select,
     bottom: 8px;
     height: 55%;
   }
+  .agent-info {
+    top: 22px;
+    left: 8px;
+    right: 8px;
+    width: auto;
+    max-height: calc(100% - 30px);
+  }
+  /* The box takes 55% plus its 8px margin and its 16px plate; the card keeps what is left above it. */
+  .office__scene:has(.agent-dialog) .agent-info {
+    max-height: calc(45% - 22px - 8px - 28px);
+    min-height: 0;
+  }
 }
 
 @media (forced-colors: active) {
   .agent-dialog,
   .agent-dialog__plate,
-  .agent-dialog__close {
+  .agent-dialog__close,
+  .agent-info,
+  .agent-info__plate,
+  .agent-info__close {
     border-color: CanvasText;
   }
   .agent-dialog__log:focus-visible,
   .agent-dialog__close:focus-visible,
-  .agent-dialog .link-button:focus-visible {
+  .agent-dialog .link-button:focus-visible,
+  .agent-info__body:focus-visible,
+  .agent-info__close:focus-visible,
+  .agent-info a:focus-visible,
+  .agent-info .link-button:focus-visible,
+  .agent-info h2:focus-visible {
     outline-color: Highlight;
   }
 }

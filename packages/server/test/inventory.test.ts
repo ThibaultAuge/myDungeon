@@ -7,9 +7,12 @@ import {
   AGENTS_CACHE_MS,
   agentNameFromDefinition,
   type AgentsCache,
+  cliVersion,
   HOOK_AGENT_TYPE,
   isRemotePath,
   isWithin,
+  isWorktree,
+  linkedBelow,
   matchEnvironment,
   normPath,
   parseDesktopSession,
@@ -17,6 +20,7 @@ import {
   parsePresets,
   readAgentTypes,
   readInventory,
+  sessionInfo,
 } from '../src/inventory.ts';
 import type { ClaudePaths } from '../src/paths.ts';
 import { ENV_ALPHA, ENV_ALPHA_API, ENV_BETA, ENVS, LOCAL_A, LOCAL_B, CLI_A, loadFixture } from './fixtures/builders.ts';
@@ -73,6 +77,15 @@ describe('parseDesktopSession', () => {
       createdAt: 1700000000000,
       lastActivityAt: 1700000500000,
       parent: { sessionId: 'local_22222222-2222-4222-8222-222222222222', title: 'Parent task' },
+      info: {
+        worktree: { name: 'wt-1' },
+        branch: 'claude/wt-1',
+        sourceBranch: 'main',
+        model: 'fake-model',
+        effort: 'medium',
+        permissionMode: 'auto',
+        completedTurns: 6,
+      },
     });
   });
 
@@ -91,6 +104,7 @@ describe('parseDesktopSession', () => {
       createdAt: 1700000100000,
       lastActivityAt: 1700000100000,
       parent: undefined,
+      info: {},
     });
   });
 
@@ -162,6 +176,15 @@ describe('parseDesktopSession', () => {
 });
 
 describe('parseLiveProcess', () => {
+  /**
+   * Verifies that a version of the wrong type is dropped without rejecting the process
+   */
+  it('drops a non-string version but keeps the process', () => {
+    const p = parseLiveProcess({ pid: 7, sessionId: CLI_A, version: 5 });
+    expect(p).not.toBeNull();
+    expect(p?.version).toBeUndefined();
+  });
+
   /**
    * Verifies that a live process maps its ids and prefers statusUpdatedAt as timestamp
    */
@@ -1383,5 +1406,325 @@ describe('readInventory: remote and pruned agents folders', () => {
     expect(byEnv.get('env-remote')).toEqual([]);
     expect(byEnv.get('env-a')).toEqual(['agent-a']);
     expect(spy.mock.calls.some(([p]) => isRemotePath(String(p)))).toBe(false);
+  });
+});
+
+describe('sessionInfo', () => {
+  const base = { sessionId: 'local_x' };
+
+  /**
+   * Verifies that every valid working-context field is kept, worktree wrapped in an object
+   */
+  it('keeps every valid field', () => {
+    expect(
+      sessionInfo({
+        ...base,
+        worktreeName: 'wt-1',
+        branch: 'claude/wt-1',
+        sourceBranch: 'main',
+        model: 'claude-opus-5-5',
+        effort: 'high',
+        permissionMode: 'acceptEdits',
+        completedTurns: 12,
+      }),
+    ).toStrictEqual({
+      worktree: { name: 'wt-1' },
+      branch: 'claude/wt-1',
+      sourceBranch: 'main',
+      model: 'claude-opus-5-5',
+      effort: 'high',
+      permissionMode: 'acceptEdits',
+      completedTurns: 12,
+    });
+  });
+
+  /**
+   * Verifies that a record without context gives an empty object with no undefined keys
+   */
+  it('returns {} without any undefined key when nothing is set', () => {
+    const info = sessionInfo(base);
+    expect(info).toStrictEqual({});
+    expect(Object.keys(info)).toEqual([]);
+  });
+
+  /**
+   * Verifies that wrongly typed values are dropped field by field
+   */
+  it('drops wrongly typed values', () => {
+    const info = sessionInfo({
+      ...base,
+      worktreeName: 5,
+      branch: ['main'],
+      sourceBranch: null,
+      model: { id: 'x' },
+      effort: 3,
+      permissionMode: true,
+      completedTurns: '6',
+    });
+    expect(info).toStrictEqual({});
+  });
+
+  /**
+   * Verifies that branch and worktree labels accept any printable text up to 128 characters
+   */
+  it.each([['main'], ['feature/été 2'], ['a'.repeat(128)], ['fix #12 (urgent)']])('accepts the label %j', (label) => {
+    expect(sessionInfo({ ...base, branch: label, sourceBranch: label, worktreeName: label })).toStrictEqual({
+      worktree: { name: label },
+      branch: label,
+      sourceBranch: label,
+    });
+  });
+
+  /**
+   * Verifies that empty, over-long or control-character labels are dropped
+   */
+  it.each([[''], ['a'.repeat(129)], ['main\n'], ['x\u0000y'], ['x\u007f'], ['\tmain'], ['a\u001bb']])('drops the label %j', (label) => {
+    expect(sessionInfo({ ...base, branch: label, sourceBranch: label, worktreeName: label })).toStrictEqual({});
+  });
+
+  /**
+   * Verifies that model ids made of word characters, dots, colons, at signs and brackets are kept
+   */
+  it.each([['claude-opus-5-5'], ['claude-sonnet-5-5[1m]'], ['vendor.claude:v1@2026'], ['a'.repeat(64)]])('accepts the model %j', (model) => {
+    expect(sessionInfo({ ...base, model }).model).toBe(model);
+  });
+
+  /**
+   * Verifies that model ids with spaces, markup, accents or over 64 characters are dropped
+   */
+  it.each([['claude opus'], ['<img src=x>'], ['modèle'], ['a'.repeat(65)], ['']])('drops the model %j', (model) => {
+    expect(sessionInfo({ ...base, model })).toStrictEqual({});
+  });
+
+  /**
+   * Verifies that effort and permission mode accept enum-like words of up to 32 characters
+   */
+  it.each([['low'], ['xhigh'], ['bypassPermissions'], ['plan-2'], ['a_b'], ['a' + 'b'.repeat(31)]])('accepts the raw word %j', (word) => {
+    expect(sessionInfo({ ...base, effort: word, permissionMode: word })).toStrictEqual({ effort: word, permissionMode: word });
+  });
+
+  /**
+   * Verifies that words starting with a non-letter, with punctuation or spaces, or too long are dropped
+   */
+  it.each([['1high'], ['-x'], ['high!'], ['plan mode'], ['a'.repeat(33)], [''], ['élevé']])('drops the raw word %j', (word) => {
+    expect(sessionInfo({ ...base, effort: word, permissionMode: word })).toStrictEqual({});
+  });
+
+  /**
+   * Verifies that completed turns accept non-negative safe integers, zero included
+   */
+  it.each([[0], [6], [Number.MAX_SAFE_INTEGER]])('accepts %d completed turns', (n) => {
+    expect(sessionInfo({ ...base, completedTurns: n })).toStrictEqual({ completedTurns: n });
+  });
+
+  /**
+   * Verifies that negative, fractional, non-finite or unsafe turn counts are dropped
+   */
+  it.each([[-1], [1.5], [Number.NaN], [Number.POSITIVE_INFINITY], [2 ** 53]])('drops %d completed turns', (n) => {
+    expect(sessionInfo({ ...base, completedTurns: n })).toStrictEqual({});
+  });
+
+  /**
+   * Verifies that an invalid context field never makes the whole desktop record invalid
+   */
+  it('lets parseDesktopSession keep a record whose context is invalid', () => {
+    const s = parseDesktopSession({ sessionId: 'local_x', title: 'T', model: 42, branch: 'main\n', completedTurns: -3, effort: 'medium' });
+    expect(s).not.toBeNull();
+    expect(s?.title).toBe('T');
+    expect(s?.info).toStrictEqual({ effort: 'medium' });
+  });
+});
+
+describe('cliVersion', () => {
+  /**
+   * Verifies that usual version strings are kept as they are
+   */
+  it.each([['2.3.1'], ['2.3.1-beta.2'], ['1.0.0+build.7'], ['a'.repeat(32)]])('keeps %j', (v) => {
+    expect(cliVersion(v)).toBe(v);
+  });
+
+  /**
+   * Verifies that empty, spaced, slashed, markup or over-long versions are dropped
+   */
+  it.each([[undefined], [''], ['2.3.1 '], ['2.3/1'], ['<b>2</b>'], ['a'.repeat(33)]])('drops %j', (v) => {
+    expect(cliVersion(v)).toBeUndefined();
+  });
+});
+
+describe('parseLiveProcess: version', () => {
+  /**
+   * Verifies that a valid Claude Code version of a live process is kept
+   */
+  it('keeps a valid version', () => {
+    expect(parseLiveProcess({ pid: 1, sessionId: 's', version: '2.3.1' })?.version).toBe('2.3.1');
+  });
+
+  /**
+   * Verifies that an invalid version string is dropped while the process is kept
+   */
+  it('drops an invalid version string but keeps the process', () => {
+    const p = parseLiveProcess({ pid: 1, sessionId: 's', version: '2.3.1; rm -rf' });
+    expect(p).not.toBeNull();
+    expect(p?.version).toBeUndefined();
+  });
+
+  /**
+   * Verifies that a process file without version gives no version
+   */
+  it('gives no version when absent', () => {
+    expect(parseLiveProcess({ pid: 1, sessionId: 's' })?.version).toBeUndefined();
+  });
+});
+
+describe('isWorktree', () => {
+  let root: string;
+
+  beforeAll(() => {
+    root = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-office-wt-'));
+  });
+
+  afterAll(() => {
+    fs.rmSync(root, { recursive: true, force: true });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  /**
+   * Verifies that a folder holding a .git file (linked worktree) is a worktree
+   */
+  it('is true when .git is a file', () => {
+    const dir = path.join(root, 'linked-wt');
+    fs.mkdirSync(dir);
+    fs.writeFileSync(path.join(dir, '.git'), 'gitdir: C:/work/alpha/.git/worktrees/wt-1\n', 'utf8');
+    expect(isWorktree(dir)).toBe(true);
+  });
+
+  /**
+   * Verifies that a main repository (.git folder) is not a worktree
+   */
+  it('is false when .git is a folder', () => {
+    const dir = path.join(root, 'main-repo');
+    fs.mkdirSync(path.join(dir, '.git'), { recursive: true });
+    expect(isWorktree(dir)).toBe(false);
+  });
+
+  /**
+   * Verifies that a folder without .git, or a missing folder, is not a worktree
+   */
+  it('is false without .git or folder', () => {
+    const dir = path.join(root, 'plain');
+    fs.mkdirSync(dir);
+    expect(isWorktree(dir)).toBe(false);
+    expect(isWorktree(path.join(root, 'missing'))).toBe(false);
+  });
+
+  /**
+   * Verifies that empty and relative folders are never checked
+   */
+  it.each([[''], ['relative\\repo'], ['relative/repo']])('is false for the non-absolute folder %j', (cwd) => {
+    expect(isWorktree(cwd)).toBe(false);
+  });
+
+  /**
+   * Verifies that a network share is reported false without touching the file system
+   */
+  it.each([['\\\\server\\share\\repo'], ['//server/share/repo']])('is false for the remote folder %s without lstat', (cwd) => {
+    const spy = vi.spyOn(fs, 'lstatSync');
+    expect(isWorktree(cwd)).toBe(false);
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  /**
+   * Verifies that an lstat failure is reported false instead of throwing
+   */
+  it('is false when lstat throws', () => {
+    const dir = path.join(root, 'locked');
+    fs.mkdirSync(dir);
+    fs.writeFileSync(path.join(dir, '.git'), 'gitdir: x\n', 'utf8');
+    vi.spyOn(fs, 'lstatSync').mockImplementation(() => {
+      throw Object.assign(new Error('EACCES'), { code: 'EACCES' });
+    });
+    expect(isWorktree(dir)).toBe(false);
+  });
+});
+
+describe('linkedBelow', () => {
+  let root: string;
+
+  beforeAll(() => {
+    root = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-office-linked-'));
+  });
+
+  afterAll(() => {
+    fs.rmSync(root, { recursive: true, force: true });
+  });
+
+  /**
+   * Verifies that real folders below the root are not reported as links
+   */
+  it('is false for plain folders', () => {
+    const dir = path.join(root, 'plain', '.claude');
+    fs.mkdirSync(dir, { recursive: true });
+    expect(linkedBelow(path.join(root, 'plain'), path.join(dir, 'launch.json'))).toBe(false);
+  });
+
+  /**
+   * Verifies that a missing component stops the check without reporting a link
+   */
+  it('is false when a component is absent', () => {
+    expect(linkedBelow(root, path.join(root, 'absent', 'deeper'))).toBe(false);
+  });
+
+  /**
+   * Verifies that a junction or symlink component below the root is reported
+   */
+  it('is true when a component is a link', () => {
+    const target = path.join(root, 'target');
+    const repo = path.join(root, 'repo');
+    fs.mkdirSync(target, { recursive: true });
+    fs.mkdirSync(repo, { recursive: true });
+    fs.symlinkSync(target, path.join(repo, '.claude'), 'junction');
+    expect(linkedBelow(repo, path.join(repo, '.claude', 'launch.json'))).toBe(true);
+  });
+});
+
+describe('readInventory: worktree flag of live processes', () => {
+  let root: string;
+
+  beforeAll(() => {
+    root = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-office-livewt-'));
+  });
+
+  afterAll(() => {
+    fs.rmSync(root, { recursive: true, force: true });
+  });
+
+  /**
+   * Verifies that each live process is flagged a worktree only when its cwd holds a .git file
+   */
+  it('sets worktree from the .git entry of each live cwd', () => {
+    const liveDir = path.join(root, 'sessions');
+    fs.mkdirSync(liveDir, { recursive: true });
+    const wt = path.join(root, 'alpha-wt');
+    const main = path.join(root, 'alpha');
+    fs.mkdirSync(wt, { recursive: true });
+    fs.mkdirSync(path.join(main, '.git'), { recursive: true });
+    fs.writeFileSync(path.join(wt, '.git'), 'gitdir: x\n', 'utf8');
+    const live = (pid: number, cwd: string) =>
+      fs.writeFileSync(path.join(liveDir, `${pid}.json`), JSON.stringify({ pid, sessionId: `s-${pid}`, cwd, version: '2.3.1' }), 'utf8');
+    live(101, wt);
+    live(102, main);
+    live(103, '\\\\server\\share\\repo');
+
+    const inv = readInventory(
+      { claudeHome: root, liveDir, desktopData: null, presetsFile: null, sessionDirs: [] },
+      () => true,
+    );
+    const byPid = new Map(inv.live.map((p) => [p.pid, p]));
+    expect(byPid.get(101)).toMatchObject({ worktree: true, version: '2.3.1' });
+    expect(byPid.get(102)?.worktree).toBe(false);
+    expect(byPid.get(103)?.worktree).toBe(false);
   });
 });

@@ -43,3 +43,37 @@ Cleanup after the KayKit adventurer characters replaced the capsule figure.
   `AgentFigure.tsx` loads models through `useKitGLTF`). Function unchanged.
 
 Rollback: re-add `export` before `function kitUrl(`; `tsc --noEmit` was clean after the change.
+
+## 2026-11-14 — branch claude/agent-info-popup-b0c674
+
+After `packages/web/src/ui/AgentPanel.tsx` was replaced by the in-scene `AgentInfo.tsx` card:
+
+- `packages/web/src/styles.css`: removed the `.icon-button` rule (formerly lines 477-485, plus
+  the blank line after it). Its only user was the close button of the deleted AgentPanel;
+  AgentInfo uses `.agent-info__close`.
+
+  ```css
+  .icon-button {
+    border: 1px solid var(--control-border);
+    background: none;
+    border-radius: var(--radius);
+    width: 28px;
+    height: 28px;
+    cursor: pointer;
+    line-height: 1;
+  }
+  ```
+
+- `panel.session` i18n key, removed from all three languages (key parity kept), each just
+  after `stateSince` in the `panel` block:
+  - `packages/web/src/i18n/en.ts` (formerly line 54): `session: 'Session',`
+  - `packages/web/src/i18n/de.ts` (formerly line 54): `session: 'Sitzung',`
+  - `packages/web/src/i18n/fr.ts` (formerly line 59): `session: 'Session',`
+
+  Reason: only AgentPanel read it; AgentInfo uses `info.session`. `session.untitled` and
+  `info.session` were kept.
+
+- `packages/web/src/ui/SessionList.tsx:7`: comment wording only ("detail panel" became
+  "agent info card"). No code change.
+
+Rollback: re-insert the snippets above at the listed positions.
