@@ -7,6 +7,7 @@ import type { AgentState, AgentView } from '@agent-office/shared';
 import { STATE_COLORS } from '../format.ts';
 import { reducedMotion } from '../motion.ts';
 import { clipFor, CLIPS, gripFor, lookFor, SPAWN_TIME_SCALE, type ClipName, type Look, type PropRef } from './characters.ts';
+import { CLICK_MAX_DRAG_PX, setPointerHover, TARGET_USER_DATA } from './cursor.ts';
 import { KIT_SCALE } from './dungeon.ts';
 import { useKitGLTF } from './kit.ts';
 import { reroute, routeBetween, SPAWN, type Point, type Spot } from './layout.ts';
@@ -268,13 +269,8 @@ function AgentFigureImpl({ agent, name, color, spot, start, selected, onSelect, 
   }, [agent.id, pos]);
 
   // A figure that leaves the scene while hovered gets no pointer-out: give the cursor back.
-  const hovered = useRef(false);
-  useEffect(
-    () => () => {
-      if (hovered.current) document.body.style.cursor = '';
-    },
-    [],
-  );
+  const cursorKey = `agent:${agent.id}`;
+  useEffect(() => () => setPointerHover(cursorKey, false), [cursorKey]);
 
   useFrame(({ clock }, delta) => {
     const g = group.current;
@@ -333,27 +329,25 @@ function AgentFigureImpl({ agent, name, color, spot, start, selected, onSelect, 
     <group
       ref={group}
       scale={scale}
+      {...(onSelect && { userData: TARGET_USER_DATA })}
       onClick={
         onSelect &&
         ((e) => {
           e.stopPropagation();
+          // Releasing after a camera drag selects nothing, as on a workstation.
+          if (e.delta > CLICK_MAX_DRAG_PX) return;
           onSelect(agent.id);
         })
       }
       onPointerOver={
         onSelect &&
-        (() => {
-          hovered.current = true;
-          document.body.style.cursor = 'pointer';
+        ((e) => {
+          // An agent in front of a workstation keeps it dark: the click would select the agent.
+          e.stopPropagation();
+          setPointerHover(cursorKey, true);
         })
       }
-      onPointerOut={
-        onSelect &&
-        (() => {
-          hovered.current = false;
-          document.body.style.cursor = '';
-        })
-      }
+      onPointerOut={onSelect && (() => setPointerHover(cursorKey, false))}
     >
       <CharacterBoundary fallback={capsule} onError={() => (motion.current.spawnLeft = 0)}>
         <Suspense fallback={null}>

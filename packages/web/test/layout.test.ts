@@ -14,11 +14,17 @@ import {
   doorOf,
   inFootprint,
   MIN_SEAT_GAP,
+  POST_IDS,
+  POST_ROOM,
+  postGroups,
   reroute,
   queueSpot,
   routeBetween,
   wallSeats,
   type Point,
+  type PostId,
+  type Prop,
+  type PropKind,
   type RoomDef,
   type SeatMemory,
   type SeatRequest,
@@ -935,5 +941,260 @@ describe('standing places', () => {
     for (const s of wallSeats(r)) {
       expect(r.props.some((p) => inFootprint(p, s.x, s.z)), `${id} ${JSON.stringify(s)}`).toBe(false);
     }
+  });
+});
+
+// ---------------------------------------------------------------- workstations (posts)
+
+/** Decoration kinds: no workstation of their own. */
+const DECOR_KINDS: PropKind[] = ['crates', 'barrels', 'chest', 'coins', 'candle', 'rug'];
+
+/** The room every workstation is expected to stand in. */
+const EXPECTED_POST_ROOM: Record<PostId, RoomId> = {
+  autel: 'autel',
+  cartes: 'cartes',
+  atelier: 'atelier',
+  chevalet: 'atelier',
+  biblio: 'biblio',
+  scriptorium: 'scriptorium',
+  observatoire: 'observatoire',
+  pigeonnier: 'pigeonnier',
+  machines: 'machines',
+  arithmetique: 'arithmetique',
+  garde: 'garde',
+  relecture: 'epreuves',
+  labo: 'epreuves',
+  estrade: 'heraut',
+  inspection: 'heraut',
+  detente: 'detente',
+  concierge: 'concierge',
+  taverne: 'taverne',
+};
+
+/** All props of the dungeon tagged with a given post. */
+function propsOfPost(post: PostId): Prop[] {
+  return ROOMS.flatMap((r) => r.props.filter((p) => p.post === post));
+}
+
+describe('POST_IDS', () => {
+  /**
+   * Verifies that the workstation ids are unique and match the documented list of 18
+   */
+  it('lists 18 unique workstation ids', () => {
+    expect(POST_IDS).toHaveLength(18);
+    expect(new Set(POST_IDS).size).toBe(POST_IDS.length);
+    expect([...POST_IDS].sort()).toEqual(Object.keys(EXPECTED_POST_ROOM).sort());
+  });
+
+  /**
+   * Verifies that every workstation id is used by at least one piece of furniture
+   */
+  it.each([...POST_IDS])('%s has at least one prop', (post) => {
+    expect(propsOfPost(post).length).toBeGreaterThan(0);
+  });
+
+  /**
+   * Verifies that every post tag on a prop is a declared workstation id
+   */
+  it('tags props only with declared workstation ids', () => {
+    const known = new Set<string>(POST_IDS);
+    const unknown = ROOMS.flatMap((r) => r.props.filter((p) => p.post !== undefined && !known.has(p.post)).map((p) => `${r.id}:${p.kind}:${p.post}`));
+    expect(unknown).toEqual([]);
+  });
+});
+
+describe('ROOMS: post tags', () => {
+  /**
+   * Verifies that no decoration piece belongs to a workstation
+   */
+  it('never gives a post to decoration', () => {
+    const tagged = ROOMS.flatMap((r) => r.props.filter((p) => DECOR_KINDS.includes(p.kind) && p.post).map((p) => `${r.id}:${p.kind}`));
+    expect(tagged).toEqual([]);
+  });
+
+  /**
+   * Verifies that every functional (non-decoration) piece belongs to a workstation
+   */
+  it('gives a post to every functional prop', () => {
+    const untagged = ROOMS.flatMap((r) => r.props.filter((p) => !DECOR_KINDS.includes(p.kind) && !p.post).map((p) => `${r.id}:${p.kind}`));
+    expect(untagged).toEqual([]);
+  });
+
+  /**
+   * Verifies that each room has at least one workstation
+   */
+  it.each(ROOMS.map((r) => [r.id, r] as const))('%s has at least one post', (_id, r) => {
+    expect(postGroups(r).posts.length).toBeGreaterThan(0);
+  });
+
+  /**
+   * Verifies that rooms with two functions split their furniture into the documented posts
+   */
+  it.each([
+    ['biblio', 'biblio', ['bookcase', 'readingTable']],
+    ['scriptorium', 'scriptorium', ['lectern']],
+    ['atelier', 'atelier', ['bench', 'toolRack']],
+    ['atelier', 'chevalet', ['easel']],
+    ['epreuves', 'relecture', ['readingTable']],
+    ['epreuves', 'labo', ['alchemyBench']],
+    ['heraut', 'estrade', ['stage']],
+    ['heraut', 'inspection', ['inspectionDesk']],
+  ] as [RoomId, PostId, PropKind[]][])('in %s, post %s holds exactly %j', (roomId, post, kinds) => {
+    const group = postGroups(room(roomId)).posts.find((g) => g.post === post);
+    expect(group, `${post} missing from ${roomId}`).toBeDefined();
+    expect([...new Set(group!.props.map((p) => p.kind))].sort()).toEqual([...kinds].sort());
+    // The post is entirely in this room.
+    expect(propsOfPost(post)).toHaveLength(group!.props.length);
+  });
+
+  /**
+   * Verifies that the library holds all its bookcases and reading tables in one post
+   */
+  it('groups the four bookcases and two reading tables of the library', () => {
+    const biblio = postGroups(room('biblio')).posts;
+    expect(biblio.map((g) => g.post)).toEqual(['biblio']);
+    const kinds = biblio[0].props.map((p) => p.kind);
+    expect(kinds.filter((k) => k === 'bookcase')).toHaveLength(4);
+    expect(kinds.filter((k) => k === 'readingTable')).toHaveLength(2);
+  });
+
+  /**
+   * Verifies that single-function rooms have one post named like the room
+   */
+  it.each([
+    'autel',
+    'cartes',
+    'observatoire',
+    'pigeonnier',
+    'machines',
+    'arithmetique',
+    'garde',
+    'detente',
+    'concierge',
+    'taverne',
+  ] as const)('%s has a single post named like the room', (id) => {
+    expect(postGroups(room(id)).posts.map((g) => g.post)).toEqual([id]);
+  });
+});
+
+describe('postGroups', () => {
+  /**
+   * Verifies that posts plus decoration are exactly the room props, each once, same objects
+   */
+  it.each(ROOMS.map((r) => [r.id, r] as const))('%s partitions its props exactly', (_id, r) => {
+    const { posts, decor } = postGroups(r);
+    const all = [...posts.flatMap((g) => g.props), ...decor];
+    expect(all).toHaveLength(r.props.length);
+    expect(new Set(all).size).toBe(all.length);
+    for (const p of r.props) expect(all).toContain(p);
+    for (const p of decor) expect(p.post).toBeUndefined();
+    for (const g of posts) for (const p of g.props) expect(p.post).toBe(g.post);
+  });
+
+  /**
+   * Verifies that each post appears once per room, in the order of its first piece
+   */
+  it.each(ROOMS.map((r) => [r.id, r] as const))('%s lists posts once, in order of first piece', (_id, r) => {
+    const ids = postGroups(r).posts.map((g) => g.post);
+    const firstSeen = [...new Set(r.props.filter((p) => p.post).map((p) => p.post!))];
+    expect(ids).toEqual(firstSeen);
+  });
+
+  /**
+   * Verifies that the three two-post rooms list their posts in the documented order
+   */
+  it.each([
+    ['atelier', ['atelier', 'chevalet']],
+    ['epreuves', ['relecture', 'labo']],
+    ['heraut', ['estrade', 'inspection']],
+  ] as [RoomId, PostId[]][])('%s lists its posts as %j', (id, expected) => {
+    expect(postGroups(room(id)).posts.map((g) => g.post)).toEqual(expected);
+  });
+
+  /**
+   * Verifies that interleaved pieces are grouped by post, keeping their relative order
+   */
+  it('groups interleaved pieces and keeps piece order within a post', () => {
+    const a: Prop = { kind: 'bench', x: 0, z: 0, post: 'atelier' };
+    const d: Prop = { kind: 'crates', x: 1, z: 0 };
+    const b: Prop = { kind: 'easel', x: 2, z: 0, post: 'chevalet' };
+    const c: Prop = { kind: 'toolRack', x: 3, z: 0, post: 'atelier' };
+    const e: Prop = { kind: 'rug', x: 4, z: 0 };
+    const r: RoomDef = { ...room('atelier'), props: [a, d, b, c, e] };
+    const { posts, decor } = postGroups(r);
+    expect(posts).toHaveLength(2);
+    expect(posts[0].post).toBe('atelier');
+    expect(posts[0].props[0]).toBe(a);
+    expect(posts[0].props[1]).toBe(c);
+    expect(posts[1].post).toBe('chevalet');
+    expect(posts[1].props).toHaveLength(1);
+    expect(posts[1].props[0]).toBe(b);
+    expect(decor).toHaveLength(2);
+    expect(decor[0]).toBe(d);
+    expect(decor[1]).toBe(e);
+  });
+
+  /**
+   * Verifies that a room without props yields no posts and no decoration
+   */
+  it('returns empty lists for a room without props', () => {
+    expect(postGroups({ ...room('atelier'), props: [] })).toEqual({ posts: [], decor: [] });
+  });
+
+  /**
+   * Verifies that a room with only decoration yields no posts
+   */
+  it('returns only decoration when no piece has a post', () => {
+    const props: Prop[] = [
+      { kind: 'crates', x: 0, z: 0 },
+      { kind: 'candle', x: 1, z: 1 },
+    ];
+    const { posts, decor } = postGroups({ ...room('atelier'), props });
+    expect(posts).toEqual([]);
+    expect(decor).toEqual(props);
+  });
+
+  /**
+   * Verifies that grouping leaves the room's prop list untouched
+   */
+  it('does not mutate the room', () => {
+    const r = room('atelier');
+    const before = structuredClone(r.props);
+    postGroups(r);
+    postGroups(r);
+    expect(r.props).toEqual(before);
+  });
+});
+
+describe('POST_ROOM', () => {
+  /**
+   * Verifies that every workstation maps to its documented room, and nothing else is mapped
+   */
+  it('maps each post to its room', () => {
+    expect(POST_ROOM.size).toBe(POST_IDS.length);
+    for (const post of POST_IDS) expect(POST_ROOM.get(post), post).toBe(EXPECTED_POST_ROOM[post]);
+  });
+
+  /**
+   * Verifies that every workstation stands in exactly one room
+   */
+  it.each([...POST_IDS])('%s lives in exactly one room', (post) => {
+    const rooms = ROOMS.filter((r) => r.props.some((p) => p.post === post)).map((r) => r.id);
+    expect(rooms).toEqual([POST_ROOM.get(post)]);
+  });
+
+  /**
+   * Verifies that the library and its scriptorium are two posts in two different rooms
+   */
+  it('keeps the scriptorium apart from the library', () => {
+    expect(POST_ROOM.get('biblio')).toBe('biblio');
+    expect(POST_ROOM.get('scriptorium')).toBe('scriptorium');
+  });
+
+  /**
+   * Verifies that every mapped room is a known room of the floor plan
+   */
+  it('only points at rooms of the floor plan', () => {
+    for (const roomId of POST_ROOM.values()) expect(ROOM_BY_ID.has(roomId), roomId).toBe(true);
   });
 });

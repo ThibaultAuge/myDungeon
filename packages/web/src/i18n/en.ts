@@ -34,8 +34,8 @@ export const en: Messages = {
   },
   office: {
     heading: (name: string) => `${name} office`,
-    canvas: '3D view of the office. The same information is available in the session list.',
-    side: 'Agent details',
+    canvas: '3D view of the office. Agents are also listed under “Active sessions”, and places under “Office places”.',
+    side: 'Agents and places',
   },
   state: {
     working: 'Working',
@@ -118,6 +118,105 @@ export const en: Messages = {
     detente: 'Lounge',
     concierge: 'Caretaker’s closet',
     taverne: 'Tavern',
+  },
+  posts: {
+    autel: {
+      title: 'Altar of requests',
+      role: 'Ask the human for a permission, an answer, or help after an error',
+      who: 'Any agent that needs you, and claude-code-guide',
+    },
+    cartes: {
+      title: 'Map table',
+      role: 'Explore the need, design and write the plan',
+      who: 'The main agent while planning, Plan',
+    },
+    atelier: {
+      title: 'Workbenches',
+      role: 'Write and edit code',
+      who: 'The main agent, general-purpose, fork, and Hancock on his rounds',
+    },
+    chevalet: {
+      title: 'Illuminator’s easel',
+      role: 'Turn mockups into HTML/CSS templates',
+      who: 'Barbapapa',
+    },
+    biblio: {
+      title: 'Shelves and reading tables',
+      role: 'Read and search the local code',
+      who: 'Explore, and the main agent while reading',
+    },
+    scriptorium: {
+      title: 'Copyists’ lecterns',
+      role: 'Write documentation, for AIs and for humans',
+      who: 'Curator (AI), Otis (humans)',
+    },
+    observatoire: {
+      title: 'Great telescope',
+      role: 'Search the web and the official documentation',
+      who: 'Oracle, and the main agent while searching online',
+    },
+    pigeonnier: {
+      title: 'Aviary',
+      role: 'Test external APIs: one pigeon leaves, one comes back',
+      who: 'Samuel Morse',
+    },
+    machines: {
+      title: 'Steam engines',
+      role: 'Run commands, build, run the tests, git',
+      who: 'The main agent and generic agents',
+    },
+    arithmetique: {
+      title: 'Abacus and slate',
+      role: 'Calculations and statistics, run in Python',
+      who: 'Turing',
+    },
+    garde: {
+      title: 'Guard table',
+      role: 'Security audit',
+      who: 'Neo',
+    },
+    relecture: {
+      title: 'Proofreading table',
+      role: 'Code review',
+      who: 'Hermione',
+    },
+    labo: {
+      title: 'Alchemy lab',
+      role: 'Write the tests',
+      who: 'Dexter',
+    },
+    estrade: {
+      title: 'Herald’s stage',
+      role: 'SEO audit',
+      who: 'Gatsby',
+    },
+    inspection: {
+      title: 'Inspection desk',
+      role: 'Accessibility audit',
+      who: 'Timmy',
+    },
+    detente: {
+      title: 'Couch and dice table',
+      role: 'Offbeat ideas, brainstorming',
+      who: 'Butt Stallion',
+    },
+    concierge: {
+      title: 'Brooms and cart',
+      role: 'Clean up dead code',
+      who: 'Hancock',
+    },
+    taverne: {
+      title: 'Tavern tables',
+      role: 'Rest: the available team, with no task',
+      who: 'One of each agent type, and the main agent waiting for your next message',
+    },
+  },
+  postList: {
+    title: 'Office places',
+  },
+  postCard: {
+    who: 'Who works here',
+    close: 'Close the card',
   },
   time: {
     seconds: (n: number) => `${n} s`,

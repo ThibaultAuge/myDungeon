@@ -272,7 +272,10 @@ Fait :
   l'attente d'un prompt ;
 - la bulle de requête à l'autel (« … », « ? », « ! ») et le losange ambre de l'attente d'un prompt ;
 - la boîte de dialogue en lecture seule, ouverte par un clic sur un personnage ou sur sa ligne,
-  lisible sans connexion depuis la page servie en local.
+  lisible sans connexion depuis la page servie en local ;
+- les postes de travail : survol et clic sur le mobilier (`packages/web/src/scene/Post.tsx`),
+  carte du poste (`packages/web/src/ui/PostCard.tsx`), un poste par fonction dans les pièces à
+  plusieurs fonctions, et la liste « Lieux du bureau » du panneau latéral.
 
 Reste à faire :
 
