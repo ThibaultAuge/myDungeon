@@ -1,47 +1,80 @@
 import { describe, expect, it } from 'vitest';
-import type { AgentState, AgentView } from '@agent-office/shared';
+import type { AgentState } from '@agent-office/shared';
 import {
-  CHARACTERS,
   CLIPS,
   KNEEL_POSE_TIME,
+  LOOKS,
+  MAIN_BODY,
   MAX_CLIP_RATE,
+  PROP_GRIP,
   RUN_CLIP_SPEED,
   RUN_THRESHOLD,
   SPAWN_TIME_SCALE,
+  SUB_BODIES,
   WALK_CLIP_SPEED,
-  characterFor,
   clipFor,
+  gripFor,
+  lookFor,
   type CharacterModel,
   type ClipInput,
+  type Grip,
+  type Look,
+  type PropRef,
 } from '../src/scene/characters.ts';
 
-const KINDS: AgentView['kind'][] = ['main', 'sub'];
 const STATES: AgentState[] = ['working', 'waiting', 'done'];
-const IDS = ['', 'a', 'agent-1', 'agent-2', 'sess_0f3c9a2b-sub-7', 'éà€ unicode id', 'x'.repeat(10_000)];
+/** Agent types that are not in LOOKS, including edge cases (empty, unicode, huge). */
+const UNKNOWN_TYPES = ['', 'a', 'my-custom-agent', 'Some_Plugin:Reviewer', 'éà€ unicode type', 'x'.repeat(10_000)];
+/** Object.prototype members a naive `LOOKS[key]` lookup would hit. */
+const PROTO_KEYS = ['constructor', '__proto__', 'toString', 'hasOwnProperty', 'valueOf', 'isPrototypeOf', '__defineGetter__'];
+const NEUTRAL: Grip = { position: [0, 0, 0], rotation: [0, 0, 0], scale: 1 };
 
 /** A still, waiting, ordinary figure: each test overrides only what it is about. */
 const BASE: ClipInput = { moving: false, speed: 0, state: 'waiting', spawning: false, kneeling: false, reducedMotion: false };
 const clip = (over: Partial<ClipInput>) => clipFor({ ...BASE, ...over });
 
-/** Runs `fn` with a temporary skin list for a kind, restoring the real one afterwards. */
-function withSkins(kind: AgentView['kind'], skins: string[], fn: () => void) {
-  const table = CHARACTERS as Record<AgentView['kind'], readonly string[]>;
-  const saved = table[kind];
-  table[kind] = skins;
-  try {
-    fn();
-  } finally {
-    table[kind] = saved;
-  }
+const LOOK_ENTRIES = Object.entries(LOOKS);
+/** Every prop held by some LOOKS entry, in either hand. */
+const HELD: PropRef[] = Object.values(LOOKS).flatMap((l) => [l.right, l.left].filter((p): p is PropRef => !!p));
+
+/** True when a look is a bare fallback: a sub body and nothing in the hands. */
+function expectFallback(look: Look, label: string) {
+  expect(SUB_BODIES, label).toContain(look.body);
+  expect(Object.keys(look), label).toEqual(['body']);
 }
 
 // ---------------------------------------------------------------- constants
 
 describe('character constants', () => {
-  /** Verifies that every agent kind has at least one skin, each listed once */
-  it.each(KINDS)('gives the %s kind at least one unique skin', (kind) => {
-    expect(CHARACTERS[kind].length).toBeGreaterThan(0);
-    expect(new Set(CHARACTERS[kind]).size).toBe(CHARACTERS[kind].length);
+  /** Verifies that the sub body list is non-empty, unique, and never holds the main body */
+  it('lists unique sub bodies, without the main body', () => {
+    expect(SUB_BODIES.length).toBeGreaterThan(0);
+    expect(new Set(SUB_BODIES).size).toBe(SUB_BODIES.length);
+    expect(SUB_BODIES).not.toContain(MAIN_BODY);
+    expect(MAIN_BODY).toBe<CharacterModel>('Knight');
+  });
+
+  /** Verifies that every LOOKS key is lower case, as lookFor lower-cases the type */
+  it('keys LOOKS in lower case only', () => {
+    expect(LOOK_ENTRIES.length).toBeGreaterThan(0);
+    expect(Object.keys(LOOKS).filter((k) => k !== k.toLowerCase())).toEqual([]);
+  });
+
+  /** Verifies that every LOOKS body is a sub body, so no subagent looks like the main agent */
+  it('gives every LOOKS entry a sub body, never the main one', () => {
+    for (const [type, look] of LOOK_ENTRIES) {
+      expect(SUB_BODIES, type).toContain(look.body);
+      expect(look.body, type).not.toBe(MAIN_BODY);
+    }
+  });
+
+  /** Verifies that every held prop names a known pack and a non-empty model */
+  it('only holds props from the adventurers_props or tools pack', () => {
+    expect(HELD.length).toBeGreaterThan(0);
+    for (const p of HELD) {
+      expect(['adventurers_props', 'tools']).toContain(p.pack);
+      expect(p.model.length).toBeGreaterThan(0);
+    }
   });
 
   /** Verifies that the clip list has no duplicate name */
@@ -60,45 +93,186 @@ describe('character constants', () => {
   });
 });
 
-// ---------------------------------------------------------------- characterFor
+// ---------------------------------------------------------------- lookFor
 
-describe('characterFor', () => {
-  /** Verifies that the same kind and id always give the same skin */
-  it.each(KINDS)('is deterministic for the %s kind', (kind) => {
-    for (const id of IDS) expect(characterFor(kind, id)).toBe(characterFor(kind, id));
-  });
+describe('lookFor', () => {
+  // ---- main agent
 
-  /** Verifies that the chosen skin always belongs to the agent kind's list */
-  it.each(KINDS)('picks a skin from the %s list, including for empty and huge ids', (kind) => {
-    for (const id of IDS) expect(CHARACTERS[kind]).toContain(characterFor(kind, id));
-  });
+  /** Verifies that the main agent is always a bare Knight, whatever its type string */
+  it.each(['', 'main', 'hermione', 'Explore', 'general-purpose', 'unknown-type', 'constructor', '__proto__'])(
+    'gives the main agent a Knight with empty hands for type %j',
+    (type) => {
+      expect(lookFor('main', type)).toEqual({ body: MAIN_BODY });
+      expect(lookFor('main', type).body).toBe<CharacterModel>('Knight');
+    },
+  );
 
-  /** Verifies that the main agent is a Knight and subagents are hooded rogues today */
-  it('maps main to Knight and sub to Rogue_Hooded with the current lists', () => {
-    for (const id of IDS) {
-      expect(characterFor('main', id)).toBe<CharacterModel>('Knight');
-      expect(characterFor('sub', id)).toBe<CharacterModel>('Rogue_Hooded');
+  // ---- known types
+
+  /** Verifies that a known subagent type gets its LOOKS entry, body and props */
+  it.each(['hermione', 'dexter', 'neo', 'Explore', 'general-purpose', 'samuel-morse', 'plan', 'statusline-setup'])(
+    'returns the LOOKS entry for the known type %s',
+    (type) => {
+      const expected = LOOKS[type.toLowerCase()];
+      expect(expected, `${type} is in LOOKS`).toBeDefined();
+      expect(lookFor('sub', type)).toEqual(expected);
+    },
+  );
+
+  /** Verifies that every LOOKS key is reachable through lookFor, in any casing */
+  it('returns the matching entry for every LOOKS key, lower or upper case', () => {
+    for (const [type, look] of LOOK_ENTRIES) {
+      expect(lookFor('sub', type), type).toEqual(look);
+      expect(lookFor('sub', type.toUpperCase()), type.toUpperCase()).toEqual(look);
     }
   });
 
-  /** Verifies that a longer skin list is used: picks stay in it, stable, and vary by id */
-  it('spreads agents over every skin once a list grows', () => {
-    const skins = ['Knight', 'Rogue_Hooded', 'Mage'];
-    withSkins('sub', skins, () => {
-      const ids = Array.from({ length: 60 }, (_, i) => `agent-${i}`);
-      const picks = ids.map((id) => characterFor('sub', id));
-      for (const p of picks) expect(skins).toContain(p);
-      expect(new Set(picks).size).toBe(skins.length);
-      expect(ids.map((id) => characterFor('sub', id))).toEqual(picks);
-    });
+  /** Verifies that the type lookup ignores case */
+  it('matches types case-insensitively', () => {
+    expect(lookFor('sub', 'HERMIONE')).toEqual(LOOKS.hermione);
+    expect(lookFor('sub', 'Hermione')).toEqual(LOOKS.hermione);
+    expect(lookFor('sub', 'explore')).toEqual(lookFor('sub', 'Explore'));
+    expect(lookFor('sub', 'Explore')).toEqual(LOOKS.explore);
+    expect(lookFor('sub', 'Samuel-Morse')).toEqual(LOOKS['samuel-morse']);
   });
 
-  /** Verifies that adding skins to one kind never changes the other kind's pick */
-  it('keeps kinds independent', () => {
-    const before = IDS.map((id) => characterFor('main', id));
-    withSkins('sub', ['Rogue_Hooded', 'Mage'], () => {
-      expect(IDS.map((id) => characterFor('main', id))).toEqual(before);
+  /** Verifies that a few role looks hold the expected props (spot check of the table) */
+  it('gives known roles their props: neo two hands, Plan a map, hermione a spellbook', () => {
+    expect(lookFor('sub', 'neo')).toEqual({
+      body: 'Barbarian',
+      right: { pack: 'tools', model: 'lantern' },
+      left: { pack: 'adventurers_props', model: 'shield_spikes' },
     });
+    expect(lookFor('sub', 'Plan').right).toEqual({ pack: 'tools', model: 'map' });
+    expect(lookFor('sub', 'hermione').right).toEqual({ pack: 'adventurers_props', model: 'spellbook_open' });
+  });
+
+  /** Verifies that a type near a known key but not equal to it is not matched */
+  it.each([' hermione', 'hermione ', 'hermione2', 'samuel_morse', 'general purpose'])(
+    'does not match the near-miss type %j',
+    (type) => {
+      expectFallback(lookFor('sub', type), type);
+    },
+  );
+
+  // ---- unknown types
+
+  /** Verifies that an unknown type gets a sub body and empty hands */
+  it.each(UNKNOWN_TYPES.map((t) => [t.length > 40 ? `${t.slice(0, 20)}... (${t.length})` : t, t]))(
+    'falls back to a bare sub body for the unknown type %j',
+    (_label, type) => {
+      expectFallback(lookFor('sub', type), _label);
+    },
+  );
+
+  /** Verifies that the fallback is deterministic for the same unknown type */
+  it('picks the same fallback body on every call', () => {
+    for (const type of UNKNOWN_TYPES) expect(lookFor('sub', type)).toEqual(lookFor('sub', type));
+  });
+
+  /** Verifies that the fallback body ignores the casing of the unknown type */
+  it.each(['my-custom-agent', 'Some_Plugin:Reviewer', 'ABCdef'])('picks the same body for %s in any casing', (type) => {
+    const body = lookFor('sub', type).body;
+    expect(lookFor('sub', type.toUpperCase()).body).toBe(body);
+    expect(lookFor('sub', type.toLowerCase()).body).toBe(body);
+  });
+
+  /** Verifies that an empty type falls back to the first sub body (its hash is 0) */
+  it('gives the empty type the first sub body', () => {
+    expect(lookFor('sub', '')).toEqual({ body: SUB_BODIES[0] });
+  });
+
+  /** Verifies that Object.prototype member names never resolve to a prototype member */
+  it.each(PROTO_KEYS)('falls back to a sub body for the prototype key %s', (type) => {
+    const look = lookFor('sub', type);
+    expectFallback(look, type);
+    expect(typeof look.body).toBe('string');
+  });
+
+  /** Verifies that prototype keys are handled in upper case too */
+  it.each(['CONSTRUCTOR', 'ToString', '__PROTO__'])('falls back to a sub body for %s', (type) => {
+    expectFallback(lookFor('sub', type), type);
+  });
+
+  /** Verifies that unknown types spread over most bodies rather than piling on one */
+  it('spreads 50 unknown types over at least 4 different bodies', () => {
+    const types = Array.from({ length: 50 }, (_, i) => `custom-agent-${i}`);
+    for (const t of types) expect(Object.hasOwn(LOOKS, t), t).toBe(false);
+    const bodies = new Set(types.map((t) => lookFor('sub', t).body));
+    for (const b of bodies) expect(SUB_BODIES).toContain(b);
+    expect(bodies.size).toBeGreaterThanOrEqual(Math.min(4, SUB_BODIES.length));
+  });
+
+  /** Verifies that an unknown subagent never gets the main agent's Knight body */
+  it('never gives an unknown subagent the main body', () => {
+    const types = [...UNKNOWN_TYPES, ...PROTO_KEYS, ...Array.from({ length: 100 }, (_, i) => `t${i}`)];
+    for (const t of types) expect(lookFor('sub', t).body, t.slice(0, 40)).not.toBe(MAIN_BODY);
+  });
+
+  /** Verifies that lookFor leaves the LOOKS table untouched */
+  it('does not modify LOOKS', () => {
+    const before = JSON.stringify(LOOKS);
+    for (const t of ['hermione', 'Explore', 'unknown', '__proto__', 'constructor']) {
+      lookFor('sub', t);
+      lookFor('main', t);
+    }
+    expect(JSON.stringify(LOOKS)).toBe(before);
+    expect(Object.getPrototypeOf(LOOKS)).toBe(Object.prototype);
+  });
+});
+
+// ---------------------------------------------------------------- grips
+
+describe('PROP_GRIP and gripFor', () => {
+  const toolModels = new Set(HELD.filter((p) => p.pack === 'tools').map((p) => p.model));
+  const propModels = new Set(HELD.filter((p) => p.pack === 'adventurers_props').map((p) => p.model));
+
+  /** Verifies that every tools item held in LOOKS has a calibrated grip */
+  it('has a grip for every tools prop held in LOOKS', () => {
+    expect(toolModels.size).toBeGreaterThan(0);
+    expect([...toolModels].filter((m) => !Object.hasOwn(PROP_GRIP, m))).toEqual([]);
+  });
+
+  /** Verifies that every grip belongs to a tools prop actually held in LOOKS (no stale entry) */
+  it('only calibrates tools props that LOOKS uses', () => {
+    expect(Object.keys(PROP_GRIP).filter((m) => !toolModels.has(m))).toEqual([]);
+  });
+
+  /** Verifies that every grip has a finite positive scale and finite position and rotation */
+  it.each(Object.entries(PROP_GRIP))('gives %s a finite, positive grip', (_model, grip) => {
+    expect(grip.scale).toBeGreaterThan(0);
+    expect(Number.isFinite(grip.scale)).toBe(true);
+    expect(grip.position).toHaveLength(3);
+    expect(grip.rotation).toHaveLength(3);
+    for (const v of [...grip.position, ...grip.rotation]) expect(Number.isFinite(v)).toBe(true);
+  });
+
+  /** Verifies that gripFor returns the calibrated grip of a tools prop */
+  it.each([...Object.keys(PROP_GRIP)])('returns the PROP_GRIP entry for the tools prop %s', (model) => {
+    expect(gripFor({ pack: 'tools', model })).toEqual(PROP_GRIP[model]);
+  });
+
+  /** Verifies that an adventurers prop, made for the hand slot, gets the neutral grip */
+  it('returns the neutral grip for every adventurers prop held in LOOKS', () => {
+    expect(propModels.size).toBeGreaterThan(0);
+    for (const model of propModels) expect(gripFor({ pack: 'adventurers_props', model }), model).toEqual(NEUTRAL);
+  });
+
+  /** Verifies that an uncalibrated tools model gets the neutral grip */
+  it.each(['saw', 'anvil', '', 'unknown_model'])('returns the neutral grip for the uncalibrated model %j', (model) => {
+    expect(gripFor({ pack: 'tools', model })).toEqual(NEUTRAL);
+  });
+
+  /** Verifies that prototype member names never resolve to a prototype member */
+  it.each(PROTO_KEYS)('returns the neutral grip for the prototype key %s', (model) => {
+    expect(gripFor({ pack: 'tools', model })).toEqual(NEUTRAL);
+  });
+
+  /** Verifies that the neutral grip has a finite positive scale */
+  it('has a usable neutral grip', () => {
+    const g = gripFor({ pack: 'adventurers_props', model: 'dagger' });
+    expect(g.scale).toBe(1);
+    expect(Number.isFinite(g.scale)).toBe(true);
   });
 });
 

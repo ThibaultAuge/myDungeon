@@ -1,16 +1,16 @@
 import { Component, Suspense, useEffect, useMemo, useRef, type CSSProperties, type ReactNode, type RefObject } from 'react';
-import { useFrame, useThree } from '@react-three/fiber';
+import { createPortal, useFrame, useThree } from '@react-three/fiber';
 import { Html, useAnimations } from '@react-three/drei';
 import { LoopOnce, LoopRepeat, Vector3, type AnimationClip, type Group, type Mesh, type Object3D, type SkinnedMesh } from 'three';
 import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import type { AgentState, AgentView } from '@agent-office/shared';
 import { STATE_COLORS } from '../format.ts';
 import { reducedMotion } from '../motion.ts';
-import { characterFor, clipFor, CLIPS, SPAWN_TIME_SCALE, type CharacterModel, type ClipName } from './characters.ts';
+import { clipFor, CLIPS, gripFor, lookFor, SPAWN_TIME_SCALE, type ClipName, type Look, type PropRef } from './characters.ts';
 import { KIT_SCALE } from './dungeon.ts';
 import { useKitGLTF } from './kit.ts';
 import { reroute, routeBetween, SPAWN, type Point, type Spot } from './layout.ts';
-import { advance, nextSpeed, remainingDistance, turnToward } from './walk.ts';
+import { advance, approach, nextSpeed, remainingDistance, turnToward } from './walk.ts';
 
 /** Live positions of the figures, read by the camera to follow the selected agent. */
 export const agentPositions = new Map<string, Vector3>();
@@ -55,13 +55,32 @@ function useClips(): AnimationClip[] {
   }, [general.animations, movement.animations]);
 }
 
+/** A model held in a hand: a plain clone (shared geometry and materials) inside the hand bone. */
+function Held({ prop, bone }: { prop: PropRef; bone: Object3D }) {
+  const { scene } = useKitGLTF(prop.pack, prop.model);
+  const object = useMemo(() => {
+    const o = scene.clone();
+    o.traverse((c) => {
+      if ((c as Mesh).isMesh) c.castShadow = true;
+    });
+    return o;
+  }, [scene]);
+  const grip = gripFor(prop);
+  return createPortal(
+    <group position={grip.position} rotation={grip.rotation} scale={grip.scale}>
+      <primitive object={object} />
+    </group>,
+    bone,
+  );
+}
+
 /**
  * The animated KayKit character. It suspends while its files load, so it sits in its own
  * Suspense and error boundary: the tag, ring and disc next to it never wait for it.
  */
-function Character({ model: name, state, motion }: { model: CharacterModel; state: AgentState; motion: RefObject<Motion> }) {
+function Character({ look, state, motion }: { look: Look; state: AgentState; motion: RefObject<Motion> }) {
   // One skinned clone per figure: the skeleton is its own, geometry and materials are shared.
-  const { scene } = useKitGLTF('adventurers', name);
+  const { scene } = useKitGLTF('adventurers', look.body);
   const model = useMemo(() => {
     const m = cloneSkinned(scene) as Object3D;
     m.traverse((o) => {
@@ -79,6 +98,13 @@ function Character({ model: name, state, motion }: { model: CharacterModel; stat
       }),
     [model],
   );
+  // GLTFLoader strips the dots from node names: `handslot.r` becomes `handslotr`.
+  const hands = useMemo(() => {
+    const right = model.getObjectByName('handslotr');
+    const left = model.getObjectByName('handslotl');
+    if (import.meta.env.DEV && (!right || !left)) console.warn('KayKit hand slot missing', look.body);
+    return { right, left };
+  }, [model, look.body]);
   const clips = useClips();
   const { actions, mixer } = useAnimations(clips, model);
   /** Clips being played and their blend weight; the current one goes to 1, the others to 0. */
@@ -139,7 +165,8 @@ function Character({ model: name, state, motion }: { model: CharacterModel; stat
     let total = 0;
     for (const [clip, w] of weights.current) {
       const target = clip === choice.name ? 1 : 0;
-      const nw = target > w ? Math.min(1, w + step) : Math.max(0, w - step);
+      // A weight already on its target stays put (it used to flicker, down to 0 on slow frames).
+      const nw = approach(w, target, step);
       weights.current.set(clip, nw);
       total += nw;
     }
@@ -158,7 +185,13 @@ function Character({ model: name, state, motion }: { model: CharacterModel; stat
     }
   });
 
-  return <primitive object={model} scale={KIT_SCALE} />;
+  return (
+    <>
+      <primitive object={model} scale={KIT_SCALE} />
+      {look.right && hands.right && <Held prop={look.right} bone={hands.right} />}
+      {look.left && hands.left && <Held prop={look.left} bone={hands.left} />}
+    </>
+  );
 }
 
 /** If a character cannot load, the figure falls back to a plain capsule instead of breaking the scene. */
@@ -317,7 +350,7 @@ export function AgentFigure({ agent, name, color, spot, start, selected, onSelec
     >
       <CharacterBoundary fallback={capsule} onError={() => (motion.current.spawnLeft = 0)}>
         <Suspense fallback={null}>
-          <Character model={characterFor(agent.kind, agent.id)} state={agent.state} motion={motion} />
+          <Character look={lookFor(agent.kind, agent.agentType)} state={agent.state} motion={motion} />
         </Suspense>
       </CharacterBoundary>
       {/* Session colour on the floor, inside the state ring: links the figure to its card. */}

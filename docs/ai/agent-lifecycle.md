@@ -8,7 +8,8 @@ description: Use when changing where agents rest or wait (tavern, altar queue), 
 - Design (user-defined, French): `docs/lieux-et-personnages.md`, section "La taverne et le
   cycle de vie d'un agent". The code below implements it.
 - Tavern: one neutral figure (`NEUTRAL_COLOR`) per roster type with no agent of that type
-  on stage. Resting figures have id `rest:<type>` and are not selectable.
+  on stage. Resting figures have id `rest:<type>` and are not selectable. They wear their
+  type's role look (`lookFor`, `docs/ai/dungeon-scene.md`).
 - Call: when a session starts a subagent of a resting type, the new figure starts from that
   resting figure's seat and walks to its post in the session colour. Simultaneous extras
   of the same type start from the lockers (`SPAWN`).
