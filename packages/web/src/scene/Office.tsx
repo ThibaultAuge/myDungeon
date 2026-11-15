@@ -18,6 +18,8 @@ import { NIGHT_SKY, scatterTrees } from './forest.ts';
 import { assignSpots, BOUNDS, SPAWN, type SeatMemory, type SeatRequest, type Spot } from './layout.ts';
 import { ENTRY_SPOT, PAN_MARGIN } from './outside.ts';
 import { OfficeRooms } from './Room.tsx';
+import { MishapProps } from './MishapProps.tsx';
+import { MishapWatcher } from './MishapWatcher.tsx';
 import { Stage } from './stage.ts';
 import { inheritSeats, NEUTRAL_COLOR, restId, restingAgent, restingTypes, startOrigins } from './tavern.ts';
 
@@ -236,6 +238,8 @@ export function OfficeScene() {
       <SunLight />
       <Forest />
       <OfficeRooms />
+      <MishapWatcher />
+      <MishapProps />
       {resting.map((agent) => (
         <AgentFigure
           key={agent.id}

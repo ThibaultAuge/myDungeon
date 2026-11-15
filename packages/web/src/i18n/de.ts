@@ -67,6 +67,10 @@ export const de: Messages = {
   slap: {
     sound: 'KLATSCH!',
   },
+  mishap: {
+    boiler: 'PUFF!',
+    flask: 'BLUBB!',
+  },
   info: {
     label: (name: string) => `Informationen zu ${name}`,
     slap: 'Ohrfeige',

@@ -21,6 +21,9 @@ import { SlapEffect } from './SlapEffect.tsx';
 import { SlapHand } from './SlapHand.tsx';
 import { SWING_IMPACT } from './slapSwing.ts';
 import { playSlapSound, preloadSlapSound } from '../ui/slapSound.ts';
+import { MISHAP_BUBBLE_MS, onMishap, SOOT_MS, type MishapKind } from './mishap.ts';
+import { MishapEffect } from './MishapEffect.tsx';
+import { Soot } from './Soot.tsx';
 import { advance, approach, nextSpeed, remainingDistance, turnToward } from './walk.ts';
 
 /** Live positions of the figures, read by the camera to follow the selected agent. */
@@ -342,6 +345,28 @@ function AgentFigureImpl({ agent, name, color, spot, start, selected, onSelect, 
     };
   }, [agent.id]);
 
+  // A failed command (mishap.ts): soot on the figure and a comic bubble, nothing else.
+  const [mishap, setMishap] = useState<{ n: number; kind: MishapKind; bubble: boolean } | null>(null);
+  useEffect(() => {
+    if (exit) return;
+    let n = 0;
+    let bubbleTimer: ReturnType<typeof setTimeout> | undefined;
+    let sootTimer: ReturnType<typeof setTimeout> | undefined;
+    const off = onMishap(agent.id, (kind) => {
+      setMishap({ n: ++n, kind, bubble: true });
+      clearTimeout(bubbleTimer);
+      clearTimeout(sootTimer);
+      bubbleTimer = setTimeout(() => setMishap((m) => m && { ...m, bubble: false }), MISHAP_BUBBLE_MS);
+      sootTimer = setTimeout(() => setMishap(null), SOOT_MS);
+    });
+    return () => {
+      off();
+      clearTimeout(bubbleTimer);
+      clearTimeout(sootTimer);
+      setMishap(null);
+    };
+  }, [agent.id, exit]);
+
   // Doomed: out of the castle to the kill point. Under reduced motion, no walk and no fight.
   useEffect(() => {
     if (!exit) return;
@@ -560,8 +585,10 @@ function AgentFigureImpl({ agent, name, color, spot, start, selected, onSelect, 
       {connected && onSelect && (
         <Html position={[0, SLAP_Y, 0]} center className="slap-anchor" zIndexRange={[30, 20]}>
           {slap !== null && <SlapEffect key={slap} />}
+          {mishap?.bubble && <MishapEffect key={mishap.n} kind={mishap.kind} />}
         </Html>
       )}
+      {!exit && <Soot root={group} mishap={mishap} />}
       {/* The 3D hand sweeps the other way on every other slap; none under reduced motion. */}
       {slap !== null && !reducedMotion() && <SlapHand key={slap} dir={slap % 2 === 0 ? 1 : -1} />}
     </group>
