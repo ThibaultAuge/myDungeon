@@ -169,7 +169,7 @@ export const fr = {
   posts: {
     autel: {
       title: 'Autel des requêtes',
-      role: 'Demander à l’humain une permission, une réponse ou de l’aide après une erreur',
+      role: 'Se prosterner devant toi, humain tout-puissant, pour implorer une permission, une réponse ou ta clémence après une erreur',
       who: 'Tout agent qui a besoin de toi, et claude-code-guide',
     },
     cartes: {

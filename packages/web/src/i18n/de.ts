@@ -161,7 +161,7 @@ export const de: Messages = {
   posts: {
     autel: {
       title: 'Altar der Anfragen',
-      role: 'Den Menschen um eine Erlaubnis, eine Antwort oder Hilfe nach einem Fehler bitten',
+      role: 'Sich vor dir, allmächtiger Mensch, niederwerfen und um eine Erlaubnis, eine Antwort oder Gnade nach einem Fehler flehen',
       who: 'Jeder Agent, der dich braucht, und claude-code-guide',
     },
     cartes: {

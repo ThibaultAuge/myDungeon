@@ -161,7 +161,7 @@ export const en: Messages = {
   posts: {
     autel: {
       title: 'Altar of requests',
-      role: 'Ask the human for a permission, an answer, or help after an error',
+      role: 'Grovel before you, almighty human, to beg for a permission, an answer, or mercy after an error',
       who: 'Any agent that needs you, and claude-code-guide',
     },
     cartes: {
