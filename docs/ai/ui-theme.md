@@ -36,10 +36,15 @@ description: Use when changing the web UI's colours or chrome styling — root C
 - Text on the home photo needs its own dark backing and a halo around focus rings, as
   `.env-card` does.
 - Re-capture `castle-gate.jpg` if the gate, walls or forest change visibly. It is a render of
-  the scene itself, not external art. Procedure: Playwright at 1920x1080 on an env page;
+  the scene itself, not external art. Procedure: Playwright at 1920x1080 on an env URL that
+  matches no environment (e.g. `/env/capture-sans-nom`), so the dungeon name sign and
+  pennants (`docs/ai/night-forest.md`) are not drawn and no project name ends up in the
+  committed image (public repo);
   hide the top bar, side panel, legend and agent tags with an injected style; park the mouse
   on the canvas's bottom edge so the cutaway (`inForeground` in `dungeon.ts`) leaves the
-  walls standing; set OrbitControls from the page through a temporary window hook (target
+  walls standing; set OrbitControls from the page through a temporary window hook (OrbitControls is
+  `makeDefault`, so a temporary component reading `useThree()` `{ controls, camera }` and
+  putting them on `window` works; target
   (5.5, 2.8, 9), camera (5.5, 2.4, 26), damping off, `minDistance` 1); remove the hook
   afterwards. Playwright and worktree preview tips: `docs/ai/dungeon-scene.md` (Usage,
   Preview).

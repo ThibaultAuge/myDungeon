@@ -11,6 +11,7 @@ import { useNow } from '../useNow.ts';
 import { AgentFigure, agentPositions } from './AgentFigure.tsx';
 import { Ambush } from './ambush.ts';
 import { AmbushScene } from './Ambush.tsx';
+import { DungeonSign } from './DungeonSign.tsx';
 import { Forest } from './Forest.tsx';
 import { Ghosts, isGhost } from './ghost.ts';
 import { GhostFigure } from './GhostFigure.tsx';
@@ -154,7 +155,13 @@ function SunLight() {
   );
 }
 
-export function OfficeScene() {
+/** The dungeon shown: its name on the sign past the drawbridge, its colour on the pennants. */
+export interface Dungeon {
+  name: string;
+  color: string;
+}
+
+export function OfficeScene({ dungeon }: { dungeon?: Dungeon }) {
   const sessions = useOffice((s) => s.sessions);
   const roster = useOffice((s) => s.roster);
   const snapshotReceived = useOffice((s) => s.snapshotReceived);
@@ -235,6 +242,7 @@ export function OfficeScene() {
       <hemisphereLight args={['#fff6e8', '#8a8478', 1.6]} />
       <SunLight />
       <Forest />
+      {dungeon?.name && <DungeonSign name={dungeon.name} color={dungeon.color} />}
       <OfficeRooms />
       {resting.map((agent) => (
         <AgentFigure

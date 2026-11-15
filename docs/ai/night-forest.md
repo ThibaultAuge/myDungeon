@@ -1,5 +1,5 @@
 ---
-description: Use when changing the night environment around the castle — forest floor, trees, moat, drawbridge, dirt path, horizon, night shading or sky colour — or the camera pan limits.
+description: Use when changing the night environment around the castle — forest floor, trees, moat, drawbridge, dirt path, horizon, night shading or sky colour — the dungeon name sign, pennants and per-environment dungeon colour (heraldry.ts, DungeonSign), or the camera pan limits.
 ---
 
 # Night forest around the castle
@@ -19,7 +19,8 @@ description: Use when changing the night environment around the castle — fores
 - Trees: `scatterTrees()` returns `{ near, far }` from two jittered seeded grids: near
   detailed ring inside `NEAR_LIMIT` 26 m, far simplified trees out to `FAR_LIMIT` 150 m.
   `treeAllowed` excludes `CLEARING` 3.5 m from `OUTER`, `MOAT_CLEARANCE` and
-  `PATH_CLEARANCE`. Kinds: `pine`, `round`. `Tree.variant` (0–1) picks the near model;
+  `PATH_CLEARANCE`, plus `SIGN_CLEARANCE` and `PENNANT_CLEARANCE` around the sign and
+  pennants (the pennant one is redundant with moat/path today, kept as a guard). Kinds: `pine`, `round`. `Tree.variant` (0–1) picks the near model;
   `Tree.shade` applies to far trees only.
 - Near ring = KayKit Forest Nature Pack 1.0 (free tier, CC0), manifest pack `forest`: 16
   models, all `_Color1`, one shared pack material `forest` with `forest_texture.png`
@@ -44,6 +45,29 @@ description: Use when changing the night environment around the castle — fores
   castle down to `uFarLight` 0.11, moon-blue tint, then fade to `NIGHT_SKY` with distance to
   the castle rectangle (30→150 m). Night materials set `toneMapped = false` so the fade
   matches the untonemapped background.
+- Dungeon name sign: `DungeonSign` (group `dungeon-sign`), mounted by `OfficeScene` after
+  `Forest` only when `dungeon.name` is set; `App.tsx` `EnvPage` passes
+  `{ name: envName(env, t), color: dungeonColor(env.id, env.virtual) }`, nothing when the
+  env is unknown. Placed at `SIGN` (east of the path just past the drawbridge,
+  z = `BRIDGE.z1` + 1.8), board 5.6 × 1.7 m (`SIGN_WIDTH`) on two posts, whole sign leaning
+  back (−0.5 rad) toward the overhead camera; a 3.2 m board was unreadable from the default
+  camera (~50 m). The +z face of the board's `BoxGeometry` (material array) carries a
+  `CanvasTexture`: wood planks, bands in the dungeon colour, the name in serif sized by
+  `fitLabel`. A small flag on the left post, plus two `Pennant`s (pole, crossbar,
+  swallowtail cloth, 5 m) at `PENNANTS`, either side of the bridge landing
+  (z = `BRIDGE.z1` − 0.25). The sign is NOT nightified (lit like the castle) and stays
+  readable at night through `emissiveMap` = the same canvas at 0.35, no extra light.
+  Raycast disabled.
+- Dungeon colour (`heraldry.ts`): `dungeonColor(envId, virtual)` = FNV-1a hash of the env ID
+  into `DUNGEON_PALETTE` (9 hues chosen to stay distinct at night: one green, no teal, which
+  looked like the green); the virtual env gets `VIRTUAL_COLOR` grey. Hashing the ID (user
+  decision) keeps the colour when the env is renamed. Not user-configurable (envs come from
+  Claude desktop presets). Used outside only: interior banners keep their per-room accent
+  colours (`docs/ai/room-identity.md`).
+- `fitLabel(text, maxWidth, measure, max=150, min=64, step=4)`: largest font size that fits,
+  last step clamped to `min`, non-positive step treated as 1; if nothing fits at `min`, the
+  text is cut by code points with `…`. Only the first 120 code points are considered, which
+  bounds the measuring cost.
 - Camera: `Office.tsx` clamps the OrbitControls target to `BOUNDS` ± `PAN_MARGIN` 20
   (`outside.ts`) so panning cannot leave the finite world.
 - Figures outside the castle (main agents walking in from the path end, the skeleton ambush
@@ -56,17 +80,24 @@ description: Use when changing the night environment around the castle — fores
   `NIGHT_SKY`, `Rect`, `MOAT`, `BRIDGE`, `distanceToRect`, `PATH_HALF_WIDTH`, `pathPoints`,
   `distanceToPath`, `Tree`, `TreeKind`, the clearance / limit constants, `treeAllowed`,
   `scatterTrees`, the KayKit model lists, `FOREST_MATERIAL_SOURCE`, `KAYKIT_TREE_SCALE`,
-  `nearModel`, `Undergrowth`, `scatterUndergrowth`.
+  `nearModel`, `Undergrowth`, `scatterUndergrowth`, `SIGN_WIDTH`, `SIGN`, `PENNANTS`.
+- `packages/web/src/scene/heraldry.ts` — pure: `DUNGEON_PALETTE`, `VIRTUAL_COLOR`, `fnv1a`,
+  `dungeonColor`, `fitLabel`.
+- `packages/web/src/scene/DungeonSign.tsx` — memoised `DungeonSign({ name, color })`,
+  `Pennant`, module-level shared geometries and materials.
+- `packages/web/src/App.tsx` — `EnvPage` builds the `dungeon` prop.
 - `packages/web/src/scene/Forest.tsx` — `Forest` plus module-private `inject`, `nightify`,
   shared materials `MAT`, `useGeometry`, `FarTrees`, `quadrant`, `ForestBoundary`,
   `NearForest`, `Ground`, `Moat`, `Drawbridge`, `Path`, `Horizon`.
 - `packages/web/src/scene/KitInstances.tsx` — optional `material` (override) and
   `receiveShadow` props, used by `NearForest`.
 - `packages/web/src/scene/kit-manifest.json` (`forest` pack), `packages/web/public/kaykit/forest/`.
-- `packages/web/src/scene/Office.tsx` — mounts `<Forest />`, background colour, pan clamp.
+- `packages/web/src/scene/Office.tsx` — mounts `<Forest />` and `<DungeonSign />`
+  (`OfficeScene({ dungeon?: Dungeon })`, exported `Dungeon { name, color }`), background
+  colour, pan clamp.
 - `packages/web/src/scene/outside.ts` — `PAN_MARGIN` (other exports:
   `docs/ai/agent-lifecycle.md`).
-- `packages/web/test/forest.test.ts`.
+- `packages/web/test/forest.test.ts`, `packages/web/test/heraldry.test.ts`.
 
 ## Usage
 - Placement logic (what goes where, exclusions) belongs in `forest.ts` so it stays tested;
@@ -79,7 +110,15 @@ description: Use when changing the night environment around the castle — fores
   (`docs/ai/dungeon-scene.md`); keep `_Color1` variants so the single-material assumption
   holds. Near-ring scenery reuses `NearForest`'s material and per-quadrant placement;
   never pass the kit's shared material to `nightify`.
-- Preview: `docs/ai/dungeon-scene.md` (Usage).
+- Any per-environment colour or label reuses `dungeonColor` and `fitLabel` from
+  `heraldry.ts`. Canvas-textured scenery follows `DungeonSign`: texture and materials in
+  `useMemo`, disposed in the effect cleanup (same pattern as `useGeometry`; safe under
+  StrictMode because three re-uploads disposed resources). New objects near the path or
+  bridge need a clearance in `treeAllowed`.
+- Preview: `docs/ai/dungeon-scene.md` (Usage). To see the sign in a worktree Vite with no
+  server, open `/env/<id>` and run
+  `(await import('/src/store.ts')).useOffice.setState({ environments: [...] })` with an env
+  of that id.
 - A visible change near the castle gate means re-capturing the home page image:
   `docs/ai/ui-theme.md`.
 

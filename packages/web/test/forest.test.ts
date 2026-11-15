@@ -19,8 +19,13 @@ import {
   NIGHT_SKY,
   PATH_CLEARANCE,
   PATH_HALF_WIDTH,
+  PENNANT_CLEARANCE,
+  PENNANTS,
   PINE_MODELS,
   ROCK_MODELS,
+  SIGN,
+  SIGN_CLEARANCE,
+  SIGN_WIDTH,
   WATER_Y,
   distanceToPath,
   distanceToRect,
@@ -350,6 +355,104 @@ describe('treeAllowed', () => {
     expect(treeAllowed(p.x + PATH_CLEARANCE * 0.5, p.z, PATH)).toBe(false);
     // Far to the side of the path, deep in the forest.
     expect(treeAllowed(p.x + 30, p.z, PATH)).toBe(true);
+  });
+
+  /**
+   * Verifies that no tree may stand on the name sign or on either pennant
+   */
+  it('refuses the sign and each pennant', () => {
+    expect(treeAllowed(SIGN.x, SIGN.z, PATH)).toBe(false);
+    PENNANTS.forEach((p, i) => expect(treeAllowed(p.x, p.z, PATH), `pennant ${i}`).toBe(false));
+  });
+
+  /**
+   * Verifies that SIGN_CLEARANCE alone rejects a point east of the sign, and its edge is free
+   */
+  it('keeps SIGN_CLEARANCE around the sign', () => {
+    // East and south of the sign: past the moat banks and far from the path, so only the
+    // sign clearance can reject these points.
+    expect(treeAllowed(SIGN.x + SIGN_CLEARANCE - 0.05, SIGN.z, PATH)).toBe(false);
+    expect(treeAllowed(SIGN.x + SIGN_CLEARANCE + 0.05, SIGN.z, PATH)).toBe(true);
+    expect(treeAllowed(SIGN.x, SIGN.z + SIGN_CLEARANCE - 0.05, PATH)).toBe(false);
+    expect(treeAllowed(SIGN.x, SIGN.z + SIGN_CLEARANCE + 0.05, PATH)).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------- sign and pennants
+
+describe('SIGN and PENNANTS', () => {
+  /**
+   * Verifies that the sign's clearance covers the whole board, with room to spare
+   */
+  it('gives the sign a clearance wider than half its board, and the pennants one', () => {
+    expect(SIGN_WIDTH).toBeGreaterThan(0);
+    expect(SIGN_CLEARANCE).toBeGreaterThan(SIGN_WIDTH / 2);
+    expect(PENNANT_CLEARANCE).toBeGreaterThan(0);
+  });
+
+  /**
+   * Verifies that no point of the sign's board lies on the path band
+   */
+  it('keeps the whole board off the path', () => {
+    // The board's nearest edge to the path is its west end, SIGN.x - SIGN_WIDTH / 2.
+    expect(distanceToPath(SIGN.x - SIGN_WIDTH / 2, SIGN.z, PATH)).toBeGreaterThan(PATH_HALF_WIDTH);
+    for (let i = 0; i <= 20; i++) {
+      const x = SIGN.x - SIGN_WIDTH / 2 + (SIGN_WIDTH * i) / 20;
+      expect(distanceToPath(x, SIGN.z, PATH), `x = ${x.toFixed(2)}`).toBeGreaterThan(PATH_HALF_WIDTH);
+    }
+  });
+
+  /**
+   * Verifies that the sign stands on dry ground past the moat, east of the path
+   */
+  it('puts the sign on dry ground past the moat, east of the path start', () => {
+    expect(SIGN.z).toBeGreaterThan(MOAT.z1);
+    expect(distanceToRect(SIGN.x, SIGN.z, MOAT)).toBeGreaterThan(0);
+    expect(distanceToRect(SIGN.x, SIGN.z, BRIDGE)).toBeGreaterThan(0);
+    expect(SIGN.x - SIGN_WIDTH / 2).toBeGreaterThan(PATH[0].x);
+  });
+
+  /**
+   * Verifies that there are two pennants, one on each side of the drawbridge
+   */
+  it('frames the bridge with one pennant on each side', () => {
+    expect(PENNANTS).toHaveLength(2);
+    const west = PENNANTS.filter((p) => p.x < BRIDGE.x0);
+    const east = PENNANTS.filter((p) => p.x > BRIDGE.x1);
+    expect(west).toHaveLength(1);
+    expect(east).toHaveLength(1);
+  });
+
+  /**
+   * Verifies that each pennant stands on dry ground south of the moat, beside the bridge
+   */
+  it.each([0, 1])('puts pennant %d south of the moat, off the bridge and the path', (i) => {
+    const p = PENNANTS[i];
+    expect(p.z).toBeGreaterThan(MOAT.z1);
+    expect(p.x < BRIDGE.x0 || p.x > BRIDGE.x1).toBe(true);
+    expect(distanceToRect(p.x, p.z, BRIDGE)).toBeGreaterThan(0);
+    expect(distanceToPath(p.x, p.z, PATH)).toBeGreaterThan(PATH_HALF_WIDTH);
+  });
+
+  /**
+   * Verifies that no tree, near or far, grows within the sign's or a pennant's clearance
+   */
+  it('keeps every tree clear of the sign and the pennants', () => {
+    const nearSign = ALL_TREES.filter((t) => Math.hypot(t.x - SIGN.x, t.z - SIGN.z) < SIGN_CLEARANCE);
+    expect(nearSign).toEqual([]);
+    for (const p of PENNANTS) {
+      expect(ALL_TREES.filter((t) => Math.hypot(t.x - p.x, t.z - p.z) < PENNANT_CLEARANCE)).toEqual([]);
+    }
+  });
+
+  /**
+   * Verifies that no bush or rock lies within the sign's or a pennant's clearance
+   */
+  it('keeps the undergrowth clear of the sign and the pennants', () => {
+    expect(UNDERGROWTH.filter((u) => Math.hypot(u.x - SIGN.x, u.z - SIGN.z) < SIGN_CLEARANCE)).toEqual([]);
+    for (const p of PENNANTS) {
+      expect(UNDERGROWTH.filter((u) => Math.hypot(u.x - p.x, u.z - p.z) < PENNANT_CLEARANCE)).toEqual([]);
+    }
   });
 });
 

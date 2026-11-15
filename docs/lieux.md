@@ -31,6 +31,16 @@ Le `║` sur le bord sud marque la porte du château, entre l'Accessibilité / S
 - **Les contrôles** forment une bande continue en bas à gauche : sécurité, revue et tests, puis accessibilité et SEO.
 - **Le Scriptorium** (rédaction de documentation) est un coin de la Bibliothèque, avec des pupitres de copistes.
 
+## Le panneau du donjon
+
+Hors du château, juste après le pont-levis et au bord du chemin, un panneau de bois porte le nom du donjon affiché. Deux fanions encadrent le pont-levis, et un petit drapeau surmonte le poteau gauche du panneau. Fanions et drapeau sont de la couleur du donjon.
+
+- **Couleur.** Chaque donjon a sa couleur, choisie parmi neuf teintes faciles à distinguer de nuit. Elle dépend de l'identifiant interne de l'environnement, et non de son nom : renommer un donjon ne change pas sa couleur. Deux donjons peuvent partager une teinte, au-delà de neuf donjons ou par hasard. Le nom écrit sur le panneau les distingue.
+- **Hors environnement.** Les sessions qui n'appartiennent à aucun environnement forment un groupe gris. Son nom, « Hors environnement », s'affiche dans la langue choisie.
+- **Nom long.** Le nom rétrécit pour tenir sur le panneau. S'il reste trop long, il est coupé et se termine par « … ».
+- **Décor seul.** Le panneau et les fanions ne réagissent ni au survol ni au clic. La couleur ne porte aucun sens à elle seule : c'est le nom écrit sur le panneau qui identifie le donjon.
+- **Intérieur du château.** Rien ne change à l'intérieur : les bannières gardent la couleur propre à chaque pièce.
+
 ## Liste des lieux
 
 | Lieu | Postes | Activité | Qui y travaille |

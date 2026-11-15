@@ -6,6 +6,8 @@ Ce document décrit ce que tu vois à l'écran et ce que tu peux faire. Pour l'i
 
 La scène montre un donjon de 14 lieux, reliés par des couloirs. Chaque agent est un personnage. Les personnages passent par les portes et les couloirs, jamais à travers un mur. Le plan des lieux est dans [lieux.md](lieux.md).
 
+Chaque donjon se reconnaît à son panneau de bois, juste après le pont-levis : son nom y est peint, et deux fanions de sa couleur encadrent le pont-levis. Les sessions hors environnement forment un groupe gris. Le détail est dans [Le panneau du donjon](lieux.md#le-panneau-du-donjon).
+
 ## Choisir un donjon
 
 La page d'accueil, « Choisis ton donjon », affiche une carte par environnement de l'app Claude. Chaque carte donne son nom, le nombre de sessions en cours (ou « Au calme ») et le premier dossier de l'environnement. Un clic ouvre le donjon. Une fois dans un donjon, le sélecteur « Donjon », en haut de la page, passe à un autre donjon.
