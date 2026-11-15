@@ -10,8 +10,11 @@ import { ROOM_BY_ID } from './layout.ts';
 import {
   dropFall,
   feathersAt,
+  freshEvents,
+  phaseAt,
   isPigeonOutcome,
   MAX_PIGEONS,
+  PLUCKED_FEATHERS,
   pigeonOutcome,
   pigeonPoint,
   Pigeons,
@@ -29,7 +32,10 @@ const HEAD_Y = 1.78;
 const SUB_SCALE = 0.85;
 /** The lectern's book, where the dropping lands when no agent is there (test command). */
 const LECTERN_Y = 1.15;
-const FEATHER_POOL = 24;
+/** A burst outlives its pigeon's slot: room for one more burst than pigeons. */
+const FEATHER_POOL = PLUCKED_FEATHERS * (MAX_PIGEONS + 1);
+/** Flight target of the test command when no agent is selected nor in the dovecote. */
+const NO_AGENT = '';
 const SPLAT_POOL = 8;
 
 function propPoint(kind: string, y: number): V3 {
@@ -50,13 +56,26 @@ const dropMaterial = new MeshStandardMaterial({ color: '#f7f7f2', roughness: 0.3
 
 const now = () => performance.now() / 1000;
 
-/** Agent id an event belongs to, as the scene names figures. */
+/**
+ * Figure id of the agent an event belongs to. The main agent's is the session's main id, never
+ * one rebuilt from the session id: an absorbed session keeps its earlier main id (potion.ts).
+ */
 function eventAgentId(e: HookEventSummary): string {
-  return e.agentId ?? `${e.sessionId}#main`;
+  if (e.agentId !== undefined) return e.agentId;
+  const session = useOffice.getState().sessions.find((s) => s.id === e.sessionId);
+  return session?.main.id ?? `${e.sessionId}#main`;
 }
 
 function agentShown(id: string): boolean {
   return useOffice.getState().sessions.some((s) => s.main.id === id || s.subagents.some((a) => a.id === id));
+}
+
+/**
+ * Whether an event belongs to the dungeon on screen: events reach every page. A subagent
+ * of a shown session counts even before the snapshot that brings its figure.
+ */
+function eventShown(e: HookEventSummary): boolean {
+  return agentShown(eventAgentId(e)) || useOffice.getState().sessions.some((s) => s.id === e.sessionId);
 }
 
 /** First agent working in the dovecote: the test command's target when no agent is selected. */
@@ -84,24 +103,22 @@ export function PigeonFlights() {
   const feathers = useRef<(Mesh | null)[]>([]);
   const drops = useRef<(Mesh | null)[]>([]);
   const splats = useRef<(Mesh | null)[]>([]);
-  const lastPos = useRef<V3[]>([]);
+  /** Last drawn position of each flight, by flight id, for its heading. */
+  const lastPos = useRef(new Map<number, V3>());
 
   // Hook events: only the ones that arrive from now on, oldest first.
-  useEffect(() => {
-    let lastSeq = useOffice.getState().events.reduce((m, e) => Math.max(m, e.seq), 0);
-    return useOffice.subscribe((state, prev) => {
-      if (state.events === prev.events) return;
-      const fresh = state.events.filter((e) => e.seq > lastSeq).reverse();
-      for (const e of fresh) {
-        lastSeq = Math.max(lastSeq, e.seq);
-        if (!e.httpCall) continue;
-        const id = eventAgentId(e);
-        if (e.httpCall === 'start') {
-          if (agentShown(id)) pigeons.launch(id, now());
-        } else pigeons.land(id, pigeonOutcome(e.httpCall), now());
-      }
-    });
-  }, [pigeons]);
+  useEffect(
+    () =>
+      useOffice.subscribe((state, prev) => {
+        for (const e of freshEvents(state.events, prev.events)) {
+          if (!e.httpCall || !eventShown(e)) continue;
+          const id = eventAgentId(e);
+          if (e.httpCall === 'start') pigeons.start(id, now());
+          else pigeons.land(id, pigeonOutcome(e.httpCall), now());
+        }
+      }),
+    [pigeons],
+  );
 
   // Test command, kept on purpose: `agentOffice.pigeon('dropping')` in the browser console.
   useEffect(() => {
@@ -111,7 +128,9 @@ export function PigeonFlights() {
     // Same contract as the other gags' commands (docs/commandes-console.md): true when a pigeon left.
     const command = (issue: PigeonOutcome = 'back', agentId?: string): boolean => {
       if (!isPigeonOutcome(issue)) return false;
-      const id = agentId ?? useOffice.getState().selectedAgentId ?? dovecoteAgent() ?? 'none';
+      // An explicit id must name a figure on stage; without one, the lectern takes the dropping.
+      if (agentId !== undefined && !agentPositions.has(agentId)) return false;
+      const id = agentId ?? useOffice.getState().selectedAgentId ?? dovecoteAgent() ?? NO_AGENT;
       return pigeons.force(id, issue, now()) !== null;
     };
     ns.pigeon = command;
@@ -129,23 +148,24 @@ export function PigeonFlights() {
     let drop = 0;
     let splat = 0;
     for (const f of pigeons.flights) {
+      if (f.silent) continue;
       const places = placesFor(f.agentId);
       const pos = still ? null : pigeonPoint(f, t, places);
       if (pos && bird < MAX_PIGEONS) {
         const g = birds.current[bird];
         if (g) {
-          const prev = lastPos.current[bird] ?? pos;
+          const prev = lastPos.current.get(f.id) ?? pos;
           const dx = pos[0] - prev[0];
           const dz = pos[2] - prev[2];
           if (dx * dx + dz * dz > 1e-6) g.rotation.y = Math.atan2(dx, dz);
-          const flying = pos !== places.nest;
+          const flying = phaseAt(f, t).phase !== 'landed';
           g.rotation.z = flying ? Math.sin(t * 22 + f.id) * 0.35 : 0;
           g.position.set(pos[0], pos[1] + (flying ? Math.abs(Math.sin(t * 22 + f.id)) * 0.06 : 0), pos[2]);
           // A plucked pigeon comes back skinny.
           g.scale.set(f.outcome === 'plucked' ? 0.6 : 1, 1, 1);
           g.visible = true;
         }
-        lastPos.current[bird] = pos;
+        lastPos.current.set(f.id, pos);
         bird++;
       }
       if (!still) {
@@ -179,7 +199,7 @@ export function PigeonFlights() {
       const g = birds.current[i];
       if (g) g.visible = false;
     }
-    lastPos.current.length = bird;
+    for (const id of lastPos.current.keys()) if (!pigeons.flights.some((f) => f.id === id)) lastPos.current.delete(id);
     for (let i = feather; i < FEATHER_POOL; i++) if (feathers.current[i]) feathers.current[i]!.visible = false;
     for (let i = drop; i < MAX_PIGEONS; i++) if (drops.current[i]) drops.current[i]!.visible = false;
     for (let i = splat; i < SPLAT_POOL; i++) if (splats.current[i]) splats.current[i]!.visible = false;

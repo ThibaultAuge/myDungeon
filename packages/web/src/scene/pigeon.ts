@@ -57,6 +57,11 @@ export function isPigeonOutcome(v: unknown): v is PigeonOutcome {
 export interface Flight {
   id: number;
   agentId: string;
+  /**
+   * A call whose pigeon could not leave (too many in the air): kept in the agent's queue so
+   * ends pair with calls in their real order, never drawn, not counted in the cap.
+   */
+  silent?: boolean;
   startedAt: number;
   /** Set when the call ends (or times out). */
   outcome?: PigeonOutcome;
@@ -68,6 +73,7 @@ export type Phase = 'leaving' | 'away' | 'returning' | 'hovering' | 'homing' | '
 
 /** Phase of a flight at `now`, and the progress (0..1) within it. */
 export function phaseAt(f: Flight, now: number): { phase: Phase; t: number } {
+  if (f.silent) return f.outcome === undefined ? { phase: 'away', t: 0 } : { phase: 'gone', t: 1 };
   const dt = now - f.startedAt;
   if (dt < LEAVE_S) return { phase: 'leaving', t: Math.max(0, dt) / LEAVE_S };
   if (f.outcome === undefined || f.returnAt === undefined || now < f.returnAt) return { phase: 'away', t: 0 };
@@ -87,7 +93,7 @@ export function phaseAt(f: Flight, now: number): { phase: Phase; t: number } {
 
 /** When the dropping lands on the head, for a `dropping` flight that has started back. */
 export function splatStart(f: Flight): number | undefined {
-  if (f.outcome !== 'dropping' || f.returnAt === undefined) return undefined;
+  if (f.silent || f.outcome !== 'dropping' || f.returnAt === undefined) return undefined;
   return f.returnAt + RETURN_S + DROP_S;
 }
 
@@ -107,12 +113,13 @@ export function dropFall(f: Flight, now: number): number | undefined {
 
 /** When the plucked pigeon loses its feathers, on its way back. */
 function featherBurstAt(f: Flight): number | undefined {
-  return f.outcome === 'plucked' && f.returnAt !== undefined ? f.returnAt + RETURN_S * BURST_AT : undefined;
+  return !f.silent && f.outcome === 'plucked' && f.returnAt !== undefined ? f.returnAt + RETURN_S * BURST_AT : undefined;
 }
 
 /** True once nothing of the flight shows any more (pigeon, feathers, dropping). */
 export function flightOver(f: Flight, now: number): boolean {
   if (phaseAt(f, now).phase !== 'gone') return false;
+  if (f.silent) return true;
   if (f.outcome === 'dropping') return now >= splatStart(f)! + SPLAT_S;
   if (f.outcome === 'lost') return now >= f.returnAt! + LOST_FEATHER_FALL_S;
   if (f.outcome === 'plucked') return now >= featherBurstAt(f)! + FEATHER_FALL_S;
@@ -169,6 +176,7 @@ export interface Feather {
  * pigeon's single feather drifting down over the aviary. Deterministic per flight.
  */
 export function feathersAt(f: Flight, now: number, places: Places): Feather[] {
+  if (f.silent) return [];
   if (f.outcome === 'plucked') {
     const at = featherBurstAt(f)!;
     const t = (now - at) / FEATHER_FALL_S;
@@ -199,28 +207,49 @@ export function feathersAt(f: Flight, now: number, places: Places): Feather[] {
 }
 
 /**
+ * Entries added in front of a newest-first list since `prev`, oldest first. Compared by
+ * reference, never by sequence number: the server's numbering restarts with the server.
+ * Relies on the store prepending live events one at a time; a bulk load of past events
+ * into the same list would replay them.
+ */
+export function freshEvents<T>(next: readonly T[], prev: readonly T[]): T[] {
+  if (next === prev) return [];
+  const idx = prev.length === 0 ? next.length : next.indexOf(prev[0]);
+  return idx <= 0 ? [] : next.slice(0, idx).reverse();
+}
+
+/**
  * The pigeons in the air. Calls and outcomes are paired first in, first out per agent.
  * Idempotent clock: every method takes `now`.
  */
 export class Pigeons {
   readonly flights: Flight[] = [];
   private nextId = 1;
+  /** A real call of `agentId` starts: a pigeon leaves, or a silent flight keeps the call's place. */
+  start(agentId: string, now: number): Flight | null {
+    const f = this.launch(agentId, now);
+    if (!f) this.flights.push({ id: this.nextId++, agentId, startedAt: now, silent: true });
+    return f;
+  }
 
   /** A pigeon leaves for `agentId`'s call; null when too many are in the air. */
   launch(agentId: string, now: number): Flight | null {
     this.update(now);
-    if (this.flights.filter((f) => phaseAt(f, now).phase !== 'gone').length >= MAX_PIGEONS) return null;
+    if (this.flights.filter((f) => !f.silent && phaseAt(f, now).phase !== 'gone').length >= MAX_PIGEONS) return null;
     const f: Flight = { id: this.nextId++, agentId, startedAt: now };
     this.flights.push(f);
     return f;
   }
 
-  /** The call of `agentId` launched first and not ended yet gets its outcome. False when there is none. */
+  /**
+   * The call of `agentId` started first and not ended yet gets its outcome. False when there
+   * is none, or when that call sent no pigeon (a silent flight, see `start`).
+   */
   land(agentId: string, outcome: PigeonOutcome, now: number): boolean {
     const f = this.flights.find((x) => x.agentId === agentId && x.outcome === undefined);
     if (!f) return false;
     this.settle(f, outcome, now);
-    return true;
+    return !f.silent;
   }
 
   /** The test command: a pigeon leaves and its outcome is already known. */

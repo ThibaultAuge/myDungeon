@@ -51,8 +51,9 @@ interface ToolHook {
 /**
  * What an event tells about an HTTP call of an agent working in `room`: `start` when it
  * launches one, `ok` / `error` when it ends, undefined otherwise or outside the dovecote.
- * A failed tool (curl exiting in error, network, timeout) or a status ≥ 400 is an error;
- * an output without any status counts as a success, since curl exited normally.
+ * A failed tool (curl exiting in error, network, timeout), a status ≥ 400 or the `000` curl
+ * prints when no response came (exit code hidden by a pipe) is an error; an output without
+ * any status counts as a success, since curl exited normally.
  */
 export function httpCallOf(ev: ToolHook, room: RoomId | undefined): HttpCall | undefined {
   if (room !== 'pigeonnier' || !ev.tool_name || !SHELL_TOOLS.has(ev.tool_name)) return undefined;
@@ -65,7 +66,7 @@ export function httpCallOf(ev: ToolHook, room: RoomId | undefined): HttpCall | u
       return 'error';
     case 'PostToolUse': {
       const status = httpStatus((ev.tool_response as { stdout?: unknown } | undefined)?.stdout);
-      return status !== undefined && status >= 400 ? 'error' : 'ok';
+      return status !== undefined && (status >= 400 || status < 100) ? 'error' : 'ok';
     }
     default:
       return undefined;
