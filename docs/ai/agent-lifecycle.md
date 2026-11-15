@@ -28,6 +28,10 @@ description: Use when changing where agents rest or wait (tavern, altar queue), 
 - Stopped sessions (`live: false`, not archived) keep their main agent visible, resting in
   the tavern in the session colour, but NOT selectable: the side panel lists live sessions
   only (accessibility decision: no 3D-only clickable target). Exception: ghosts below.
+- Seated in the tavern: resting figures, mains waiting for a prompt and stopped-session
+  knights sit on a stool at table seats or on the floor at wall / scatter places, unless an
+  altar pose (sleeping) applies; a working figure there stands. Poses and stools:
+  `docs/ai/dungeon-scene.md` (Work gestures).
 
 ### Tavern introduction card (resting subagent types)
 User request: clicking a resting figure introduces its type.

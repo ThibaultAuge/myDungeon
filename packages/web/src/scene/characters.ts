@@ -188,6 +188,24 @@ export const HERALD_CLIPS = [
 
 /** Work gestures, per room or post. */
 export const WORK_CLIPS = [
+  'Hammering',
+  'Sawing',
+  'Working_A',
+  'Working_B',
+  'Working_C',
+  'Work_A',
+  'Work_B',
+  'Work_C',
+  'Ranged_Magic_Spellcasting',
+  'Melee_Blocking',
+  'Melee_2H_Idle',
+  'Melee_1H_Attack_Chop',
+  'Ranged_Bow_Draw',
+  'Throw',
+  'Lockpicking',
+  'Sit_Chair_Idle',
+  'Sit_Floor_Idle',
+  'Push_Ups',
 ] as const satisfies readonly KitClip[];
 
 /** Small gags: cheering when done, dodging a slap, sneaking, fishing… */
@@ -272,6 +290,8 @@ export interface ClipInput {
   drinking?: boolean;
   /** The endless wait at the altar, for a figure at its place. Absent otherwise. */
   altar?: AltarPose;
+  /** The gesture or seated pose of a figure at its place (workGestures.ts). Absent: the defaults. */
+  place?: ClipChoice | null;
 }
 
 export interface ClipChoice {
@@ -311,6 +331,8 @@ export function clipFor(input: ClipInput): ClipChoice {
   if (altar === 'sitting') return hold(SIT_CLIP, SIT_POSE_TIME);
   if (altar === 'pacing' && !reducedMotion) return play('Walking_A', PACE_CLIP_RATE);
   if (kneeling) return hold('PickUp', KNEEL_POSE_TIME);
+  // A work gesture or a seated pose at the figure's place (workGestures.ts minds reduced motion).
+  if (input.place) return input.place;
   if (state === 'done' || reducedMotion) return hold('Idle_A');
   if (state === 'working') return play('Interact');
   return play('Idle_B');

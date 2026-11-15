@@ -37,6 +37,19 @@ const BOOKS = ['#5B4BD6', '#1FA67A', '#E0613A', '#2F8FE0', '#D94C8A', '#E8B730']
 
 /** Only shapes big enough for their shadow to show cast one: each caster costs a draw call. */
 const SHADOW_MIN = 0.3;
+/** Stools of a tavern long table, relative to the table: one under each seat of layout.ts, a little behind it. */
+const STOOL_BACK = 1.25;
+const TABLE_STOOLS: readonly [number, number][] = [-1.2, 0, 1.2].flatMap((z) => [
+  [-STOOL_BACK, z],
+  [STOOL_BACK, z],
+]);
+const STOOL_SCALE = 0.7;
+/** Stools of the relaxation corner's dice table, west, east and north of it (seats at 1 m, hips 0.25 m further). */
+const DICE_STOOLS: readonly [number, number][] = [
+  [-STOOL_BACK, 0],
+  [STOOL_BACK, 0],
+  [0, -STOOL_BACK],
+];
 
 function Box({ size, pos, color, rot }: { size: V3; pos: V3; color: string; rot?: V3 }) {
   return (
@@ -408,6 +421,10 @@ export const PROPS: Record<PropKind, PropRenderer> = {
       <Box size={[0.14, 0.14, 0.14]} pos={[-0.15, 0.78, -0.05]} color="#E54B4B" rot={[0, 1.1, 0]} />
       <Kit name="coin_stack_small" pos={[-0.25, 0.71, 0.25]} scale={0.4} />
       <Kit pack="mixed1" name="puzzlecube_complete" pos={[0.3, on(0.71, -0.21, 0.35), -0.3]} rot={[0, 0.6, 0]} scale={0.35} />
+      {/* Stools under the three dice players (layout.ts seats west, east and north of the table). */}
+      {DICE_STOOLS.map(([x, z]) => (
+        <Kit key={`${x}:${z}`} name="stool" pos={[x, 0, z]} scale={STOOL_SCALE} />
+      ))}
     </group>
   ),
   posters: (room) => (
@@ -445,6 +462,11 @@ export const PROPS: Record<PropKind, PropRenderer> = {
       <Kit name="plate_stack" pos={[0.1, 0.75, 0.5]} scale={0.4} />
       <Kit pack="restaurant" name="food_dinner" pos={[0, 0.75, 1.4]} scale={0.35} />
       <Kit name="candle_lit" pos={[-0.1, 0.75, 0.95]} scale={0.45} />
+      {/* Stools under the six tavern seats around the table (layout.ts), where the
+          Sit_Chair_Idle pose lands its hips (workGestures.ts). */}
+      {TABLE_STOOLS.map(([x, z]) => (
+        <Kit key={`${x}:${z}`} name="stool" pos={[x, 0, z]} scale={STOOL_SCALE} />
+      ))}
     </group>
   ),
   fireplace: () => (

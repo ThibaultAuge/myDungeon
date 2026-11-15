@@ -489,7 +489,8 @@ export const ROOMS: RoomDef[] = [
       { kind: 'diceTable', x: 1.6, z: -0.2, post: 'detente' },
       { kind: 'posters', x: 1.6, z: -2.15, post: 'detente' },
     ],
-    seats: [...row(-0.9, [-3, -1.6], S), ...around(1.6, -0.2, 1, [W, E, N])],
+    // The two couch seats sit far enough back that the seated pose lands on the cushions (workGestures.ts).
+    seats: [...row(-1.15, [-3, -1.6], S), ...around(1.6, -0.2, 1, [W, E, N])],
   },
   {
     // One metre narrower on its west side: the corridor widens into the castle gate.

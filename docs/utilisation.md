@@ -142,9 +142,11 @@ Les personnages viennent du pack KayKit Adventurers 2.0 :
 Tous les agents d'un même type se ressemblent, y compris au repos à la taverne. La liste complète est dans [personnages.md](personnages.md).
 
 - **Déplacement.** Ils marchent ou courent entre les pièces. Ils font une animation de travail quand ils travaillent.
+- **Gestes de travail.** Chaque pièce a son geste : on martèle et on scie à l'Atelier, on actionne les leviers dans la Salle des machines, on lit ou on écrit à la Bibliothèque, au Scriptorium, dans la Salle des cartes et au Cabinet de l'arithméticien, on lance un sort à l'Observatoire, on se tient en garde derrière son bouclier au Poste de garde, on s'entraîne à l'épée ou à l'arc dans la Salle des épreuves (on lit à la table de relecture, on manipule les fioles au laboratoire), on crochète une serrure dans le Réduit du concierge. Au Pigeonnier, l'agent lance un pigeon chaque fois qu'il en part un.
+- **Assis.** À la taverne, les personnages au repos, l'agent principal qui attend ton message et le chevalier d'une session arrêtée s'assoient sur des tabourets autour des grandes tables, ou par terre le long des murs quand les tables sont pleines. Au Coin détente, Butt-Stallion s'assoit sur le canapé ou autour de la table de dés, par terre le long des murs, et l'un d'eux fait des pompes.
 - **Attente.** Ils regardent autour d'eux, le losange ambre restant affiché. Le premier de la file s'agenouille devant l'autel, puis se relève au bout d'une minute.
 - **Couleur.** Chaque personnage a un disque au sol de la couleur de sa session, et le bord de son étiquette porte cette même couleur. L'étiquette du personnage sélectionné a un contour bleu et du texte en gras.
-- **Réduction des animations.** Si la réduction des animations est activée dans le système, les personnages gardent une pose fixe et n'effectuent pas de surgissement. Ils se déplacent toujours d'une pièce à l'autre. Le chevalier d'une session supprimée disparaît sans marche ni combat, et les squelettes ne s'affichent pas.
+- **Réduction des animations.** Si la réduction des animations est activée dans le système, les personnages gardent une pose fixe et n'effectuent pas de surgissement. Les personnages assis le restent, immobiles ; ceux qui travaillent debout se figent dans leur pose calme, sans pompes ni lancer de pigeon. Ils se déplacent toujours d'une pièce à l'autre. Le chevalier d'une session supprimée disparaît sans marche ni combat, et les squelettes ne s'affichent pas.
 
 ## Une baffe sur un personnage
 
@@ -183,6 +185,7 @@ Il y a trois issues possibles en cas d'erreur :
 Deux règles encadrent le gag :
 
 - **Quatre pigeons au plus.** Quatre pigeons peuvent voler en même temps. Au-delà, l'appel n'envoie aucun pigeon, mais son résultat reste rattaché au bon appel, dans l'ordre.
+- **Le lancer.** L'agent fait le geste de lancer chaque fois qu'un pigeon part, y compris avec la commande de console. Quand aucun pigeon ne part (quatre déjà en vol), il ne lance rien.
 - **Réduction des animations.** Ni vol ni plume. Seule la fiente s'affiche, immobile, sur la tête de l'agent. Les autres issues ne montrent rien.
 
 Cet effet est purement esthétique : il ne change rien à la requête ni à son résultat, et il n'affiche aucun texte. Il ne montre ni le contenu de la réponse, ni son code HTTP. Il utilise les hooks d'outil déjà installés, sans réinstallation. Le détail est dans [Appels HTTP du Pigeonnier](fonctionnement.md#appels-http-du-pigeonnier).
