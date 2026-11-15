@@ -81,6 +81,8 @@ export const fr = {
   slap: {
     /** Comic sound word of the slap, shown in a bubble over the slapped agent. */
     sound: 'PAF !',
+    /** Comic word over an agent that dodged the slap (the third of a quick streak). */
+    miss: 'Raté !',
   },
   mishap: {
     /** Comic word over an agent whose command failed in the engine room (the boiler goes poof). */

@@ -48,9 +48,11 @@ console command: `docs/commandes-console.md`.
   `AgentFigure` computes the wanted pose before the walk step, keeps the track in a ref
   (starts at `ALTAR_POSE_START`, `held` = `Infinity`: a figure that appears already in a
   pose, e.g. after a reload, is shown settled with no way down) and passes `held` as
-  `altarFor`. `interrupted` = the hit clip or gulp actually shows (not during the hand's
-  swing delay): it restarts the way down afterwards and ends a getting-up at once (both
-  clips end standing). `still` (reduced motion) or `exit` (doomed figure): no way down, no
+  `altarFor`. `interrupted` = the hit clip, gulp or cheer (`cheer.ts`) actually shows
+  (`(m.hitWait <= 0 && m.hitLeft > 0) || gulping || cheering`, not during the hand's swing
+  delay): it restarts the way down afterwards and ends a getting-up at once, because all
+  three clips end standing (otherwise a lying figure would cheer standing, snap back to
+  lying, then pop up). `still` (reduced motion) or `exit` (doomed figure): no way down, no
   getting up. Returns the same object when a figure away from the altar has nothing to
   change (no per-frame allocation).
 - Follows the pose actually shown: `AgentFigure`'s `useFrame` sets `data-asleep` on the tag

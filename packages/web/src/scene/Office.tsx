@@ -14,6 +14,15 @@ import { Ambush } from './ambush.ts';
 import { AmbushScene } from './Ambush.tsx';
 import { DungeonSign } from './DungeonSign.tsx';
 import { Fireworks } from './Fireworks.tsx';
+import {
+  assignFishingRanks,
+  fishingForceVersion,
+  fishingSpot,
+  installFishingCommand,
+  isFishingForced,
+  onFishingForce,
+  wantsToFish,
+} from './fishing.ts';
 import { Forest } from './Forest.tsx';
 import { Ghosts, isGhost } from './ghost.ts';
 import { GhostFigure } from './GhostFigure.tsx';
@@ -199,6 +208,18 @@ export function OfficeScene({ dungeon }: { dungeon?: Dungeon }) {
       }),
     [],
   );
+  // Fishing in the moat: a forced fisher (test command) walks out at once.
+  useSyncExternalStore(onFishingForce, fishingForceVersion);
+  // Test command `agentOffice.peche(id?)`, for the console.
+  useEffect(
+    () =>
+      installFishingCommand(window, {
+        selected: () => useOffice.getState().selectedAgentId,
+        isLiveMain: (id) => useOffice.getState().sessions.some((s) => s.live && s.main.id === id),
+        log: (message) => console.info(message),
+      }),
+    [],
+  );
   // Finished subagents that reached the tavern: they have left the scene.
   const [arrived, setArrived] = useState<ReadonlySet<string>>(() => new Set());
   const onArrive = useCallback((id: string) => setArrived((prev) => (prev.has(id) ? prev : new Set(prev).add(id))), []);
@@ -251,7 +272,23 @@ export function OfficeScene({ dungeon }: { dungeon?: Dungeon }) {
   const restingKey = restingTypes(roster, shown).join('\n');
   const resting = useMemo(() => (restingKey ? restingKey.split('\n').map(restingAgent) : []), [restingKey]);
   const returned = sessions.flatMap((s) => s.subagents.filter((a) => arrived.has(a.id)));
-  const spots = useSpots(placed, resting, returned);
+  const seated = useSpots(placed, resting, returned);
+  // Main agents waiting long for a prompt go fishing in the moat: their spot becomes a place on
+  // the bank, kept while they fish (fishing.ts).
+  const fishRanks = useRef(new Map<string, number>());
+  const fishers = placed
+    .filter(({ agent, session }) => agent.kind === 'main' && session.live && wantsToFish(agent, session.live, now, isFishingForced(agent.id)))
+    .sort((a, b) => a.agent.since - b.agent.since || a.agent.id.localeCompare(b.agent.id))
+    .map(({ agent }) => agent.id);
+  const ranks = assignFishingRanks(fishers, fishRanks.current);
+  fishRanks.current = ranks;
+  const fishingKey = [...ranks].map(([id, rank]) => `${id}:${rank}`).join('|');
+  const spots = useMemo(() => {
+    if (ranks.size === 0) return seated;
+    const out = new Map(seated);
+    for (const [id, rank] of ranks) out.set(id, fishingSpot(rank));
+    return out;
+  }, [seated, fishingKey]); // eslint-disable-line react-hooks/exhaustive-deps
   lastSpots.current = spots;
   const starts = useStarts(shown, resting, spots, snapshotReceived, stage);
 

@@ -51,6 +51,11 @@ description: Use when changing the Samuel-Morse pigeon gag — HTTP-call detecti
   `docs/commandes-console.md`): issue `back | plucked | lost | dropping`; target = id ??
   selected agent ?? first non-done dovecote agent ?? lectern. Returns false for an unknown
   issue, an explicit id with no figure on stage, or a full sky. Uses `Pigeons.force`.
+- Throw cue: when a drawn flight leaves (`Pigeons.start` returned true, never a silent
+  flight) or the console command forces one, `Pigeons.tsx` calls `throwPigeon(id)`
+  (`workGestures.ts` bus); the agent's `AgentFigure` listens with `onThrow` and plays
+  `Throw` once at the lectern (clip side: `docs/ai/dungeon-scene.md`, Work gestures).
+  Skipped under reduced motion.
 
 ## Relevant Files
 - `packages/server/src/http-call.ts` — `isHttpCommand`, `httpStatus`, `httpCallOf`,
@@ -60,6 +65,7 @@ description: Use when changing the Samuel-Morse pigeon gag — HTTP-call detecti
 - `packages/web/src/scene/pigeon.ts` — pure timeline, `Pigeons` queue, `freshEvents`,
   `pigeonOutcome`, constants.
 - `packages/web/src/scene/Pigeons.tsx` — `PigeonFlights`, pools, console command.
+- `packages/web/src/scene/workGestures.ts` — `throwPigeon` / `onThrow` (throw cue).
 - `packages/web/src/scene/Office.tsx` — mounts `PigeonFlights`.
 - Tests: `packages/server/test/http-call.test.ts`, `packages/server/test/reducer.test.ts`
   (httpCall block), `packages/web/test/pigeon.test.ts`.
@@ -84,3 +90,7 @@ description: Use when changing the Samuel-Morse pigeon gag — HTTP-call detecti
   same list would replay them.
 - Accepted limit: a call ending after its `LOST_TIMEOUT_S` settles the agent's next
   pending call instead.
+- Throw accepted limits (review findings not done): the bird leaves from the aviary a few
+  metres from the lectern; a second pigeon during a throw does not restart it, and one
+  within the ~0.2 s fade after it shows a frozen release pose; `throwAt` keeps running while
+  a slap, gulp or walk overrides the gesture, so the throw can be cut short.

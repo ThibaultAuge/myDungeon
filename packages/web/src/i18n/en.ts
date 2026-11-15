@@ -73,6 +73,7 @@ export const en: Messages = {
   },
   slap: {
     sound: 'SLAP!',
+    miss: 'Missed!',
   },
   mishap: {
     boiler: 'POOF!',

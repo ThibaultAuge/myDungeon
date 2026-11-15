@@ -57,11 +57,11 @@ Hors du château, juste après le pont-levis et au bord du chemin, un panneau de
 | **Poste de garde** | Herse, râtelier d'armes, lanternes | Audit sécurité | Neo |
 | **Salle des épreuves** | Table de relecture, laboratoire d'alchimie | Revue de code, tests | Hermione, Dexter |
 | **Salle Accessibilité / SEO** | Estrade du héraut, pupitre d'inspection | Audits SEO et accessibilité | Gatsby, Timmy |
-| **Coin détente** | Banquettes, jeu de dés, mur d'affiches | Idées décalées | Butt-Stallion |
+| **Coin détente** | Banquettes, jeu de dés avec ses tabourets, mur d'affiches | Idées décalées | Butt-Stallion |
 | **Scriptorium** (dans la Bibliothèque) | Pupitres de copistes | Documentation | Curator (pour les IA), Otis (pour les humains) |
 | **Réduit du concierge** | Balais, seaux, chariot | Base de Hancock, qui fait des tournées dans l'Atelier | Hancock |
 | **Tours d'angle** (quatre, dans les murs) | Trappe et plateforme sur chaque tour | Sonner de la trompette après un commit ou un push réussi | Un héraut, sur une tour libre |
-| **Taverne** | Grandes tables, cheminée, tonneaux, casiers | Agents disponibles, sans tâche | Un exemplaire de chaque type d'agent, l'agent principal en attente de ton prochain prompt, et le chevalier endormi d'une session arrêtée |
+| **Taverne** | Grandes tables et leurs tabourets, cheminée, tonneaux, casiers | Agents disponibles, sans tâche | Un exemplaire de chaque type d'agent, l'agent principal en attente de ton prochain prompt, et le chevalier endormi d'une session arrêtée |
 
 Deux postes réagissent aux échecs d'outil : la chaudière de la Salle des machines et la fiole du laboratoire de la Salle des épreuves. Le détail est dans [La chaudière et la fiole](utilisation.md#la-chaudière-et-la-fiole).
 
