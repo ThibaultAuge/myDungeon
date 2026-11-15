@@ -11,8 +11,8 @@ import { Kit } from './KitInstances.tsx';
 export function AltarCobwebs() {
   return (
     <Suspense fallback={null}>
-      <Kit pack="mixed2" name="cobweb_C" pos={[-0.55, 0.55, -1.6]} rot={[0, 0, 0]} scale={0.5} shadow={false} />
-      <Kit pack="mixed2" name="cobweb_C" pos={[0.55, 0.55, -0.15]} rot={[0, Math.PI, 0]} scale={0.5} shadow={false} />
+      <Kit pack="mixed2" name="cobweb_C" pos={[-0.5, 0.7, -0.65]} rot={[0, 0, 0]} scale={0.4} shadow={false} />
+      <Kit pack="mixed2" name="cobweb_C" pos={[0.5, 0.7, 0.4]} rot={[0, Math.PI, 0]} scale={0.4} shadow={false} />
     </Suspense>
   );
 }

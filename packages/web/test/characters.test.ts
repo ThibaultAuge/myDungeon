@@ -22,9 +22,9 @@ import {
   KNEEL_POSE_TIME,
   LOOKS,
   PACE_CLIP_RATE,
-  SIT_CLIP,
-  SIT_POSE_TIME,
-  SLEEP_CLIP,
+  LIE_DOWN_TIME,
+  SIT_DOWN_TIME,
+  altarClip,
   MAIN_BODY,
   MAX_CLIP_RATE,
   POTION_PROP,
@@ -631,21 +631,65 @@ describe('clipFor', () => {
 
   // ---- the endless wait at the altar (altarWait.ts)
 
-  /** Verifies each altar pose: slow walk in place, sitting on the heels, lying asleep */
+  /** The settled sit and sleep loops, and the clips only an altar pose plays. */
+  const SITTING = play('Sit_Floor_Idle');
+  const SLEEPING = play('Lie_Idle');
+  const SIT_STILL = hold('Sit_Floor_Idle');
+  const SLEEP_STILL = hold('Lie_Idle');
+  const ALTAR_ONLY = ['Sit_Floor_Down', 'Sit_Floor_Idle', 'Sit_Floor_StandUp', 'Lie_Down', 'Lie_Idle', 'Lie_StandUp'] as const;
+
+  /** Verifies each altar pose: slow walk in place, sitting on the floor, lying asleep */
   it('poses the endless wait at the altar', () => {
     expect(clip({ altar: 'pacing' })).toEqual(play('Walking_A', PACE_CLIP_RATE));
-    expect(clip({ altar: 'sitting' })).toEqual(hold(SIT_CLIP, SIT_POSE_TIME));
-    expect(clip({ altar: 'sleeping' })).toEqual(hold(SLEEP_CLIP));
-    expect(SIT_CLIP).toBe('Death_B');
-    expect(SLEEP_CLIP).toBe('Death_A_Pose');
-    for (const name of [SIT_CLIP, SLEEP_CLIP]) expect(CLIPS).toContain(name);
+    expect(clip({ altar: 'sitting' })).toEqual(SITTING);
+    expect(clip({ altar: 'sleeping' })).toEqual(SLEEPING);
+    expect(clip({ altar: 'rising-sit' })).toEqual(play('Sit_Floor_StandUp', 1, false));
+    expect(clip({ altar: 'rising-lie' })).toEqual(play('Lie_StandUp', 1, false));
+    for (const name of ALTAR_ONLY) expect(CLIPS).toContain(name);
     expect(PACE_CLIP_RATE).toBeGreaterThan(0);
+  });
+
+  /** Verifies the way down plays once, then the resting loop, at the measured clip length */
+  it('sits and lies down once before the resting loop', () => {
+    expect(clip({ altar: 'sitting', altarFor: 0 })).toEqual(play('Sit_Floor_Down', 1, false));
+    expect(clip({ altar: 'sitting', altarFor: SIT_DOWN_TIME - 0.01 }).name).toBe('Sit_Floor_Down');
+    expect(clip({ altar: 'sitting', altarFor: SIT_DOWN_TIME })).toEqual(SITTING);
+    expect(clip({ altar: 'sleeping', altarFor: 0 })).toEqual(play('Lie_Down', 1, false));
+    expect(clip({ altar: 'sleeping', altarFor: LIE_DOWN_TIME - 0.01 }).name).toBe('Lie_Down');
+    expect(clip({ altar: 'sleeping', altarFor: LIE_DOWN_TIME })).toEqual(SLEEPING);
+    // Getting up ignores how long it has lasted (the walk waits for its length).
+    expect(clip({ altar: 'rising-lie', altarFor: 100 }).name).toBe('Lie_StandUp');
+  });
+
+  /** Verifies reduced motion holds the resting pose at once: no way down, no getting up */
+  it('holds the resting altar pose under reduced motion whatever the time', () => {
+    for (const held of [0, 0.5, 10, Infinity]) {
+      expect(altarClip('sitting', held, true)).toEqual(SIT_STILL);
+      expect(altarClip('sleeping', held, true)).toEqual(SLEEP_STILL);
+      expect(altarClip('rising-sit', held, true)).toEqual(SIT_STILL);
+      expect(altarClip('rising-lie', held, true)).toEqual(SLEEP_STILL);
+    }
+  });
+
+  /** Verifies clipFor passes reduced motion on: no way down even at the pose's first frame */
+  it('holds the resting pose from the first frame under reduced motion through clipFor', () => {
+    expect(clip({ altar: 'sitting', altarFor: 0, reducedMotion: true })).toEqual(SIT_STILL);
+    expect(clip({ altar: 'sleeping', altarFor: 0, reducedMotion: true })).toEqual(SLEEP_STILL);
+    expect(clip({ altar: 'rising-sit', altarFor: 0, reducedMotion: true })).toEqual(SIT_STILL);
+    expect(clip({ altar: 'rising-lie', altarFor: 0, reducedMotion: true })).toEqual(SLEEP_STILL);
+  });
+
+  /** Verifies the pose time only matters to a floor pose: pacing and no pose ignore it */
+  it('ignores altarFor without a sitting, sleeping or rising pose', () => {
+    expect(clip({ altarFor: 0 })).toEqual(clip({}));
+    expect(clip({ altarFor: 0, kneeling: true })).toEqual(clip({ kneeling: true }));
+    expect(clip({ altar: 'pacing', altarFor: 0 })).toEqual(play('Walking_A', PACE_CLIP_RATE));
   });
 
   /** Verifies the altar poses replace the kneeling and every state */
   it.each(STATES)('lets an altar pose win over kneeling in state %s', (state) => {
-    expect(clip({ altar: 'sitting', kneeling: true, state }).name).toBe(SIT_CLIP);
-    expect(clip({ altar: 'sleeping', kneeling: true, state }).name).toBe(SLEEP_CLIP);
+    expect(clip({ altar: 'sitting', kneeling: true, state })).toEqual(SITTING);
+    expect(clip({ altar: 'sleeping', kneeling: true, state })).toEqual(SLEEPING);
     expect(clip({ altar: 'pacing', kneeling: true, state }).name).toBe('Walking_A');
   });
 
@@ -660,8 +704,8 @@ describe('clipFor', () => {
 
   /** Verifies reduced motion keeps the still poses but stops the pacing walk */
   it('keeps still altar poses under reduced motion and stops pacing', () => {
-    expect(clip({ altar: 'sitting', reducedMotion: true })).toEqual(hold(SIT_CLIP, SIT_POSE_TIME));
-    expect(clip({ altar: 'sleeping', reducedMotion: true })).toEqual(hold(SLEEP_CLIP));
+    expect(clip({ altar: 'sitting', reducedMotion: true })).toEqual(SIT_STILL);
+    expect(clip({ altar: 'sleeping', reducedMotion: true })).toEqual(SLEEP_STILL);
     expect(clip({ altar: 'pacing', reducedMotion: true })).toEqual(hold('Idle_A'));
     expect(clip({ altar: 'pacing', reducedMotion: true, kneeling: true }).name).toBe('PickUp');
   });
@@ -676,8 +720,8 @@ describe('clipFor', () => {
   it('keeps the still altar poses for a drink or a slap under reduced motion', () => {
     for (const over of [{ drinking: true }, { hit: 'Hit_A' as const }]) {
       const at = JSON.stringify(over);
-      expect(clip({ ...over, altar: 'sitting', reducedMotion: true }), at).toEqual(hold(SIT_CLIP, SIT_POSE_TIME));
-      expect(clip({ ...over, altar: 'sleeping', reducedMotion: true }), at).toEqual(hold(SLEEP_CLIP));
+      expect(clip({ ...over, altar: 'sitting', reducedMotion: true }), at).toEqual(SIT_STILL);
+      expect(clip({ ...over, altar: 'sleeping', reducedMotion: true }), at).toEqual(SLEEP_STILL);
       expect(clip({ ...over, altar: 'pacing', reducedMotion: true }), at).toEqual(hold('Idle_A'));
     }
   });
@@ -936,7 +980,7 @@ describe('clipFor', () => {
     }
   });
 
-  const ALTAR_POSES = ['pacing', 'sitting', 'sleeping'] as const;
+  const ALTAR_POSES = ['pacing', 'sitting', 'sleeping', 'rising-sit', 'rising-lie'] as const;
 
   /** Verifies that every altar pose keeps the clip invariants: known, consistent, still if reduced */
   it('keeps the clip invariants with every altar pose', () => {
@@ -966,8 +1010,7 @@ describe('clipFor', () => {
         const c = clipFor({ ...input, altar });
         const earlier = input.moving || ((input.spawning || !!input.hit) && !input.reducedMotion);
         if (earlier) expect(c, at).toEqual(clipFor(input));
-        else if (altar === 'sleeping') expect(c, at).toEqual(hold(SLEEP_CLIP));
-        else if (altar === 'sitting') expect(c, at).toEqual(hold(SIT_CLIP, SIT_POSE_TIME));
+        else if (altar !== 'pacing') expect(c, at).toEqual(altarClip(altar, Infinity, input.reducedMotion));
         else if (input.reducedMotion) expect(c, at).toEqual(clipFor(input));
         else expect(c, at).toEqual(play('Walking_A', PACE_CLIP_RATE));
       }
@@ -977,7 +1020,7 @@ describe('clipFor', () => {
   /** Verifies that the sit and sleep clips only ever come from an altar pose or a script */
   it('never picks the sit or sleep clip without an altar pose', () => {
     for (const input of ALL) {
-      expect([SIT_CLIP, SLEEP_CLIP], JSON.stringify(input)).not.toContain(clipFor(input).name);
+      expect(ALTAR_ONLY as readonly string[], JSON.stringify(input)).not.toContain(clipFor(input).name);
     }
   });
 

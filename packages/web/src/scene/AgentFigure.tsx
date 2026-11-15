@@ -6,7 +6,18 @@ import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js
 import type { AgentState, AgentView } from '@agent-office/shared';
 import { STATE_COLORS, statusKind } from '../format.ts';
 import { reducedMotion } from '../motion.ts';
-import { altarHeading, isAsleep, paceAxis, paceOffset, paceSeed, type AltarStage } from './altarWait.ts';
+import {
+  ALTAR_POSE_START,
+  altarHeading,
+  isAsleep,
+  isLyingDown,
+  paceAxis,
+  paceOffset,
+  paceSeed,
+  trackAltarPose,
+  type AltarPoseTrack,
+  type AltarStage,
+} from './altarWait.ts';
 import { AltarCobwebs } from './AltarCobwebs.tsx';
 import { victimClip, victimSink, type Ambush } from './ambush.ts';
 import { clipFor, CLIPS, gripFor, lookFor, POTION_PROP, SPAWN_TIME_SCALE, type AltarPose, type ClipChoice, type ClipName, type Look, type PropRef } from './characters.ts';
@@ -76,6 +87,8 @@ export interface Motion {
   potionId?: number;
   /** The endless wait at the altar (altarWait.ts), for a figure at its place; null or absent otherwise. */
   altar?: AltarPose | null;
+  /** Seconds the altar pose has been shown (the way down plays first); endless when absent. */
+  altarFor?: number;
 }
 
 /** Share of the gap to close this frame for an exponential turn; all of it under reduced motion. */
@@ -197,6 +210,7 @@ export function Character({
       hit: m.hitWait <= 0 && m.hitLeft > 0 && m.hit ? m.hit : undefined,
       drinking: potionPhase(m.potionAt ?? -1) === 'drinking',
       altar: m.altar ?? undefined,
+      altarFor: m.altarFor,
     });
     // The bottle shows only while the gulp clip itself plays (a slap or a spawn takes over the hand).
     const gulp = choice.name === 'Use_Item' && !m.scripted;
@@ -380,6 +394,8 @@ function AgentFigureImpl({ agent, name, color, spot, start, selected, onSelect, 
   /** Cobwebs over a sleeper, shown only while the lying pose is (set every frame). */
   const webs = useRef<Group>(null);
   const paceStart = useMemo(() => paceSeed(agent.id), [agent.id]);
+  /** The altar pose shown, how long, and the getting up from the floor (altarWait.ts). */
+  const altarPose = useRef<AltarPoseTrack>(ALTAR_POSE_START);
   /** Number of the slap on screen (a new one remounts the effect), null when none is. */
   const [slap, setSlap] = useState<number | null>(null);
   const slaps = useRef(0);
@@ -543,6 +559,17 @@ function AgentFigureImpl({ agent, name, color, spot, start, selected, onSelect, 
     const stage: AltarStage = exit || (still && altarStage === 'pacing') ? 'calm' : altarStage;
     // A slap or a gulp freezes the pacing where it is (heading and sideways shift).
     const paceFrozen = stage === 'pacing' && (hitting || gulping);
+    // The pose the stage asks of a figure at its place (never a doomed one); a figure sitting
+    // or lying gets up before it walks off.
+    const atPlace = !exit && !spawning && path.current.length === 0;
+    altarPose.current = trackAltarPose(
+      altarPose.current,
+      atPlace && stage !== 'calm' ? (isAsleep(stage) ? 'sleeping' : stage) : null,
+      dt,
+      // Interrupted while the hit or gulp clip shows, not while the hand is still on its way.
+      { still, exit: !!exit, interrupted: (m.hitWait <= 0 && m.hitLeft > 0) || gulping },
+    );
+    const rising = altarPose.current.riseLeft > 0;
     // Only while the potion acts, plus one frame to stand straight again: no work when idle.
     if (sway.current && drunk >= 0) {
       const lean = staggerSway(m.potionAt ?? -1);
@@ -557,8 +584,9 @@ function AgentFigureImpl({ agent, name, color, spot, start, selected, onSelect, 
       onGone?.(agent.id);
       return;
     }
-    if ((hitting || gulping) && !exit && path.current.length > 0) {
-      // A slap or a gulp pauses an ordinary walk; a figure walking out to its death never stops.
+    if ((hitting || gulping || rising) && !exit && path.current.length > 0) {
+      // A slap, a gulp or getting up from the floor pauses an ordinary walk; a figure walking
+      // out to its death never stops.
       m.speed = 0;
     } else if (!spawning && path.current.length > 0) {
       // A reroute keeps the current speed: the agent changes course without stopping.
@@ -586,17 +614,18 @@ function AgentFigureImpl({ agent, name, color, spot, start, selected, onSelect, 
         onArrive(agent.id);
       }
       // The endless wait at the altar: pacing faces the way it walks, sitting turns its back.
-      if (!paceFrozen) {
+      // Getting up from the floor keeps the heading it sat with: no turning on the spot.
+      if (!paceFrozen && !rising) {
         const heading = altarHeading(stage, spot.facing, clock.elapsedTime + paceStart);
         g.rotation.y = turnToward(g.rotation.y, heading, turnFraction(stage === 'pacing' ? WALK_TURN_RATE : REST_TURN_RATE, dt, still));
       }
     }
-    // The endless wait at the altar poses a figure standing at its place (never a doomed one).
-    const atPlace = !exit && !spawning && path.current.length === 0;
-    m.altar = atPlace && stage !== 'calm' ? (isAsleep(stage) ? 'sleeping' : stage) : null;
-    // Zzz and cobwebs follow the pose actually shown, not the stage: never over a figure that
-    // walks (the queue moves up), or stands up for a slap or a gulp.
-    const asleep = m.altar === 'sleeping' && !hitting && !gulping;
+    m.altar = altarPose.current.pose;
+    m.altarFor = altarPose.current.held;
+    // Zzz and cobwebs follow the pose actually shown, not the stage: only once lying on the
+    // floor, never over a figure that gets up, walks (the queue moves up), or stands up for a
+    // slap or a gulp.
+    const asleep = isLyingDown(altarPose.current) && !hitting && !gulping;
     if (webs.current) webs.current.visible = asleep;
     m.kneeling = !exit && path.current.length === 0 && !!spot.kneel && m.altar === null;
     m.scripted = doomed && path.current.length === 0 ? victimClip(doomed.phase) : null;

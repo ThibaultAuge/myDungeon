@@ -168,8 +168,12 @@ export const BASE_CLIPS = [
 
 /** The endless wait at the altar (altarWait.ts): sitting down, then lying asleep. */
 export const ALTAR_CLIPS = [
-  'Death_B',
-  'Death_A_Pose',
+  'Sit_Floor_Down',
+  'Sit_Floor_Idle',
+  'Sit_Floor_StandUp',
+  'Lie_Down',
+  'Lie_Idle',
+  'Lie_StandUp',
 ] as const satisfies readonly KitClip[];
 
 /** The skeleton ambush outside the castle (ambush.ts, Ambush.tsx). */
@@ -243,18 +247,23 @@ export const SPAWN_TIME_SCALE = 1.5;
 /** Time in PickUp where the figure is crouched: the kneeling pose at the altar. */
 export const KNEEL_POSE_TIME = 0.55;
 /**
- * The endless wait at the altar has no sit or sleep clip in the free pack: an agent sits on
- * its heels with Death_B held where it has dropped to its knees, upright, before falling
- * forward (it also turns its back to the altar, see altarWait.ts), and sleeps with the lying
- * end pose of Death_A. Pacing plays the walk slowly, in place.
+ * The endless wait at the altar (altarWait.ts): an agent sits down on the floor
+ * (Sit_Floor_Down, then Sit_Floor_Idle), later lies down asleep (Lie_Down, then Lie_Idle),
+ * and gets up again (Sit_Floor_StandUp, Lie_StandUp) before it walks away. Lengths in
+ * seconds at timeScale 1, read from Rig_Medium_Simulation.glb (a test checks them).
+ * Pacing plays the walk slowly, in place.
  */
-export const SIT_CLIP = 'Death_B' satisfies ClipName;
-export const SIT_POSE_TIME = 1.1;
-export const SLEEP_CLIP = 'Death_A_Pose' satisfies ClipName;
+export const SIT_DOWN_TIME = 1;
+export const SIT_UP_TIME = 17 / 15;
+export const LIE_DOWN_TIME = 3;
+export const LIE_UP_TIME = 7 / 3;
 export const PACE_CLIP_RATE = 0.6;
 
-/** How the endless wait at the altar poses a figure standing at its place (see altarWait.ts). */
-export type AltarPose = 'pacing' | 'sitting' | 'sleeping';
+/**
+ * How the endless wait at the altar poses a figure at its place (see altarWait.ts):
+ * `rising-sit` and `rising-lie` get up from the floor before the figure walks off.
+ */
+export type AltarPose = 'pacing' | 'sitting' | 'sleeping' | 'rising-sit' | 'rising-lie';
 
 export interface ClipInput {
   /** The figure moves along its path this frame. */
@@ -275,6 +284,8 @@ export interface ClipInput {
   drinking?: boolean;
   /** The endless wait at the altar, for a figure at its place. Absent otherwise. */
   altar?: AltarPose;
+  /** Seconds since the altar pose started (altarWait.ts trackAltarPose); endless when absent. */
+  altarFor?: number;
 }
 
 export interface ClipChoice {
@@ -288,6 +299,21 @@ export interface ClipChoice {
 
 export const play = (name: ClipName, timeScale = 1, loop = true): ClipChoice => ({ name, loop, timeScale, frozen: false, frozenAt: 0 });
 export const hold = (name: ClipName, at = 0): ClipChoice => ({ name, loop: false, timeScale: 0, frozen: true, frozenAt: at });
+
+/**
+ * The clip of a sitting, sleeping or rising figure, `held` seconds into its pose: the way
+ * down plays once, then the resting loop. Reduced motion holds the resting pose at once.
+ */
+export function altarClip(pose: Exclude<AltarPose, 'pacing'>, held: number, still: boolean): ClipChoice {
+  if (pose === 'rising-sit') return still ? hold('Sit_Floor_Idle') : play('Sit_Floor_StandUp', 1, false);
+  if (pose === 'rising-lie') return still ? hold('Lie_Idle') : play('Lie_StandUp', 1, false);
+  if (pose === 'sitting') {
+    if (still) return hold('Sit_Floor_Idle');
+    return held < SIT_DOWN_TIME ? play('Sit_Floor_Down', 1, false) : play('Sit_Floor_Idle');
+  }
+  if (still) return hold('Lie_Idle');
+  return held < LIE_DOWN_TIME ? play('Lie_Down', 1, false) : play('Lie_Idle');
+}
 
 /**
  * The clip for a frame. Reduced motion keeps every figure on a still pose: the position
@@ -308,10 +334,9 @@ export function clipFor(input: ClipInput): ClipChoice {
       ? play('Running_A', Math.min(speed / RUN_CLIP_SPEED, MAX_CLIP_RATE))
       : play('Walking_A', Math.min(Math.max(speed / WALK_CLIP_SPEED, 0.5), MAX_CLIP_RATE));
   }
-  // The endless wait at the altar: still poses, so they stay under reduced motion; pacing
-  // does not (the figure stands still, see AgentFigure).
-  if (altar === 'sleeping') return hold(SLEEP_CLIP);
-  if (altar === 'sitting') return hold(SIT_CLIP, SIT_POSE_TIME);
+  // The endless wait at the altar: sitting and lying stay (held still) under reduced motion;
+  // pacing does not (the figure stands still, see AgentFigure).
+  if (altar && altar !== 'pacing') return altarClip(altar, input.altarFor ?? Infinity, reducedMotion);
   if (altar === 'pacing' && !reducedMotion) return play('Walking_A', PACE_CLIP_RATE);
   if (kneeling) return hold('PickUp', KNEEL_POSE_TIME);
   if (state === 'done' || reducedMotion) return hold('Idle_A');
