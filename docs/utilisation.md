@@ -151,6 +151,14 @@ Cet effet est purement esthétique : rien n'agit sur l'agent ni sur sa session.
 - **Clavier.** Le bouton « Baffer » de la fiche de l'agent, ou de la présentation d'un sous-agent au repos, fait la même chose. Il n'apparaît que tant que l'agent a un personnage dans la scène.
 - **Réduction des animations.** Ni main ni coup : seule la bulle s'affiche, immobile.
 
+## La potion d'oubli
+
+Quand Claude Code compacte le contexte d'une session, l'agent concerné boit une fiole verte. Il titube, des étoiles tournent autour de sa tête, et une bulle « Où suis-je ? » apparaît. L'effet dure environ 4,6 s. Le compactage peut être automatique ou lancé avec `/compact`. Le gag concerne l'agent principal comme un sous-agent.
+
+Cet effet est purement esthétique, comme la baffe : rien n'agit sur le travail de l'agent. Il suppose les hooks installés. Après une mise à jour, relance `npm run hooks:install`.
+
+- **Réduction des animations.** Ni fiole, ni gorgée, ni titubation : les étoiles et la bulle restent immobiles.
+
 ## La fiche d'agent
 
 Un clic sur un personnage, ou sur sa ligne dans la liste, ouvre sa **fiche** en haut à droite de la scène. Un sous-agent au repos fait exception : son clic ouvre sa [présentation](#la-présentation-dun-sous-agent). Elle est dans le même style que la [boîte de dialogue](#dialogue-avec-un-agent) en bas.
@@ -212,3 +220,5 @@ L'historique liste les sessions terminées.
 ## Débogage
 
 `/debug` montre le flux brut des événements reçus.
+
+Dans la console du navigateur, `agentOffice.potion()` fait boire l'agent sélectionné. `agentOffice.potion('rest:hermione')` vise une figure précise de la taverne : l'identifiant est en minuscules. La commande renvoie `true` si une figure a réagi. Elle reste disponible en production et n'appelle pas le serveur.

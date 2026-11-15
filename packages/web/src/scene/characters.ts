@@ -13,9 +13,9 @@ export const SUB_BODIES: readonly CharacterModel[] = ['Barbarian', 'Mage', 'Rang
 /** Character models of the `skeletons` pack: the enemies outside the castle. */
 export type SkeletonModel = 'Skeleton_Minion';
 
-/** A model held in a hand: an Adventurers prop, an RPG Tools item, or a skeleton's weapon. */
+/** A model held in a hand: an Adventurers prop, an RPG Tools item, a skeleton's weapon, or a dungeon bottle. */
 export interface PropRef {
-  pack: 'adventurers_props' | 'tools' | 'skeleton_props';
+  pack: 'adventurers_props' | 'tools' | 'skeleton_props' | 'dungeon';
   model: string;
 }
 
@@ -126,7 +126,12 @@ export const PROP_GRIP: Readonly<Record<string, Grip>> = {
   bucket_metal: upright(0.6),
   // Turned the other way, so it hangs from its handle below the hand.
   lantern: grip([0, 0, -Q], 0.55),
+  // The potion of oblivion (potion.ts), a dungeon shelf bottle.
+  bottle_C_green: upright(0.8),
 };
+
+/** The potion of oblivion, held in the right hand while the agent drinks it (potion.ts). */
+export const POTION_PROP: PropRef = Object.freeze({ pack: 'dungeon', model: 'bottle_C_green' });
 
 export function gripFor(ref: PropRef): Grip {
   return Object.hasOwn(PROP_GRIP, ref.model) ? PROP_GRIP[ref.model] : NEUTRAL_GRIP;
@@ -191,6 +196,8 @@ export interface ClipInput {
   scripted?: ClipChoice | null;
   /** The figure was just slapped: the hit reaction to play (once). Absent otherwise. */
   hit?: 'Hit_A' | 'Hit_B';
+  /** The figure is drinking the potion of oblivion (potion.ts): the gulp, played once. */
+  drinking?: boolean;
 }
 
 export interface ClipChoice {
@@ -210,12 +217,14 @@ export const hold = (name: ClipName, at = 0): ClipChoice => ({ name, loop: false
  * still changes (that is information), the limbs do not.
  */
 export function clipFor(input: ClipInput): ClipChoice {
-  const { moving, speed, state, spawning, kneeling, reducedMotion, scripted, hit } = input;
+  const { moving, speed, state, spawning, kneeling, reducedMotion, scripted, hit, drinking } = input;
   // Reduced motion wins even over a scripted scene: limbs stay still.
   if (scripted && !reducedMotion) return scripted;
   if (spawning && !reducedMotion) return play('Spawn_Ground', SPAWN_TIME_SCALE, false);
   // A slap (purely visual) interrupts everything but the spawn; reduced motion keeps the pose.
   if (hit && !reducedMotion) return play(hit, 1, false);
+  // The potion's gulp (purely visual too) comes right after the slap.
+  if (drinking && !reducedMotion) return play('Use_Item', 1, false);
   if (moving) {
     if (reducedMotion) return hold('Idle_A');
     return speed >= RUN_THRESHOLD

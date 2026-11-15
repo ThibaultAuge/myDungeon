@@ -61,7 +61,7 @@ User design: `plans/plan-fantomes-2026-11-15.md` (French).
 - `SessionView.everActive` (shared): desktop sessions start true; a `cli` session becomes
   true on a work hook (`ACTIVITY_EVENTS` in `reducer.ts` `applyHook`: UserPromptSubmit,
   PreToolUse, PostToolUse, PostToolUseFailure, PermissionRequest, SubagentStart,
-  SubagentStop, Stop, StopFailure — NOT SessionStart, SessionEnd, Notification), a busy
+  SubagentStop, Stop, StopFailure — NOT SessionStart, SessionEnd, Notification, PreCompact), a busy
   process (`mainFromLiveStatus`), or `LiveProcess.transcript` (`applyInventory`); ORed in
   `absorb`. Never goes back to false.
 - `hasTranscript(projectsDir, cwd, cliSessionId)` (`inventory.ts`): one `lstat` per live
