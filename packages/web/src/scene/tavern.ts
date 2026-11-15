@@ -16,6 +16,16 @@ export function restId(agentType: string): string {
   return `rest:${agentType.toLowerCase()}`;
 }
 
+/** True for the id of a resting figure (`rest:<type>`), never for a real agent. */
+export function isRestId(id: string): boolean {
+  return id.startsWith('rest:');
+}
+
+/** The roster type behind a resting figure's id, in the roster's own spelling; undefined when gone from it. */
+export function restType(id: string, roster: readonly string[]): string | undefined {
+  return isRestId(id) ? roster.find((t) => restId(t) === id) : undefined;
+}
+
 /** The figure resting in the tavern for an agent type. */
 export function restingAgent(agentType: string): AgentView {
   return { id: restId(agentType), sessionId: '', kind: 'sub', agentType, state: 'done', room: 'taverne', since: 0 };

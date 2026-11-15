@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import type { EnvironmentView, HookEventSummary, ServerMessage, SessionView } from '@agent-office/shared';
 import { initialLang, saveLang, type Lang } from './i18n/index.ts';
 import type { PostId } from './scene/layout.ts';
+import { isRestId, restType } from './scene/tavern.ts';
 
 export type Route = { page: 'home' } | { page: 'env'; envId: string } | { page: 'debug' };
 
@@ -77,7 +78,8 @@ export const useOffice = create<OfficeStore>((set) => ({
     connect();
   },
   select(agentId) {
-    set({ selectedAgentId: agentId, dialogOpen: agentId !== null });
+    // A resting figure has no conversation: only its short introduction card opens.
+    set({ selectedAgentId: agentId, dialogOpen: agentId !== null && !isRestId(agentId) });
   },
   closeDialog() {
     set({ dialogOpen: false });
@@ -114,7 +116,10 @@ function onMessage(msg: ServerMessage): void {
     if (route.page === 'env' && route.envId !== msg.envId) return;
     const selected = useOffice.getState().selectedAgentId;
     const stillThere =
-      selected !== null && msg.sessions.some((s) => s.main.id === selected || s.subagents.some((a) => a.id === selected));
+      selected !== null &&
+      (isRestId(selected)
+        ? restType(selected, msg.roster ?? []) !== undefined
+        : msg.sessions.some((s) => s.main.id === selected || s.subagents.some((a) => a.id === selected)));
     useOffice.setState({
       sessions: msg.sessions,
       environments: msg.environments,

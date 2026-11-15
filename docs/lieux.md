@@ -40,13 +40,13 @@ Le `║` sur le bord sud marque la porte du château, entre l'Accessibilité / S
 | **Atelier** | Établis, outils, coin de l'enlumineur avec chevalet | Écrire et modifier le code, découper des maquettes | Agent principal en réalisation, general-purpose, fork, Barbapapa |
 | **Bibliothèque** | Rayonnages de grimoires, tables de lecture | Lire et chercher dans le code local | Explore, agent principal quand il lit |
 | **Observatoire** | Grande lunette, cartes du ciel | Recherche web, documentation officielle | Oracle |
-| **Pigeonnier** | Volière, pupitre à messages | Tester des API externes : un pigeon part, un pigeon revient | Samuel Morse |
+| **Pigeonnier** | Volière, pupitre à messages | Tester des API externes : un pigeon part, un pigeon revient | Samuel-Morse |
 | **Salle des machines** | Machines à vapeur, engrenages, chaudière | Lancer des commandes, compiler, exécuter les tests, git | Agent principal et agents génériques quand ils utilisent une commande (`Bash`, `PowerShell`…) |
 | **Cabinet de l'arithméticien** | Boulier géant, abaque, tableau d'ardoise | Calculs et statistiques | Turing |
 | **Poste de garde** | Herse, râtelier d'armes, lanternes | Audit sécurité | Neo |
 | **Salle des épreuves** | Table de relecture, laboratoire d'alchimie | Revue de code, tests | Hermione, Dexter |
 | **Salle Accessibilité / SEO** | Estrade du héraut, pupitre d'inspection | Audits SEO et accessibilité | Gatsby, Timmy |
-| **Coin détente** | Banquettes, jeu de dés, mur d'affiches | Idées décalées | Butt Stallion |
+| **Coin détente** | Banquettes, jeu de dés, mur d'affiches | Idées décalées | Butt-Stallion |
 | **Scriptorium** (dans la Bibliothèque) | Pupitres de copistes | Documentation | Curator (pour les IA), Otis (pour les humains) |
 | **Réduit du concierge** | Balais, seaux, chariot | Base de Hancock, qui fait des tournées dans l'Atelier | Hancock |
 | **Taverne** | Grandes tables, cheminée, tonneaux, casiers | Agents disponibles, sans tâche | Un exemplaire de chaque type d'agent, l'agent principal en attente de ton prochain prompt, et le chevalier endormi d'une session arrêtée |
@@ -100,9 +100,9 @@ Deux agents ne se tiennent jamais au même endroit.
 
 ## La taverne et le cycle de vie d'un agent
 
-La taverne montre l'équipe disponible, même quand rien ne tourne.
+La taverne montre l'équipe disponible, même quand rien ne tourne. La liste latérale « Compagnie de la taverne » en donne le même accès au clavier.
 
-1. **Au repos.** Elle contient **un seul exemplaire de chaque type** d'agent connu de l'environnement affiché : une Hermione, un Dexter, un Turing… Ils ont une couleur neutre, puisqu'ils ne travaillent pour aucune session. Un exemplaire au repos ne se sélectionne pas.
+1. **Au repos.** Elle contient **un seul exemplaire de chaque type** d'agent connu de l'environnement affiché : une Hermione, un Dexter, un Turing… Ils ont une couleur neutre, puisqu'ils ne travaillent pour aucune session. Un clic sur un exemplaire au repos ouvre sa présentation, sans conversation : voir [La présentation d'un sous-agent](utilisation.md#la-présentation-dun-sous-agent).
 2. **Appel.** Quand une session lance un sous-agent de ce type, l'exemplaire de la taverne se lève, prend la couleur de la session et va à son poste.
 3. **Appels simultanés.** Si deux ou trois Hermione sont lancées en même temps (même session ou sessions différentes), les exemplaires manquants sortent des casiers et partent chacun vers une place libre de la Salle des épreuves.
 4. **Fin de tâche.** Le sous-agent qui a fini reprend la couleur neutre et retourne à la taverne. Il disparaît en arrivant. Le type reprend alors une seule figure au repos, sur la place occupée par le dernier agent revenu. Quand une session se termine, ses sous-agents retournent aussi à la taverne.

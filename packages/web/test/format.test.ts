@@ -2,6 +2,7 @@ import type { AgentView, EnvironmentView, SessionView, WaitReason } from '@agent
 import { describe, expect, it } from 'vitest';
 import {
   agentName,
+  agentRole,
   ago,
   branchLabel,
   elapsed,
@@ -15,6 +16,7 @@ import {
   STATUS_COLORS,
   statusKind,
   type StatusKind,
+  typeLabel,
 } from '../src/format.ts';
 import { MESSAGES, type Lang } from '../src/i18n/index.ts';
 
@@ -319,6 +321,172 @@ describe('agentName', () => {
    */
   it('uses the agent type for a subagent', () => {
     expect(agentName(agent({ kind: 'sub', agentType: 'Explore' }), session({ title: null }), MESSAGES.fr)).toBe('Explore');
+  });
+
+  /**
+   * Verifies that a lower-case subagent type is shown capitalized, word by word
+   */
+  it.each([
+    ['oracle', 'Oracle'],
+    ['samuel-morse', 'Samuel-Morse'],
+    ['plugin:agent', 'Plugin:Agent'],
+  ])('capitalizes the subagent type %s as %s', (agentType, expected) => {
+    expect(agentName(agent({ kind: 'sub', agentType }), session(), MESSAGES.en)).toBe(expected);
+  });
+
+  /**
+   * Verifies that a main agent's session title is shown as typed, never capitalized
+   */
+  it('keeps a lower-case session title as it is for the main agent', () => {
+    expect(agentName(agent({ kind: 'main' }), session({ title: 'refactor parser' }), MESSAGES.en)).toBe('refactor parser');
+  });
+});
+
+describe('typeLabel', () => {
+  /**
+   * Verifies that each word of a type starts with a capital, separators kept
+   */
+  it.each([
+    ['oracle', 'Oracle'],
+    ['samuel-morse', 'Samuel-Morse'],
+    ['butt-stallion', 'Butt-Stallion'],
+    ['claude-code-guide', 'Claude-Code-Guide'],
+    ['plugin:agent', 'Plugin:Agent'],
+    ['mcp:server:tool', 'Mcp:Server:Tool'],
+    ['plugin:multi-word', 'Plugin:Multi-Word'],
+  ])('%s → %s', (type, expected) => {
+    expect(typeLabel(type)).toBe(expected);
+  });
+
+  /**
+   * Verifies that an already-capitalized type is shown unchanged
+   */
+  it.each([['Explore'], ['Plan'], ['Samuel-Morse'], ['DEXTER'], ['Plugin:Agent']])('keeps %s unchanged', (type) => {
+    expect(typeLabel(type)).toBe(type);
+  });
+
+  /**
+   * Verifies that only first letters change: inner letters keep their case
+   */
+  it('changes only the first letter of each word', () => {
+    expect(typeLabel('oRACLE')).toBe('ORACLE');
+    expect(typeLabel('mcpServer')).toBe('McpServer');
+  });
+
+  /**
+   * Verifies that underscores and spaces are not word separators
+   */
+  it('does not treat underscores or spaces as separators', () => {
+    expect(typeLabel('general_purpose')).toBe('General_purpose');
+    expect(typeLabel('my agent')).toBe('My agent');
+  });
+
+  /**
+   * Verifies that a word starting with a digit or symbol is left as it is
+   */
+  it('leaves words that do not start with a letter', () => {
+    expect(typeLabel('2fa-helper')).toBe('2fa-Helper');
+    expect(typeLabel('agent-2')).toBe('Agent-2');
+    expect(typeLabel('_private')).toBe('_private');
+  });
+
+  /**
+   * Verifies that leading, trailing and repeated separators are handled without error
+   */
+  it('handles leading, trailing and doubled separators', () => {
+    expect(typeLabel('-x')).toBe('-X');
+    expect(typeLabel('a-')).toBe('A-');
+    expect(typeLabel('a--b')).toBe('A--B');
+    expect(typeLabel(':a::b')).toBe(':A::B');
+  });
+
+  /**
+   * Verifies that non-ASCII lower-case letters are capitalized too
+   */
+  it('capitalizes accented letters', () => {
+    expect(typeLabel('éclaireur')).toBe('Éclaireur');
+    expect(typeLabel('über-agent')).toBe('Über-Agent');
+  });
+
+  /**
+   * Verifies that an empty type gives an empty label
+   */
+  it('returns an empty string for an empty type', () => {
+    expect(typeLabel('')).toBe('');
+  });
+
+  /**
+   * Verifies that applying the label twice changes nothing more
+   */
+  it('is idempotent', () => {
+    for (const t of ['oracle', 'samuel-morse', 'plugin:agent', 'general_purpose', 'éclaireur']) {
+      expect(typeLabel(typeLabel(t)), t).toBe(typeLabel(t));
+    }
+  });
+});
+
+describe('agentRole', () => {
+  /**
+   * Verifies that every known type gets its own translated role in each language
+   */
+  it.each(['fr', 'de', 'en'] as const)('returns the role of every known type in %s', (lang) => {
+    const t = MESSAGES[lang];
+    const roles = t.agentRoles as Record<string, string>;
+    const keys = Object.keys(roles);
+    expect(keys.length).toBeGreaterThan(0);
+    for (const key of keys) {
+      expect(agentRole(key, t), key).toBe(roles[key]);
+      expect(agentRole(key, t), key).not.toBe(t.restCard.unknownRole);
+    }
+  });
+
+  /**
+   * Verifies that a known role is found whatever the case of the type
+   */
+  it('looks the type up case-insensitively', () => {
+    const t = MESSAGES.en;
+    expect(agentRole('Explore', t)).toBe(t.agentRoles.explore);
+    expect(agentRole('HERMIONE', t)).toBe(t.agentRoles.hermione);
+    expect(agentRole('Samuel-Morse', t)).toBe(t.agentRoles['samuel-morse']);
+  });
+
+  /**
+   * Verifies that a concrete English role reads as expected
+   */
+  it('gives the English role of a known type', () => {
+    expect(agentRole('dexter', MESSAGES.en)).toBe('Writes unit, integration and API contract tests.');
+  });
+
+  /**
+   * Verifies that a type with no known role gets the translated generic line
+   */
+  it.each(['fr', 'de', 'en'] as const)('falls back to the unknown role for a custom type in %s', (lang) => {
+    const t = MESSAGES[lang];
+    expect(agentRole('my-custom-agent', t)).toBe(t.restCard.unknownRole);
+    expect(agentRole('plugin:agent', t)).toBe(t.restCard.unknownRole);
+    expect(agentRole('', t)).toBe(t.restCard.unknownRole);
+  });
+
+  /**
+   * Verifies that inherited Object properties are never taken for a role
+   */
+  it.each([['constructor'], ['__proto__'], ['toString'], ['hasOwnProperty'], ['valueOf'], ['Constructor'], ['__PROTO__']])(
+    'falls back to the unknown role for %s',
+    (type) => {
+      for (const lang of ['fr', 'de', 'en'] as const) {
+        const t = MESSAGES[lang];
+        expect(agentRole(type, t), lang).toBe(t.restCard.unknownRole);
+      }
+    },
+  );
+
+  /**
+   * Verifies that the role follows the language of the dictionary passed in
+   */
+  it('returns a different text per language for the same type', () => {
+    const fr = agentRole('oracle', MESSAGES.fr);
+    expect(agentRole('oracle', MESSAGES.de)).not.toBe(fr);
+    expect(agentRole('oracle', MESSAGES.en)).not.toBe(fr);
   });
 });
 

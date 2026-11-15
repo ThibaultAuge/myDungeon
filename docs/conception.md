@@ -9,7 +9,7 @@ Un **donjon de fantasy coloré et joyeux**, pas sombre : proportions trapues, co
 ## Décisions
 
 - **L'humain n'est pas représenté.** La bulle et la file à l'autel suffisent.
-- **Seul l'agent principal entre et sort du château.** Les sous-agents restent dans le cycle de la taverne. Une session arrêtée n'a pas de cible cliquable en 3D, seulement sa ligne dans la liste latérale : une cible réservée à la 3D ne serait accessible ni au clavier ni au lecteur d'écran.
+- **Seul l'agent principal entre et sort du château.** Les sous-agents restent dans le cycle de la taverne. Une session arrêtée n'a pas de cible cliquable en 3D, seulement sa ligne dans la liste latérale : une cible réservée à la 3D ne serait accessible ni au clavier ni au lecteur d'écran. Les exemplaires au repos de la taverne sont cliquables en 3D, et leur présentation s'ouvre aussi depuis la section « Compagnie de la taverne » du panneau latéral.
 - **Squelettes nus.** Les attaquants de l'embuscade sont des `Skeleton_Minion` sans casque ni capuche. Vus de haut, les autres corps du pack ne se lisent pas comme des squelettes.
 - **Sessions lancées par une autre session** (`spawnedFrom`). Chacune est un agent principal à part entière, avec sa propre couleur. En général elle travaille dans son propre worktree et ne dépend pas de la session qui l'a lancée. Le lien est donc secondaire : une mention « lancée depuis… » dans la fiche de l'agent suffit, un repère visuel dans la 3D est facultatif.
 - **Skills** (`jira-comment`, `knowledge`…). Ce ne sont pas des personnages. Un agent qui utilise un skill porte un **badge** à son nom : un petit insigne en 3D sur le personnage, ou au minimum un badge dans la fiche de l'agent. Ce badge n'est pas encore en place (voir « Reste à faire »).

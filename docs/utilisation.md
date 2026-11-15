@@ -109,6 +109,20 @@ Pendant qu'un agent marche vers un lieu, un pictogramme de sa destination (pièc
 
 Un sous-agent apparaît comme un collègue de la même couleur que sa session. Il surgit du sol à son arrivée. Quand il a fini, il retourne à la taverne et disparaît.
 
+## La présentation d'un sous-agent
+
+Un clic sur un exemplaire au repos, à la taverne, ouvre sa présentation. La carte s'affiche en haut à droite de la scène, dans le même cadre que la carte d'un poste. Elle donne :
+
+- le nom du type, par exemple « Oracle » ou « Samuel-Morse » ;
+- la mention « Sous-agent » ;
+- son rôle en quelques mots, par exemple « Cherche la documentation et les sources sur le web. » pour Oracle.
+
+Un type sans présentation connue, comme un agent propre à un autre projet ou à un plugin, reçoit une ligne générique.
+
+- **Baffer.** Le bouton « Baffer » apparaît tant que l'exemplaire est à la taverne. Il fait la même chose que le clic droit.
+- **Fermer.** Ferme la présentation avec ×, ou avec Échap.
+- **Au travail.** Un sous-agent qui travaille ne s'ouvre pas par cette carte. Son clic ouvre sa fiche et sa conversation.
+
 ## Les personnages animés
 
 Les personnages viennent du pack KayKit Adventurers 2.0 :
@@ -130,12 +144,12 @@ Un clic droit sans glisser sur un personnage le baffe : une grande main en 3D ar
 Cet effet est purement esthétique : rien n'agit sur l'agent ni sur sa session.
 
 - **Glisser.** Un clic droit glissé déplace toujours la caméra, sans baffer.
-- **Clavier.** Le bouton « Baffer » de la fiche de l'agent fait la même chose. Il n'apparaît que tant que l'agent a un personnage dans la scène.
+- **Clavier.** Le bouton « Baffer » de la fiche de l'agent, ou de la présentation d'un sous-agent au repos, fait la même chose. Il n'apparaît que tant que l'agent a un personnage dans la scène.
 - **Réduction des animations.** Ni main ni coup : seule la bulle s'affiche, immobile.
 
 ## La fiche d'agent
 
-Un clic sur un personnage, ou sur sa ligne dans la liste, ouvre sa **fiche** en haut à droite de la scène. Elle est dans le même style que la [boîte de dialogue](#dialogue-avec-un-agent) en bas.
+Un clic sur un personnage, ou sur sa ligne dans la liste, ouvre sa **fiche** en haut à droite de la scène. Un sous-agent au repos fait exception : son clic ouvre sa [présentation](#la-présentation-dun-sous-agent). Elle est dans le même style que la [boîte de dialogue](#dialogue-avec-un-agent) en bas.
 
 La fiche affiche :
 
@@ -157,6 +171,7 @@ Le × de la fiche désélectionne l'agent. La fiche et la boîte de dialogue se 
 Le panneau latéral s'appelle « Agents et lieux ». Il est l'équivalent complet de la vue 3D au clavier et au lecteur d'écran.
 
 - **Sessions en cours.** Une ligne par agent, avec son icône d'état. Un clic ouvre la fiche et la boîte de dialogue.
+- **Compagnie de la taverne.** Un bouton par type de sous-agent de l'environnement. Il ouvre la même présentation que le clic sur l'exemplaire au repos. Fermer la présentation rend le focus au bouton choisi.
 - **Lieux du donjon.** Les postes, groupés par pièce. Un clic ouvre la même carte que le clic sur un poste. Fermer la carte rend le focus au bouton choisi.
 
 ## Dialogue avec un agent
@@ -168,6 +183,8 @@ Clique sur un personnage dans la 3D, ou sur sa ligne dans la liste des sessions.
 - une ligne courte pour chaque outil appelé. Le contenu brut des résultats et la réflexion de l'agent ne s'affichent pas.
 
 Pour un sous-agent, la boîte affiche sa propre conversation. La consigne qu'il a reçue s'affiche sous le nom « Agent principal ».
+
+Un sous-agent au repos, à la taverne, n'a pas de conversation : son clic ouvre sa présentation, et la boîte reste fermée.
 
 - **Historique.** Fais défiler vers le haut, ou clique sur « Charger les messages précédents ».
 - **Nouveaux messages.** Ils arrivent tout seuls : le serveur relit la conversation toutes les 2 s.

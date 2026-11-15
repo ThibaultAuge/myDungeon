@@ -78,8 +78,9 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cast
   every pointer over/move and on click. Posts never `stopPropagation` on hover;
   `AgentFigure` stops on pointerover and click. `CLICK_MAX_DRAG_PX = 2` (R3F's pointer-missed
   limit) is shared by agents and posts: a release after a camera drag selects nothing.
-  Right click on an agent slaps it (see Slap gag below). Resting tavern figures have no
-  handlers and no target flag.
+  Right click on an agent slaps it (see Slap gag below). Resting tavern figures are
+  selectable like the others (`onSelect` switches on all pointer interactions; their card:
+  `docs/ai/agent-lifecycle.md`).
 - Store: `selectedPost` / `selectPost`, reset on route change; Canvas `onPointerMissed`
   clears both agent and post selection.
 - `ui/PostCard.tsx`: card at the top right of `.office__scene` (top 24px, width
@@ -170,7 +171,7 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cast
     ≤ `CLICK_MAX_DRAG_PX` from `clientX/Y`, both gated by `nearestTarget(e.intersections)`
     being the figure's group. `onContextMenu` only calls `preventDefault`: `contextmenu`
     fires on press on macOS/Linux, so it cannot tell a click from an OrbitControls right-drag
-    pan. Resting tavern figures cannot be slapped.
+    pan. Resting tavern figures can be slapped too.
   - Bus (`slap.ts`): `slapAgent(id)` / `onSlap(id, cb)` per agent; `hasSlapTarget(id)` +
     `watchSlapTargets(cb)` (notified on first listener added / last removed).
     `hitClipFor(count)` alternates `Hit_A` / `Hit_B` (NaN/Infinity → `Hit_A`);
@@ -224,7 +225,8 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cast
   - Keyboard route: `AgentInfo` "Baffer" button `.agent-info__slap`, `aria-label`
     `t.info.slapLabel(name)` containing the visible text (tested in `i18n.test.ts`), shown
     only while `hasSlapTarget` (`useSyncExternalStore`); if it disappears while focused,
-    focus moves to `#agent-info-title`.
+    focus moves to `#agent-info-title`. For a resting tavern figure, the `RestCard` slap
+    button plays that role (`docs/ai/agent-lifecycle.md`).
 - Spots (`layout.ts`): `Spot` carries `room: RoomId` and optional `station?: StationId`
   (key absent, not `undefined`). `RoomDef.stations` is `Partial<Record<StationId, Seat[]>>`,
   `STATIONS` maps agent type → `StationId`, `candidateSeats` returns

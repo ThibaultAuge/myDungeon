@@ -12,6 +12,7 @@ import {
   sessionTitle,
   stateLabel,
   statusKind,
+  typeLabel,
 } from '../format.ts';
 import { useT } from '../i18n/useT.ts';
 import { hasSlapTarget, slapAgent, watchSlapTargets } from '../scene/slap.ts';
@@ -221,7 +222,7 @@ export function AgentInfo({ sessions }: { sessions: SessionView[] }) {
         <h3>{t.info.agent}</h3>
         <dl>
           <dt>{t.panel.agent}</dt>
-          <dd>{agent.kind === 'main' ? t.panel.mainAgent : t.panel.subagent(agent.agentType)}</dd>
+          <dd>{agent.kind === 'main' ? t.panel.mainAgent : t.panel.subagent(typeLabel(agent.agentType))}</dd>
           {agent.description && (
             <>
               <dt>{agent.kind === 'main' ? t.panel.lastRequest : t.panel.task}</dt>
