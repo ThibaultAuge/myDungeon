@@ -35,6 +35,7 @@ import { sneaks, SNEAK_SPEED } from './sneak.ts';
 import { MishapEffect } from './MishapEffect.tsx';
 import { Soot } from './Soot.tsx';
 import { advance, approach, nextSpeed, remainingDistance, turnToward } from './walk.ts';
+import { advanceThrow, onThrow, placeClip, seatOf } from './workGestures.ts';
 
 /** Live positions of the figures, read by the camera to follow the selected agent. */
 export const agentPositions = new Map<string, Vector3>();
@@ -87,6 +88,10 @@ export interface Motion {
   sneaking?: boolean;
   /** The fishing clip of a figure standing at its moat place (fishing.ts), or null. */
   fishing?: ClipChoice | null;
+  /** Work gesture or seated pose at the figure's place (workGestures.ts); null or absent otherwise. */
+  place?: ClipChoice | null;
+  /** Seconds since the figure threw its pigeon (workGestures.ts); absent or -1 when it is not. */
+  throwAt?: number;
 }
 
 /** Share of the gap to close this frame for an exponential turn; all of it under reduced motion. */
@@ -215,6 +220,7 @@ export function Character({
       cheering: (m.cheerLeft ?? 0) > 0,
       sneaking: m.sneaking,
       fishing: m.fishing ?? undefined,
+      place: m.place,
     });
     if (rodRef.current) rodRef.current.visible = choice.name.startsWith('Fishing_');
     // The bottle shows only while the gulp clip itself plays (a slap or a spawn takes over the hand).
@@ -466,6 +472,19 @@ function AgentFigureImpl({ agent, name, color, spot, start, selected, onSelect, 
     };
   }, [agent.id]);
 
+  // The dovecote throw (workGestures.ts): the agent releases each pigeon that leaves for it.
+  // A throw already under way goes on (accepted: no restart for a second bird).
+  useEffect(
+    () =>
+      onThrow(agent.id, () => {
+        const m = motion.current;
+        if (!reducedMotion() && (m.throwAt ?? -1) < 0) m.throwAt = 0;
+      }),
+    [agent.id],
+  );
+  // Where at its place the figure stands, for its gesture: parsed once per spot.
+  const seat = useMemo(() => seatOf(spot.id, spot.room, spot.station), [spot.id, spot.room, spot.station]);
+
   // A failed command (mishap.ts): soot on the figure and a comic bubble, nothing else.
   const [mishap, setMishap] = useState<{ n: number; kind: MishapKind; bubble: boolean } | null>(null);
   /** A ref, as for the slaps: a re-run of the effect must never reuse a number `Soot` already armed. */
@@ -663,6 +682,19 @@ function AgentFigureImpl({ agent, name, color, spot, start, selected, onSelect, 
     const asleep = m.altar === 'sleeping' && !hitting && !gulping;
     if (webs.current) webs.current.visible = asleep;
     m.kneeling = !exit && path.current.length === 0 && !!spot.kneel && m.altar === null;
+    // The room's work gesture or the seated pose of the figure at its place (workGestures.ts).
+    m.throwAt = still ? -1 : advanceThrow(m.throwAt ?? -1, delta);
+    m.place =
+      atPlace && m.altar === null
+        ? placeClip({
+            room: spot.room,
+            station: spot.station,
+            seat,
+            state: agent.state,
+            reducedMotion: still,
+            throwing: m.throwAt >= 0,
+          })
+        : null;
     m.scripted = doomed && path.current.length === 0 ? victimClip(doomed.phase) : null;
     // Touch the DOM only when walking starts or stops: no React render per frame. The tag
     // is a separate React root that renders a little later: until it shows the new

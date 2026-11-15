@@ -176,6 +176,12 @@ export const ALTAR_CLIPS = [
 
 /** The skeleton ambush outside the castle (ambush.ts, Ambush.tsx). */
 export const AMBUSH_CLIPS = [
+  'Skeletons_Spawn_Ground',
+  'Skeletons_Taunt',
+  'Melee_1H_Attack_Chop',
+  'Melee_2H_Attack_Chop',
+  'Skeletons_Walking',
+  'Skeletons_Death',
 ] as const satisfies readonly KitClip[];
 
 /** The heralds on the corner towers (celebrate.ts, Herald.tsx). */
@@ -184,6 +190,24 @@ export const HERALD_CLIPS = [
 
 /** Work gestures, per room or post. */
 export const WORK_CLIPS = [
+  'Hammering',
+  'Sawing',
+  'Working_A',
+  'Working_B',
+  'Working_C',
+  'Work_A',
+  'Work_B',
+  'Work_C',
+  'Ranged_Magic_Spellcasting',
+  'Melee_Blocking',
+  'Melee_2H_Idle',
+  'Melee_1H_Attack_Chop',
+  'Ranged_Bow_Draw',
+  'Throw',
+  'Lockpicking',
+  'Sit_Chair_Idle',
+  'Sit_Floor_Idle',
+  'Push_Ups',
 ] as const satisfies readonly KitClip[];
 
 /** Small gags: cheering when done, dodging a slap, sneaking, fishing… */
@@ -284,6 +308,8 @@ export interface ClipInput {
   sneaking?: boolean;
   /** The fishing clip of a figure at its place on the moat bank (fishing.ts). Absent otherwise. */
   fishing?: ClipChoice;
+  /** The gesture or seated pose of a figure at its place (workGestures.ts). Absent: the defaults. */
+  place?: ClipChoice | null;
 }
 
 export interface ClipChoice {
@@ -327,6 +353,8 @@ export function clipFor(input: ClipInput): ClipChoice {
   if (altar === 'pacing' && !reducedMotion) return play('Walking_A', PACE_CLIP_RATE);
   if (fishing) return reducedMotion ? hold('Fishing_Idle') : fishing;
   if (kneeling) return hold('PickUp', KNEEL_POSE_TIME);
+  // A work gesture or a seated pose at the figure's place (workGestures.ts minds reduced motion).
+  if (input.place) return input.place;
   if (state === 'done' || reducedMotion) return hold('Idle_A');
   if (state === 'working') return play('Interact');
   return play('Idle_B');

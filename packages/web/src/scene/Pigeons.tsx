@@ -8,6 +8,7 @@ import { agentPositions } from './AgentFigure.tsx';
 import { gagCommands } from './gagCommands.ts';
 import { Kit } from './KitInstances.tsx';
 import { ROOM_BY_ID } from './layout.ts';
+import { throwPigeon } from './workGestures.ts';
 import {
   dropFall,
   feathersAt,
@@ -114,7 +115,10 @@ export function PigeonFlights() {
         for (const e of freshEvents(state.events, prev.events)) {
           if (!e.httpCall || !eventShown(e)) continue;
           const id = eventAgentId(e);
-          if (e.httpCall === 'start') pigeons.start(id, now());
+          // The agent throws only a pigeon that really leaves (workGestures.ts), never a silent flight.
+          if (e.httpCall === 'start') {
+            if (pigeons.start(id, now())) throwPigeon(id);
+          }
           else pigeons.land(id, pigeonOutcome(e.httpCall), now());
         }
       }),
@@ -130,7 +134,9 @@ export function PigeonFlights() {
       // An explicit id must name a figure on stage; without one, the lectern takes the dropping.
       if (agentId !== undefined && !agentPositions.has(agentId)) return false;
       const id = agentId ?? useOffice.getState().selectedAgentId ?? dovecoteAgent() ?? NO_AGENT;
-      return pigeons.force(id, issue, now()) !== null;
+      const left = pigeons.force(id, issue, now()) !== null;
+      if (left) throwPigeon(id);
+      return left;
     };
     ns.pigeon = command;
     return () => {

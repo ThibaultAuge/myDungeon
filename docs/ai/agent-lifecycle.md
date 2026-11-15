@@ -28,6 +28,10 @@ description: Use when changing where agents rest or wait (tavern, altar queue), 
 - Stopped sessions (`live: false`, not archived) keep their main agent visible, resting in
   the tavern in the session colour, but NOT selectable: the side panel lists live sessions
   only (accessibility decision: no 3D-only clickable target). Exception: ghosts below.
+- Seated in the tavern: resting figures, mains waiting for a prompt and stopped-session
+  knights sit on a stool at table seats or on the floor at wall / scatter places, unless an
+  altar pose (sleeping) applies; a working figure there stands. Poses and stools:
+  `docs/ai/dungeon-scene.md` (Work gestures).
 
 ### Tavern introduction card (resting subagent types)
 User request: clicking a resting figure introduces its type.
@@ -115,10 +119,32 @@ do this; subagents keep the tavern cycle above.
 - Ambush (`ambush.ts`, pure state machine, `Ambush` class): victim phases
   `walking → waiting → struck → hit → dying → lying → sinking → gone`. At most
   `SKELETON_COUNT` 3 skeletons, split by `assignSkeletons` (a lone victim gets all 3, other
-  victims wait). Skeletons rise (`Spawn_Ground`), strike (`Use_Item` looping; the free pack
-  has no attack clip), then walk into the nearest near tree within `TREE_REACH` and shrink,
-  or burrow (`Spawn_Ground` held backwards + y descent). The body sinks `SINK_DEPTH`, then
-  `onGone` → `Stage.gone`. Timings use the measured clip lengths in `characters.ts`.
+  victims wait). Skeleton phases `free → rising → taunting → striking → (walking →
+  vanishing | collapsing → burrowing) → free`; clips from KayKit Character Animations 1.1,
+  chosen by `skeletonClip(Pick<Skeleton,'phase'|'index'>)`:
+  - rising: `Skeletons_Spawn_Ground` (climbs from ~2.8 m underground, weapons first) at
+    `RISE_RATE` 1.5, so `RISE_TIME` = `RISE_CLIP_TIME` / 1.5 ≈ 2.38 s.
+    `Skeletons_Awaken_Floor` was rejected: it starts lying on the floor.
+  - taunting: `Skeletons_Taunt` once (`TAUNT_CLIP_TIME`).
+  - striking: looped attack matching the weapon, `attackFor(index)`: right prop
+    `Skeleton_Axe` → `Melee_2H_Attack_Chop` (impact `CHOP_2H_IMPACT` 0.75 s), anything else
+    → `Melee_1H_Attack_Chop` (`CHOP_1H_IMPACT` 0.6 s). Skeletons leave once the victim lies.
+  - walking to the nearest near tree within `TREE_REACH`: `Skeletons_Walking` at
+    min(`SKELETON_SPEED` / `SKELETON_WALK_CLIP_SPEED`, `MAX_CLIP_RATE`), then shrink.
+  - no tree: collapsing = `Skeletons_Death` once (`SKELETON_DEATH_CLIP_TIME` 2 s; root
+    motion throws it back into a pile of bones), then burrowing = `hold('Skeletons_Death',
+    2)` (same clip frozen: `Character` only pauses it, no blend) sinking `BURROW_DEPTH` over
+    `BURROW_TIME`.
+  - Victim sync: `Victim.strikeAt` = `strikeAt(index of the skeleton at spawns[0])`, the
+    one the victim faces = `RISE_TIME` + `TAUNT_CLIP_TIME` + its weapon's impact; the
+    victim's `struck` phase lasts that long (≈4.0 s blade, ≈4.2 s axe). Victim clips:
+    `Idle_B`, `Hit_A`, `Death_A`. The body sinks `SINK_DEPTH`, then `onGone` →
+    `Stage.gone`.
+  - Measured constants live in `ambush.ts`, not `characters.ts` (merge hotspot shared by
+    parallel clip branches). `ambush.test.ts` checks the five clip lengths against the GLBs
+    with its own GLB JSON reader; impact times and the walk clip speed were measured by hand
+    (bones sampled with three.js in node) and are only range-checked.
+  - `AMBUSH_CLIPS` (`characters.ts`) loads the Special and CombatMelee animation files.
 - React keys: `stage.key(id)` is the id, then `${id}~${n}` after n deaths, so a session that
   reappears while its old figure dies mounts a NEW figure from the forest once the old one
   is gone (`Stage.hidden` holds it back meanwhile). Generations are never cleared, on
@@ -186,8 +212,8 @@ do this; subagents keep the tavern cycle above.
   `ENTRY_INDEX`, `KILL_INDEX`, `SLOT_STEP`, `GATE_SPOT`, `ENTRY_SPOT`, `routeFrom`,
   `killIndex`, `killPoint`, `nearestPathIndex`, `isOutside`, `exitRoute`.
 - `packages/web/src/scene/ambush.ts` — pure: `Ambush` state machine, `assignSkeletons`,
-  `skeletonSpawns`, `nearestTree`, `victimClip`, `victimSink`, `skeletonClip`,
-  `skeletonDepth`, `skeletonScale`, timing constants.
+  `skeletonSpawns`, `nearestTree`, `victimClip`, `victimSink`, `skeletonClip`, `attackFor`,
+  `strikeAt`, `skeletonDepth`, `skeletonScale`, measured clip and timing constants.
 - `packages/web/src/scene/Ambush.tsx` — skeleton rendering (`SkeletonFigure`).
 - `packages/web/src/scene/ghost.ts` — pure: `isGhost`, `seededRandom`, `WANDER_POINTS`,
   `nearestOnCorridor`, `wanderStart`, `nextWander`, `Ghosts`, evaporation constants.
@@ -218,9 +244,15 @@ do this; subagents keep the tavern cycle above.
   the castle goes through `routeFrom` / `exitRoute`; any figure standing outside applies
   `groundY`. A new scripted creature reuses `Character` with a `Look` and `Motion.scripted`
   (clip packs and `ClipInput.scripted`: `docs/ai/dungeon-scene.md`).
+- New ambush clips go in `AMBUSH_CLIPS` and through `skeletonClip` / `victimClip`
+  (`ClipInput.scripted`), never `clipFor`. A new skeleton weapon needs an attack in
+  `attackFor`.
 - Watching an ambush in a store-injected gallery (general preview setup:
-  `docs/ai/dungeon-scene.md`, Usage): remove a session from `sessions` after a first
-  snapshot; at headless 1–2 fps the walk out takes minutes. Read `agentPositions` from the
+  `docs/ai/dungeon-scene.md`, Usage): run Vite on a free port from the worktree; set
+  `{sessions: [], snapshotReceived: false}`, then `{sessions: [s], snapshotReceived: true}`
+  so the knight starts in place, then remove the session. Frame rate varies by machine
+  (Playwright reached ~120 fps on one, 1–2 fps headless elsewhere, where the walk out takes
+  minutes). Right-drag pans to the kill point (≈ x 4, z 22.7). Read `agentPositions` from the
   `AgentFigure.tsx` URL found in `performance.getEntriesByType('resource')` (after HMR the
   modules carry `?t=`, so a plain `import('/src/scene/AgentFigure.tsx')` gives a different
   map). Pan with synthetic right-button pointer events to see the kill point (z ≈ 23–30).
@@ -276,5 +308,5 @@ do this; subagents keep the tavern cycle above.
   kept definitions depend on OS listing order.
 - Accepted limits of the ambush: with many simultaneous deaths, kill slots past the path
   end stack there and go beyond the pan limit; a skeleton walks to its tree in a straight
-  line; after a server restart, a reconnect may kill sessions missing from the first
+  line, and its walk clip rate is capped, so its feet slide somewhat; after a server restart, a reconnect may kill sessions missing from the first
   snapshot.
