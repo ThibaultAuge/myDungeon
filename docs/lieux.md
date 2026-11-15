@@ -50,7 +50,7 @@ Hors du château, juste après le pont-levis et au bord du chemin, un panneau de
 | **Atelier** | Établis, outils, coin de l'enlumineur avec chevalet | Écrire et modifier le code, découper des maquettes | Agent principal en réalisation, general-purpose, fork, Barbapapa |
 | **Bibliothèque** | Rayonnages de grimoires, tables de lecture | Lire et chercher dans le code local | Explore, agent principal quand il lit |
 | **Observatoire** | Grande lunette, cartes du ciel | Recherche web, documentation officielle | Oracle |
-| **Pigeonnier** | Volière, pupitre à messages | Tester des API externes : un pigeon part, un pigeon revient | Samuel-Morse |
+| **Pigeonnier** | Volière, pupitre à messages | Tester des API externes : à chaque appel HTTP, un pigeon part et revient selon le résultat | Samuel-Morse |
 | **Salle des machines** | Machines à vapeur, engrenages, chaudière | Lancer des commandes, compiler, exécuter les tests, git | Agent principal et agents génériques quand ils utilisent une commande (`Bash`, `PowerShell`…) |
 | **Cabinet de l'arithméticien** | Boulier géant, abaque, tableau d'ardoise | Calculs et statistiques | Turing |
 | **Poste de garde** | Herse, râtelier d'armes, lanternes | Audit sécurité | Neo |
@@ -147,6 +147,28 @@ Elle regroupe :
 - les types vus au travail dans ce donjon. Les agents intégrés (Explore, general-purpose…) y entrent à leur premier appel, et y restent jusqu'au redémarrage du serveur.
 
 Les dossiers sont relus au plus une fois par minute.
+
+## Le Pigeonnier
+
+La volière abrite des poulets en peluche, qui tiennent lieu de pigeons. Ils sont posés sur le perchoir supérieur. En pratique, seul Samuel-Morse les fait voler : chaque requête HTTP qu'il lance dans un shell envoie un pigeon vers le ciel, et le résultat décide de son retour. Le détail de l'effet à l'écran est dans [utilisation.md](utilisation.md#le-pigeon-de-samuel-morse).
+
+Le trajet d'un pigeon dépend seulement du résultat de la requête :
+
+```mermaid
+flowchart LR
+    V["Volière"] -->|"appel HTTP"| E["Envol"]
+    E -->|"succès"| R["Retour, atterrissage"]
+    E -->|"erreur, au hasard"| P["Revient plumé"]
+    E -->|"erreur, au hasard"| L["Ne revient pas"]
+    E -->|"erreur, au hasard"| F["Fiente sur la tête"]
+    E -->|"aucun résultat en 60 s"| L
+    R --> V
+    P --> V
+    F -->|"après 6 s"| V
+```
+*Figure : Trajet d'un pigeon selon le résultat de la requête HTTP.*
+
+Quatre pigeons volent au plus à la fois. Au-delà, les appels suivants n'envoient aucun pigeon.
 
 ## Voir aussi
 

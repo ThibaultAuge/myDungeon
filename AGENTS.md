@@ -28,6 +28,7 @@ npm workspaces: `packages/server`, `packages/web`, `packages/shared`.
 - `docs/ai/dialogue.md` — Use when changing the agent conversation box (AgentDialog), the Markdown rendering of agent messages (MessageText, markdown.ts), how transcripts are found, parsed or paged (transcript.ts, /api/transcript, useTranscript), or adding any route that reads or changes conversations.
 - `docs/ai/agent-info.md` — Use when changing the selected-agent details card (AgentInfo), session details sent to the client (SessionView.info, worktree, branch, model, effort, permission mode, CLI version), or the detection of a session's local web servers (ports.ts, SessionView.servers).
 - `docs/ai/ui-theme.md` — Use when changing the web UI's colours or chrome styling — root CSS tokens, the single dark dungeon theme, top bar, side panel, home page and its castle-gate background image (and how to re-capture it).
+- `docs/ai/pigeon-gag.md` — Use when changing the Samuel-Morse pigeon gag — HTTP-call detection of dovecote agents (http-call.ts, HookEventSummary.httpCall), pigeon flights, outcomes and their 3D rendering (pigeon.ts, Pigeons.tsx), or the agentOffice.pigeon console command.
 
 Human docs (French): `README.md` (pitch, install, tests, doc index); in `docs/`:
 `utilisation.md`, `fonctionnement.md` (data flow, hooks, env vars), `securite.md`,

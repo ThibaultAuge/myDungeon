@@ -2511,3 +2511,116 @@ describe('everActive', () => {
     expect(state.sessions.get(CLI_KEY)).toMatchObject({ live: false, everActive: true });
   });
 });
+
+describe('summarize: httpCall (Samuel-Morse pigeon)', () => {
+  const SM = 'ag-sm';
+  const CURL = { command: 'curl -s -i https://api.example.com/v1/items' };
+
+  /** A state holding a samuel-morse subagent, posted in the dovecote. */
+  function withSamuelMorse(): OfficeState {
+    const state = stateWithEnvs();
+    applyHook(state, hook('SubagentStart', { agent_id: SM, agent_type: 'samuel-morse' }), 1000);
+    return state;
+  }
+
+  /** Applies `ev` then summarises it, as the server does. */
+  function summary(state: OfficeState, ev: ReturnType<typeof hook>, at: number) {
+    return summarize(ev, applyHook(state, ev, at), at, 7);
+  }
+
+  /** A Bash event of the samuel-morse subagent. */
+  function smBash(event: string, extra: Record<string, unknown> = {}) {
+    return hook(event, { agent_id: SM, agent_type: 'samuel-morse', tool_name: 'Bash', tool_input: CURL, ...extra });
+  }
+
+  /**
+   * Verifies that a samuel-morse curl gives start, then ok on a 200 response
+   */
+  it('reports start then ok for a successful curl in the dovecote', () => {
+    const state = withSamuelMorse();
+    expect(summary(state, smBash('PreToolUse'), 1100).httpCall).toBe('start');
+    expect(state.sessions.get(CLI_KEY)!.subagents[0]?.room).toBe('pigeonnier');
+    const post = smBash('PostToolUse', { tool_response: { stdout: 'HTTP/1.1 200 OK\r\n\r\n{"items":[]}' } });
+    expect(summary(state, post, 1200).httpCall).toBe('ok');
+  });
+
+  /**
+   * Verifies that a 4xx response of a samuel-morse curl gives error
+   */
+  it('reports error for a curl answered with 404', () => {
+    const state = withSamuelMorse();
+    summary(state, smBash('PreToolUse'), 1100);
+    const post = smBash('PostToolUse', { tool_response: { stdout: 'HTTP/1.1 404 Not Found\r\n\r\nnope' } });
+    expect(summary(state, post, 1200).httpCall).toBe('error');
+  });
+
+  /**
+   * Verifies that a failed curl run (network, timeout) gives error
+   */
+  it('reports error for a failed curl run', () => {
+    const state = withSamuelMorse();
+    summary(state, smBash('PreToolUse'), 1100);
+    expect(summary(state, smBash('PostToolUseFailure', { error: 'exit 6' }), 1200).httpCall).toBe('error');
+  });
+
+  /**
+   * Verifies that the final status after a redirect decides the outcome (301 then 404)
+   */
+  it('uses the last status line after a redirect', () => {
+    const state = withSamuelMorse();
+    const stdout = 'HTTP/1.1 301 Moved Permanently\r\nLocation: /b\r\n\r\nHTTP/1.1 404 Not Found\r\n\r\n';
+    expect(summary(state, smBash('PostToolUse', { tool_response: { stdout } }), 1200).httpCall).toBe('error');
+  });
+
+  /**
+   * Verifies that the -w marker overrides earlier status lines
+   */
+  it('lets the --- HTTP marker override earlier status lines', () => {
+    const state = withSamuelMorse();
+    const stdout = 'HTTP/1.1 503 Service Unavailable\r\n\r\nretry\n--- HTTP 200';
+    expect(summary(state, smBash('PostToolUse', { tool_response: { stdout } }), 1200).httpCall).toBe('ok');
+  });
+
+  /**
+   * Verifies that the same curl by the main agent (in the machine room) sends no pigeon
+   */
+  it('gives no httpCall for a curl of the main agent', () => {
+    const state = withSamuelMorse();
+    const ev = hook('PreToolUse', { tool_name: 'Bash', tool_input: CURL });
+    const s = applyHook(state, ev, 1100);
+    expect(s.main.room).toBe('machines');
+    expect(summarize(ev, s, 1100).httpCall).toBeUndefined();
+  });
+
+  /**
+   * Verifies that a non-shell tool of samuel-morse sends no pigeon
+   */
+  it('gives no httpCall for a Read by samuel-morse', () => {
+    const state = withSamuelMorse();
+    const ev = hook('PreToolUse', { agent_id: SM, agent_type: 'samuel-morse', tool_name: 'Read', tool_input: { file_path: 'C:/work/alpha/api.md' } });
+    expect(summary(state, ev, 1100).httpCall).toBeUndefined();
+  });
+
+  /**
+   * Verifies that a curl from an agent_id the session does not show sends no pigeon
+   */
+  it('gives no httpCall for an unknown internal agent', () => {
+    const state = withSamuelMorse();
+    const ev = hook('PreToolUse', { agent_id: 'ag-internal', tool_name: 'Bash', tool_input: CURL });
+    expect(summary(state, ev, 1100).httpCall).toBeUndefined();
+  });
+
+  /**
+   * Verifies that the summary carries only the enum, never the response body or status
+   */
+  it('never leaks the curl output into the summary', () => {
+    const state = withSamuelMorse();
+    const stdout = 'HTTP/1.1 418 I am a teapot\r\nSet-Cookie: token=s3cr3t\r\n\r\nsecret-body';
+    const sum = summary(state, smBash('PostToolUse', { tool_response: { stdout } }), 1200);
+    expect(sum.httpCall).toBe('error');
+    const json = JSON.stringify(sum);
+    expect(json).not.toContain('s3cr3t');
+    expect(json).not.toContain('secret-body');
+    expect(json).not.toContain('418');
+  });
+});

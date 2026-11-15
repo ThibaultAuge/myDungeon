@@ -314,6 +314,8 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cast
     included, user decision); no id = selected agent; the room effect plays even with no
     figure; returns true when a figure reacted. Human console doc:
     [docs/commandes-console.md](../commandes-console.md).
+- Samuel-Morse pigeon gag (pigeons leave the dovecote on HTTP calls):
+  `docs/ai/pigeon-gag.md`.
 - Spots (`layout.ts`): `Spot` carries `room: RoomId` and optional `station?: StationId`
   (key absent, not `undefined`). `RoomDef.stations` is `Partial<Record<StationId, Seat[]>>`,
   `STATIONS` maps agent type → `StationId`, `candidateSeats` returns
@@ -475,8 +477,8 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cast
   pick a free one), otherwise the page shown is another branch's code. A worktree can
   also serve its build on another port: `npm run build`, then
   `AGENT_OFFICE_PORT=4790 AGENT_OFFICE_TOKEN=… npm run start`. The in-app Browser pane, when
-  hidden, gives the Canvas size 0 and renders no frames; use Playwright for visual
-  verification. Headless Playwright renders about 1–2 fps (software GL): wait about 2 s
+  hidden, gives the Canvas size 0 and renders no frames, and shown it renders about 3 fps;
+  use Playwright for visual verification. Headless Playwright renders about 1–2 fps (software GL): wait about 2 s
   before checking rAF-driven effects (focus return, highlight screenshots). Give Playwright
   file outputs absolute paths inside the worktree; relative paths resolve elsewhere.
   A headless screenshot takes about 4 s, longer than the 1.5 s slap effect: to capture it,
@@ -520,7 +522,7 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cast
 - Tests must not import `kit.ts` or any `.tsx` file (drei / `import.meta.env`); test
   `dungeon.ts`, `layout.ts`, `walk.ts`, `characters.ts`, `slap.ts`, `slapSwing.ts`,
   `destinations.ts`, `forest.ts`, `outside.ts`, `stage.ts`, `ambush.ts`, `tavern.ts`,
-  `decor.ts`, `merge.ts`, `potion.ts`, `mishap.ts`, `altarWait.ts` and the manifest JSON.
+  `decor.ts`, `merge.ts`, `potion.ts`, `mishap.ts`, `altarWait.ts`, `pigeon.ts` and the manifest JSON.
 - Walk speed was set so figures reach the room before short tasks finish (user request).
   The chibi legs walk naturally at 0.57 (`Walking_A`) and 1.4 u/s (`Running_A`) at
   `KIT_SCALE`, so feet slide at cruise speed by design. Accepted limits: a reroute to a
