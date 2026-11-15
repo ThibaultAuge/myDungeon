@@ -40,7 +40,7 @@ writeEnvFile({ ...env, AGENT_OFFICE_PORT: String(port), AGENT_OFFICE_TOKEN: toke
 const backup = backupSettings();
 writeSettings(addOurs(settings, { relayPath: RELAY_SCRIPT }));
 
-console.log(`Hooks IA IA Land installés dans ${SETTINGS_FILE}`);
+console.log(`Hooks Agents’ lAIr installés dans ${SETTINGS_FILE}`);
 console.log(`  événements : ${EVENTS.join(', ')}`);
 console.log(`  relais     : ${RELAY_SCRIPT} (copie dans ton profil)`);
 console.log(`  commande   : ${relayCommand()} (async, réponse ignorée : observation seule)`);
@@ -48,4 +48,4 @@ console.log('  après une modification de scripts/hook-relay.mjs, relance cette 
 console.log(`  cible      : http://127.0.0.1:${port}/hooks`);
 console.log(`  jeton      : ${ENV_FILE} (absent de settings.json)${rotate ? ', régénéré' : ''}`);
 if (backup) console.log(`  sauvegarde : ${backup}`);
-console.log('Redémarre le serveur IA IA Land s’il tourne, pour qu’il prenne le jeton.');
+console.log('Redémarre le serveur Agents’ lAIr s’il tourne, pour qu’il prenne le jeton.');
