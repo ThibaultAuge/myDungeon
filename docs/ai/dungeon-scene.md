@@ -364,6 +364,8 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cast
   against double install).
 - Where figures rest, wait, appear and leave (tavern, altar, forest entry, ambush, roster):
   `docs/ai/agent-lifecycle.md`.
+- A visible change to the castle gate, walls or forest means re-capturing the home page
+  image: `docs/ai/ui-theme.md`.
 
 ## Notes
 - The import script rejects unsafe names, `..` paths, symlinks, glTF extensions (Draco /
