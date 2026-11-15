@@ -89,6 +89,19 @@ stateDiagram-v2
 ```
 *Figure : États d'une session sans activité, du fantôme au retour du chevalier ou à la disparition.*
 
+## Le héraut des tours d'angle
+
+Le héraut n'est pas un agent. Il ne représente aucune session ni aucun sous-agent, et il n'apparaît que pendant une célébration : un `git commit` ou un `git push` réussi (voir [Le héraut des tours d'angle](utilisation.md#le-héraut-des-tours-dangle)).
+
+- **Silhouette.** Un corps Voleur (Rogue) du pack KayKit Adventurers 2.0 (voir [modeles-3d.md](modeles-3d.md)).
+- **Accessoire.** Une trompette de laiton, construite dans le code et tenue dans la main droite. Un fanion rouge est fixé à la trompette pour un push.
+- **Notes.** Des notes ♪ flottent au-dessus de lui pendant qu'il sonne. Elles ne sont pas lues par les lecteurs d'écran.
+- **Poste.** Une des quatre tours d'angle, si elle est libre. Il monte par la trappe, se tourne vers la cour, sonne, puis redescend. Il ne reste pas sur sa tour.
+- **Pas de clic.** Il ne se sélectionne pas en 3D et n'apparaît ni à la taverne ni dans la liste latérale.
+- **Mouvement réduit.** Il se tient immobile sur sa tour, sans monter ni descendre.
+
+Il ne faut pas le confondre avec deux autres « héraut » : le costume de Gatsby, dans le tableau des sous-agents spécialisés, et l'estrade du héraut de la salle Accessibilité / SEO (voir [lieux.md](lieux.md#liste-des-lieux)). Le héraut des tours n'a aucun rôle d'audit.
+
 ## Les sous-agents spécialisés
 
 Ce sont les agents définis dans `~/.claude/agents/`, ou dans le `.claude/agents/` d'un dossier du donjon. Le hook `SubagentStart` donne leur type dans `agent_type`, ce qui permet de choisir la silhouette.

@@ -30,6 +30,7 @@ Le `║` sur le bord sud marque la porte du château, entre l'Accessibilité / S
 - **Les grandes pièces** sont celles qui accueillent le plus d'agents en même temps : l'Atelier, la Salle des cartes, la Bibliothèque et la Taverne, qui doit loger un exemplaire de chaque type.
 - **Les contrôles** forment une bande continue en bas à gauche : sécurité, revue et tests, puis accessibilité et SEO.
 - **Le Scriptorium** (rédaction de documentation) est un coin de la Bibliothèque, avec des pupitres de copistes.
+- **Les tours d'angle** : quatre petites tours rondes marquent les coins du château. Le détail est dans [Les tours d'angle](#les-tours-dangle).
 
 ## Le panneau du donjon
 
@@ -59,9 +60,12 @@ Hors du château, juste après le pont-levis et au bord du chemin, un panneau de
 | **Coin détente** | Banquettes, jeu de dés, mur d'affiches | Idées décalées | Butt-Stallion |
 | **Scriptorium** (dans la Bibliothèque) | Pupitres de copistes | Documentation | Curator (pour les IA), Otis (pour les humains) |
 | **Réduit du concierge** | Balais, seaux, chariot | Base de Hancock, qui fait des tournées dans l'Atelier | Hancock |
+| **Tours d'angle** (quatre, dans les murs) | Trappe et plateforme sur chaque tour | Sonner de la trompette après un commit ou un push réussi | Un héraut, sur une tour libre |
 | **Taverne** | Grandes tables, cheminée, tonneaux, casiers | Agents disponibles, sans tâche | Un exemplaire de chaque type d'agent, l'agent principal en attente de ton prochain prompt, et le chevalier endormi d'une session arrêtée |
 
 Deux postes réagissent aux échecs d'outil : la chaudière de la Salle des machines et la fiole du laboratoire de la Salle des épreuves. Le détail est dans [La chaudière et la fiole](utilisation.md#la-chaudière-et-la-fiole).
+
+Les tours d'angle réagissent aux réussites : un héraut sonne après un commit ou un push, et le ciel s'illumine quand des tests passent. Le détail est dans [Le héraut des tours d'angle](utilisation.md#le-héraut-des-tours-dangle) et [Le feu d'artifice](utilisation.md#le-feu-dartifice).
 
 ## Décor propre à chaque pièce
 
@@ -85,6 +89,12 @@ au survol.
 | Salle des épreuves | Tonneaux |
 | Salle Accessibilité / SEO | Cadres aux murs |
 | Taverne | Bûches, caisses de réserve, tonneaux, ragoût et assiettes |
+
+## Les tours d'angle
+
+Quatre petites tours rondes marquent les angles du château. Elles sont bâties dans la même pierre que les murs. Comme les murs, elles s'enfoncent dans le sol avec ceux qui se trouvent devant le curseur (voir [Les murs qui s'effacent](utilisation.md#les-murs-qui-seffacent)).
+
+Chaque tour a une trappe. Un héraut en sort pour sonner de la trompette, face à la cour, après un `git commit` ou un `git push` réussi. Une tour porte au plus un héraut. Le héraut n'a rien à voir avec l'estrade du héraut de la salle Accessibilité / SEO. Le détail est dans [Le héraut des tours d'angle](utilisation.md#le-héraut-des-tours-dangle).
 
 ## L'autel et la file d'attente
 
