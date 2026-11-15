@@ -1,44 +1,56 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import {
   Ambush,
   BURROW_DEPTH,
-  IMPACT_TIME,
+  BURROW_TIME,
+  CHOP_1H_CLIP_TIME,
+  CHOP_1H_IMPACT,
+  CHOP_2H_CLIP_TIME,
+  CHOP_2H_IMPACT,
   LIE_TIME,
+  RISE_CLIP_TIME,
+  RISE_RATE,
+  RISE_TIME,
   SINK_DEPTH,
   SINK_TIME,
   SKELETON_COUNT,
+  SKELETON_DEATH_CLIP_TIME,
   SKELETON_SPEED,
+  SKELETON_WALK_CLIP_SPEED,
   STRIKE_RANGE,
+  TAUNT_CLIP_TIME,
   TREE_REACH,
   TRUNK_RADIUS,
   VANISH_TIME,
   assignSkeletons,
+  attackFor,
   nearestTree,
   skeletonClip,
   skeletonDepth,
   skeletonScale,
   skeletonSpawns,
+  strikeAt,
   victimClip,
   victimSink,
   type SkeletonPhase,
   type VictimPhase,
 } from '../src/scene/ambush.ts';
-import {
-  CLIPS,
-  DEATH_CLIP_TIME,
-  HIT_CLIP_TIME,
-  MAX_CLIP_RATE,
-  SKELETON_LOOKS,
-  SPAWN_CLIP_TIME,
-  USE_ITEM_CLIP_TIME,
-  WALK_CLIP_SPEED,
-} from '../src/scene/characters.ts';
+import { AMBUSH_CLIPS, CLIPS, DEATH_CLIP_TIME, HIT_CLIP_TIME, MAX_CLIP_RATE, SKELETON_LOOKS } from '../src/scene/characters.ts';
+import { CLIP_FILE, type KitClip } from '../src/scene/clipCatalog.ts';
 import type { Point } from '../src/scene/layout.ts';
 import { killPoint } from '../src/scene/outside.ts';
 
 /** Simulation step, in seconds. */
 const DT = 0.05;
 const EPS = 1e-9;
+
+/** Every skeleton phase, in the order of an outing. */
+const SKELETON_PHASES: SkeletonPhase[] = ['free', 'rising', 'taunting', 'striking', 'walking', 'vanishing', 'collapsing', 'burrowing'];
+/** Every skeleton index. */
+const INDEXES = Array.from({ length: SKELETON_COUNT }, (_, i) => i);
 
 /** Steps the ambush until `done` holds; fails instead of looping forever. Returns the time spent. */
 function runUntil(a: Ambush, done: () => boolean, max = 4000): number {
@@ -53,8 +65,17 @@ function runUntil(a: Ambush, done: () => boolean, max = 4000): number {
 /** Skeletons currently sent for a victim. */
 const sentFor = (a: Ambush, id: string) => a.skeletons.filter((s) => s.victim === id);
 
+/** Index of the first skeleton sent for a victim (free skeletons are taken in index order). */
+const firstIndex = (a: Ambush, id: string) => Math.min(...sentFor(a, id).map((s) => s.index));
+
 /** True once every skeleton is back underground or in a tree. */
 const allFree = (a: Ambush) => a.skeletons.every((s) => s.phase === 'free');
+
+/** Expects a duration measured on the DT-stepped simulation to match `expected` within one step. */
+function expectWithinStep(actual: number, expected: number, label: string) {
+  expect(actual, label).toBeGreaterThanOrEqual(expected - EPS);
+  expect(actual, label).toBeLessThanOrEqual(expected + DT + EPS);
+}
 
 /**
  * Runs a whole ambush, recording when each victim and skeleton phase starts (seconds since
@@ -93,6 +114,11 @@ function record(a: Ambush, ids: string[], max = 4000) {
 
 const phases = <T extends { phase: string }>(log: T[]) => log.map((e) => e.phase);
 const startOf = <T extends { phase: string; at: number }>(log: T[], phase: string) => log.find((e) => e.phase === phase)!.at;
+/** Time spent in the first occurrence of `phase` in a log. */
+const lasts = <T extends { phase: string; at: number }>(log: T[], phase: string) => {
+  const i = log.findIndex((e) => e.phase === phase);
+  return log[i + 1].at - log[i].at;
+};
 
 // ---------------------------------------------------------------- constants
 
@@ -103,24 +129,181 @@ describe('ambush constants', () => {
   it('has a look for every skeleton index', () => {
     expect(SKELETON_COUNT).toBeGreaterThan(0);
     expect(SKELETON_LOOKS).toHaveLength(SKELETON_COUNT);
-    expect(new Ambush([]).skeletons.map((s) => s.index)).toEqual(Array.from({ length: SKELETON_COUNT }, (_, i) => i));
+    expect(new Ambush([]).skeletons.map((s) => s.index)).toEqual(INDEXES);
   });
 
   /**
-   * Verifies that the blow lands in the middle of the strike clip
+   * Verifies that the rise lasts exactly the spawn clip played at RISE_RATE
    */
-  it('lands the blow halfway through Use_Item', () => {
-    expect(IMPACT_TIME).toBeCloseTo(USE_ITEM_CLIP_TIME / 2, 12);
+  it('times the rise on the spawn clip at RISE_RATE', () => {
+    expect(RISE_RATE).toBeGreaterThan(0);
+    expect(RISE_TIME).toBeCloseTo(RISE_CLIP_TIME / RISE_RATE, 12);
+    expect(RISE_TIME * RISE_RATE).toBeCloseTo(RISE_CLIP_TIME, 12);
+  });
+
+  /**
+   * Verifies that each chop's blow lands strictly inside its own clip
+   */
+  it('lands each chop strictly inside its clip', () => {
+    expect(CHOP_1H_IMPACT).toBeGreaterThan(0);
+    expect(CHOP_1H_IMPACT).toBeLessThan(CHOP_1H_CLIP_TIME);
+    expect(CHOP_2H_IMPACT).toBeGreaterThan(0);
+    expect(CHOP_2H_IMPACT).toBeLessThan(CHOP_2H_CLIP_TIME);
   });
 
   /**
    * Verifies that distances and durations are positive and the trunk radius is below the reach
    */
   it('has positive, consistent distances and times', () => {
-    for (const v of [STRIKE_RANGE, LIE_TIME, SINK_TIME, SINK_DEPTH, SKELETON_SPEED, TREE_REACH, TRUNK_RADIUS, VANISH_TIME, BURROW_DEPTH]) {
+    for (const v of [
+      STRIKE_RANGE,
+      LIE_TIME,
+      SINK_TIME,
+      SINK_DEPTH,
+      SKELETON_SPEED,
+      SKELETON_WALK_CLIP_SPEED,
+      TREE_REACH,
+      TRUNK_RADIUS,
+      VANISH_TIME,
+      BURROW_TIME,
+      BURROW_DEPTH,
+      RISE_CLIP_TIME,
+      TAUNT_CLIP_TIME,
+      SKELETON_DEATH_CLIP_TIME,
+    ]) {
       expect(v).toBeGreaterThan(0);
     }
     expect(TRUNK_RADIUS).toBeLessThan(TREE_REACH);
+  });
+});
+
+// ---------------------------------------------------------------- measured clips
+
+/** The `animations` pack, as served to the browser. */
+const ANIMATIONS = fileURLToPath(new URL('../public/kaykit/animations/', import.meta.url));
+
+interface AnimJson {
+  animations?: { name?: string; samplers: { input: number }[] }[];
+  accessors?: { max?: number[] }[];
+}
+const animJsonCache = new Map<string, AnimJson>();
+
+/** The JSON chunk of an animations GLB: bytes 12..16 hold its length, it starts at byte 20. */
+function animJson(file: string): AnimJson {
+  let json = animJsonCache.get(file);
+  if (!json) {
+    const buf = fs.readFileSync(path.join(ANIMATIONS, `${file}.glb`));
+    const length = buf.readUInt32LE(12);
+    json = JSON.parse(buf.toString('utf8', 20, 20 + length)) as AnimJson;
+    animJsonCache.set(file, json);
+  }
+  return json;
+}
+
+/** Length of a clip in its GLB file: the latest keyframe time over all its samplers. */
+function clipLength(clip: KitClip): number {
+  const json = animJson(CLIP_FILE[clip]);
+  const anim = json.animations?.find((a) => a.name === clip);
+  if (!anim) throw new Error(`${clip} not found in ${CLIP_FILE[clip]}.glb`);
+  return Math.max(...anim.samplers.map((s) => json.accessors![s.input].max![0]));
+}
+
+describe('ambush clip lengths measured from the GLB files', () => {
+  /**
+   * Verifies that each measured clip length constant matches its animation in the GLB file
+   */
+  it.each([
+    ['Skeletons_Spawn_Ground', RISE_CLIP_TIME],
+    ['Skeletons_Taunt', TAUNT_CLIP_TIME],
+    ['Melee_1H_Attack_Chop', CHOP_1H_CLIP_TIME],
+    ['Melee_2H_Attack_Chop', CHOP_2H_CLIP_TIME],
+    ['Skeletons_Death', SKELETON_DEATH_CLIP_TIME],
+  ] as [KitClip, number][])('measures %s at %d s', (clip, constant) => {
+    expect(clipLength(clip)).toBeCloseTo(constant, 3);
+  });
+
+  /**
+   * Verifies that both chops' impacts fall strictly inside the clip length found in the GLB
+   */
+  it.each([
+    ['Melee_1H_Attack_Chop', CHOP_1H_IMPACT],
+    ['Melee_2H_Attack_Chop', CHOP_2H_IMPACT],
+  ] as [KitClip, number][])('lands the %s blow inside the measured clip', (clip, impact) => {
+    expect(impact).toBeGreaterThan(0);
+    expect(impact).toBeLessThan(clipLength(clip));
+  });
+
+  /**
+   * Verifies that each skeleton's attack impact lies inside the GLB length of the clip it plays
+   */
+  it.each(INDEXES)('lands skeleton %i blow inside its attack clip', (index) => {
+    const { clip, impact } = attackFor(index);
+    expect(impact).toBeGreaterThan(0);
+    expect(impact).toBeLessThan(clipLength(clip));
+  });
+});
+
+// ---------------------------------------------------------------- attackFor and strikeAt
+
+describe('attackFor', () => {
+  /**
+   * Verifies that the blade skeletons (indexes 0 and 2) chop with one hand
+   */
+  it.each([0, 2])('gives blade skeleton %i the one-handed chop', (index) => {
+    expect(SKELETON_LOOKS[index].right?.model).toBe('Skeleton_Blade');
+    expect(attackFor(index)).toEqual({ clip: 'Melee_1H_Attack_Chop', impact: CHOP_1H_IMPACT });
+  });
+
+  /**
+   * Verifies that the axe skeleton (index 1) chops with both hands
+   */
+  it('gives the axe skeleton the two-handed chop', () => {
+    expect(SKELETON_LOOKS[1].right?.model).toBe('Skeleton_Axe');
+    expect(attackFor(1)).toEqual({ clip: 'Melee_2H_Attack_Chop', impact: CHOP_2H_IMPACT });
+  });
+
+  /**
+   * Verifies that the two-handed chop is chosen exactly for the skeletons holding the axe
+   */
+  it('matches the attack to every skeleton weapon', () => {
+    for (const index of INDEXES) {
+      const axe = SKELETON_LOOKS[index].right?.model === 'Skeleton_Axe';
+      expect(attackFor(index).clip, `skeleton ${index}`).toBe(axe ? 'Melee_2H_Attack_Chop' : 'Melee_1H_Attack_Chop');
+    }
+  });
+
+  /**
+   * Verifies that an index without a look falls back to the one-handed chop
+   */
+  it.each([-1, SKELETON_COUNT, 99])('falls back to the one-handed chop for unknown index %i', (index) => {
+    expect(attackFor(index)).toEqual({ clip: 'Melee_1H_Attack_Chop', impact: CHOP_1H_IMPACT });
+  });
+
+  /**
+   * Verifies that every attack clip is a known clip of the ambush theme
+   */
+  it('only uses ambush clips', () => {
+    for (const index of INDEXES) {
+      expect(CLIPS).toContain(attackFor(index).clip);
+      expect(AMBUSH_CLIPS as readonly string[]).toContain(attackFor(index).clip);
+    }
+  });
+});
+
+describe('strikeAt', () => {
+  /**
+   * Verifies that the first blow lands after the rise, the taunt and the weapon's impact time
+   */
+  it.each(INDEXES)('adds rise, taunt and impact for skeleton %i', (index) => {
+    expect(strikeAt(index)).toBeCloseTo(RISE_TIME + TAUNT_CLIP_TIME + attackFor(index).impact, 12);
+  });
+
+  /**
+   * Verifies that the axe skeleton lands its first blow later than a blade skeleton
+   */
+  it('lands the axe blow later than the blade blow', () => {
+    expect(strikeAt(1) - strikeAt(0)).toBeCloseTo(CHOP_2H_IMPACT - CHOP_1H_IMPACT, 12);
+    expect(strikeAt(0)).toBe(strikeAt(2));
   });
 });
 
@@ -293,12 +476,12 @@ describe('Ambush: add, arrived, release', () => {
   });
 
   /**
-   * Verifies that a new victim starts walking, at time 0
+   * Verifies that a new victim starts walking, at time 0, with no blow scheduled yet
    */
   it('starts a new victim walking', () => {
     const a = new Ambush([]);
     a.add('a');
-    expect(a.victim('a')).toMatchObject({ id: 'a', phase: 'walking', t: 0, slot: 0 });
+    expect(a.victim('a')).toMatchObject({ id: 'a', phase: 'walking', t: 0, slot: 0, strikeAt: 0 });
   });
 
   /**
@@ -366,6 +549,18 @@ describe('Ambush: timeline of a lone victim', () => {
   });
 
   /**
+   * Verifies that a lone victim's blow is timed on its first skeleton, the blade at index 0
+   */
+  it('schedules the blow of skeleton 0 for a lone victim', () => {
+    const a = new Ambush([]);
+    a.add('v');
+    a.arrived('v');
+    a.step(DT);
+    expect(firstIndex(a, 'v')).toBe(0);
+    expect(a.victim('v')!.strikeAt).toBe(strikeAt(0));
+  });
+
+  /**
    * Verifies that each victim phase lasts its documented time (within one step)
    */
   it('times each victim phase on the clips and constants', () => {
@@ -373,57 +568,78 @@ describe('Ambush: timeline of a lone victim', () => {
     a.add('v');
     a.arrived('v');
     const log = record(a, ['v']).victims.get('v')!;
-    const lasts = (phase: VictimPhase) => {
-      const i = log.findIndex((e) => e.phase === phase);
-      return log[i + 1].at - log[i].at;
-    };
     const expected: [VictimPhase, number][] = [
-      ['struck', SPAWN_CLIP_TIME + IMPACT_TIME],
+      ['struck', strikeAt(0)],
       ['hit', HIT_CLIP_TIME],
       ['dying', DEATH_CLIP_TIME],
       ['lying', LIE_TIME],
       ['sinking', SINK_TIME],
     ];
-    for (const [phase, time] of expected) {
-      expect(lasts(phase), phase).toBeGreaterThanOrEqual(time - EPS);
-      expect(lasts(phase), phase).toBeLessThanOrEqual(time + DT + EPS);
-    }
+    for (const [phase, time] of expected) expectWithinStep(lasts(log, phase), time, phase);
   });
 
   /**
-   * Verifies that a lone victim gets every skeleton, which then burrow back without trees
+   * Verifies that a lone victim gets every skeleton, which rise, taunt, strike, collapse and burrow
    */
-  it('sends all skeletons, which rise, strike and burrow back when no tree is near', () => {
+  it('sends all skeletons, which collapse and burrow back when no tree is near', () => {
     const a = new Ambush([]);
     a.add('v');
     a.arrived('v');
     const { skeletons } = record(a, ['v']);
     for (const log of skeletons) {
-      expect(phases(log)).toEqual(['free', 'rising', 'striking', 'burrowing', 'free']);
+      expect(phases(log)).toEqual(['free', 'rising', 'taunting', 'striking', 'collapsing', 'burrowing', 'free']);
       expect(log[1].victim).toBe('v');
       expect(log[log.length - 1].victim).toBe('');
     }
   });
 
   /**
-   * Verifies that the blow lands IMPACT_TIME into the strike and the skeletons leave when the body lies
+   * Verifies that each skeleton phase lasts its clip or constant time (within one step)
    */
-  it('syncs the hit with the strike and the leaving with the body lying still', () => {
+  it('times rising, taunting, collapsing and burrowing on the clips', () => {
+    const a = new Ambush([]);
+    a.add('v');
+    a.arrived('v');
+    const { skeletons } = record(a, ['v']);
+    for (const log of skeletons) {
+      expectWithinStep(lasts(log, 'rising'), RISE_TIME, 'rising');
+      expectWithinStep(lasts(log, 'taunting'), TAUNT_CLIP_TIME, 'taunting');
+      expectWithinStep(lasts(log, 'collapsing'), SKELETON_DEATH_CLIP_TIME, 'collapsing');
+      expectWithinStep(lasts(log, 'burrowing'), BURROW_TIME, 'burrowing');
+    }
+  });
+
+  /**
+   * Verifies that the hit lands strikeAt after the struck start, during the first skeleton's chop
+   */
+  it('syncs the hit with the first skeleton chop', () => {
+    const a = new Ambush([]);
+    a.add('v');
+    a.arrived('v');
+    const { victims, skeletons } = record(a, ['v']);
+    const v = victims.get('v')!;
+    for (const log of skeletons) expect(startOf(log, 'rising')).toBeCloseTo(startOf(v, 'struck'), 9);
+    expectWithinStep(startOf(v, 'hit') - startOf(v, 'struck'), strikeAt(0), 'struck → hit');
+    // The first skeleton is already chopping when the blow lands, near its impact time.
+    const first = skeletons[0];
+    const intoChop = startOf(v, 'hit') - startOf(first, 'striking');
+    expect(intoChop).toBeGreaterThan(0);
+    expect(intoChop).toBeLessThan(CHOP_1H_CLIP_TIME);
+    expect(Math.abs(intoChop - CHOP_1H_IMPACT)).toBeLessThanOrEqual(2 * DT + EPS);
+  });
+
+  /**
+   * Verifies that the skeletons start collapsing in the same step the body starts lying still
+   */
+  it('makes the skeletons collapse when the body lies still', () => {
     const a = new Ambush([]);
     a.add('v');
     a.arrived('v');
     const { victims, skeletons } = record(a, ['v']);
     const v = victims.get('v')!;
     for (const log of skeletons) {
-      expect(startOf(log, 'rising')).toBeCloseTo(startOf(v, 'struck'), 9);
-      const rise = startOf(log, 'striking') - startOf(log, 'rising');
-      expect(rise).toBeGreaterThanOrEqual(SPAWN_CLIP_TIME - EPS);
-      expect(rise).toBeLessThanOrEqual(SPAWN_CLIP_TIME + DT + EPS);
-      expect(Math.abs(startOf(v, 'hit') - startOf(log, 'striking') - IMPACT_TIME)).toBeLessThanOrEqual(DT + EPS);
-      expect(startOf(log, 'burrowing')).toBeCloseTo(startOf(v, 'lying'), 9);
-      const burrow = startOf(log.slice(1), 'free') - startOf(log, 'burrowing');
-      expect(burrow).toBeGreaterThanOrEqual(SPAWN_CLIP_TIME - EPS);
-      expect(burrow).toBeLessThanOrEqual(SPAWN_CLIP_TIME + DT + EPS);
+      expect(startOf(log, 'collapsing')).toBeCloseTo(startOf(v, 'lying'), 9);
+      expect(startOf(log, 'burrowing')).toBeGreaterThan(startOf(log, 'collapsing'));
     }
   });
 
@@ -465,6 +681,57 @@ describe('Ambush: timeline of a lone victim', () => {
   });
 });
 
+describe('Ambush: blow timed on the first skeleton weapon', () => {
+  /**
+   * Builds an ambush where 'blade' arrives first and takes skeleton 0, so 'axe' gets
+   * skeletons 1 and 2 and its first one (spawns[0]) is the axe skeleton.
+   */
+  function ambushWithAxeFirst() {
+    const a = new Ambush([]);
+    a.add('blade');
+    a.add('axe');
+    a.arrived('blade');
+    a.arrived('axe');
+    a.step(DT);
+    return a;
+  }
+
+  /**
+   * Verifies that a victim whose first skeleton holds the axe gets the two-handed strikeAt
+   */
+  it('gives the axe strikeAt to a victim first served by the axe skeleton', () => {
+    const a = ambushWithAxeFirst();
+    expect(sentFor(a, 'blade').map((s) => s.index)).toEqual([0]);
+    expect(sentFor(a, 'axe').map((s) => s.index)).toEqual([1, 2]);
+    expect(a.victim('blade')!.strikeAt).toBe(strikeAt(0));
+    expect(a.victim('axe')!.strikeAt).toBe(strikeAt(1));
+    expect(a.victim('axe')!.strikeAt).toBeGreaterThan(a.victim('blade')!.strikeAt);
+  });
+
+  /**
+   * Verifies that the axe victim faces the axe skeleton, the one at its first spawn point
+   */
+  it('faces the axe victim towards the axe skeleton', () => {
+    const a = ambushWithAxeFirst();
+    const v = a.victim('axe')!;
+    const axe = a.skeletons[1];
+    expect(axe.pos).toEqual(skeletonSpawns(v.point, 2, 'axe')[0]);
+    expect(v.facing).toBeCloseTo(Math.atan2(axe.pos.x - v.point.x, axe.pos.z - v.point.z), 12);
+  });
+
+  /**
+   * Verifies that the axe victim stays struck for the two-handed strikeAt (within one step)
+   */
+  it('lands the axe blow strikeAt(1) after the struck start', () => {
+    const a = ambushWithAxeFirst();
+    const { victims, problems } = record(a, ['blade', 'axe']);
+    expect(problems).toEqual([]);
+    // record starts after the sending step: struck is the first phase seen.
+    expectWithinStep(lasts(victims.get('axe')!, 'struck'), strikeAt(1), 'axe struck');
+    expectWithinStep(lasts(victims.get('blade')!, 'struck'), strikeAt(0), 'blade struck');
+  });
+});
+
 describe('Ambush: skeletons leaving into trees', () => {
   /**
    * Finds the first victim id whose skeletons include at least one heading for a tree.
@@ -485,7 +752,7 @@ describe('Ambush: skeletons leaving into trees', () => {
   /**
    * Verifies that each skeleton picks the tree in reach or underground, and leaves accordingly
    */
-  it('walks to the tree when it has one, burrows otherwise', () => {
+  it('walks to the tree when it has one, collapses and burrows otherwise', () => {
     const tree = { x: killPoint(0).x + 3, z: killPoint(0).z };
     let walkers = 0;
     let burrowers = 0;
@@ -501,10 +768,10 @@ describe('Ambush: skeletons leaving into trees', () => {
       log.forEach((l, k) => {
         if (trees[k]) {
           walkers++;
-          expect(phases(l)).toEqual(['rising', 'striking', 'walking', 'vanishing', 'free']);
+          expect(phases(l)).toEqual(['rising', 'taunting', 'striking', 'walking', 'vanishing', 'free']);
         } else {
           burrowers++;
-          expect(phases(l)).toEqual(['rising', 'striking', 'burrowing', 'free']);
+          expect(phases(l)).toEqual(['rising', 'taunting', 'striking', 'collapsing', 'burrowing', 'free']);
         }
       });
     }
@@ -588,6 +855,7 @@ describe('Ambush: several victims', () => {
     expect(a.victim('first')!.phase === 'lying' || a.victim('first')!.phase === 'sinking' || a.victim('first')!.phase === 'gone').toBe(true);
     expect(a.victim('second')!.phase).toBe('struck');
     expect(sentFor(a, 'second').length).toBeGreaterThan(0);
+    expect(a.victim('second')!.strikeAt).toBe(strikeAt(firstIndex(a, 'second')));
   });
 
   /**
@@ -602,6 +870,8 @@ describe('Ambush: several victims', () => {
     // One skeleton each for the first three, the last two wait.
     expect(ids.map((id) => sentFor(a, id).length)).toEqual([1, 1, 1, 0, 0]);
     expect(ids.map((id) => a.victim(id)!.phase)).toEqual(['struck', 'struck', 'struck', 'waiting', 'waiting']);
+    // Each served victim's blow is timed on its own skeleton's weapon.
+    expect(['a', 'b', 'c'].map((id) => a.victim(id)!.strikeAt)).toEqual([strikeAt(0), strikeAt(1), strikeAt(2)]);
     const { problems, victims } = record(a, ids);
     expect(problems).toEqual([]);
     for (const id of ids) expect(a.victim(id)!.phase, id).toBe('gone');
@@ -648,9 +918,9 @@ describe('Ambush: several victims', () => {
 
 describe('Ambush: release', () => {
   /**
-   * Verifies that releasing a victim mid-strike makes its skeletons leave on the next step
+   * Verifies that releasing a victim mid-strike makes its skeletons collapse on the next step
    */
-  it('sends striking skeletons away when their victim is released', () => {
+  it('makes striking skeletons collapse when their victim is released', () => {
     const a = new Ambush([]);
     a.add('v');
     a.arrived('v');
@@ -658,15 +928,16 @@ describe('Ambush: release', () => {
     expect(a.victim('v')!.phase).toBe('struck');
     a.release('v');
     a.step(DT);
-    expect(a.skeletons.map((s) => s.phase)).toEqual(Array(SKELETON_COUNT).fill('burrowing'));
+    expect(a.skeletons.map((s) => s.phase)).toEqual(Array(SKELETON_COUNT).fill('collapsing'));
+    runUntil(a, () => a.skeletons.every((s) => s.phase === 'burrowing'));
     runUntil(a, () => allFree(a));
     expect(a.skeletons.every((s) => s.victim === '')).toBe(true);
   });
 
   /**
-   * Verifies that skeletons still rising for a released victim finish rising, then leave
+   * Verifies that skeletons rising for a released victim still rise and taunt, then collapse
    */
-  it('lets rising skeletons finish rising before leaving', () => {
+  it('lets rising skeletons finish rising and taunting before leaving', () => {
     const a = new Ambush([]);
     a.add('v');
     a.arrived('v');
@@ -675,7 +946,12 @@ describe('Ambush: release', () => {
     a.step(DT);
     expect(a.skeletons.every((s) => s.phase === 'rising')).toBe(true);
     runUntil(a, () => a.skeletons.every((s) => s.phase !== 'rising'));
-    runUntil(a, () => a.skeletons.every((s) => s.phase === 'burrowing'), 2);
+    expect(a.skeletons.every((s) => s.phase === 'taunting')).toBe(true);
+    runUntil(a, () => a.skeletons.every((s) => s.phase !== 'taunting'));
+    // Leaving is only decided while striking: one step there, then away.
+    expect(a.skeletons.every((s) => s.phase === 'striking')).toBe(true);
+    a.step(DT);
+    expect(a.skeletons.every((s) => s.phase === 'collapsing')).toBe(true);
     runUntil(a, () => allFree(a));
   });
 
@@ -698,6 +974,7 @@ describe('Ambush: release', () => {
     runUntil(a, () => a.victim('z')!.phase !== 'waiting');
     expect(a.victim('z')!.phase).toBe('struck');
     expect(sentFor(a, 'z')).toHaveLength(SKELETON_COUNT);
+    expect(a.victim('z')!.strikeAt).toBe(strikeAt(0));
   });
 });
 
@@ -856,79 +1133,114 @@ describe('victimSink', () => {
 
 describe('skeletonClip', () => {
   /**
-   * Verifies that a rising skeleton plays Spawn_Ground once at normal speed (timed on SPAWN_CLIP_TIME)
+   * Verifies that a rising skeleton plays Skeletons_Spawn_Ground once at RISE_RATE
    */
-  it('plays Spawn_Ground once while rising', () => {
-    expect(skeletonClip({ phase: 'rising', t: 0 })).toEqual({ name: 'Spawn_Ground', loop: false, timeScale: 1, frozen: false, frozenAt: 0 });
+  it.each(INDEXES)('plays Skeletons_Spawn_Ground once at RISE_RATE while rising (skeleton %i)', (index) => {
+    expect(skeletonClip({ phase: 'rising', index })).toEqual({
+      name: 'Skeletons_Spawn_Ground',
+      loop: false,
+      timeScale: RISE_RATE,
+      frozen: false,
+      frozenAt: 0,
+    });
   });
 
   /**
-   * Verifies that a striking skeleton loops Use_Item
+   * Verifies that a taunting skeleton plays Skeletons_Taunt once at normal speed
    */
-  it('loops Use_Item while striking', () => {
-    expect(skeletonClip({ phase: 'striking', t: 3 })).toEqual({ name: 'Use_Item', loop: true, timeScale: 1, frozen: false, frozenAt: 0 });
+  it('plays Skeletons_Taunt once while taunting', () => {
+    expect(skeletonClip({ phase: 'taunting', index: 0 })).toEqual({ name: 'Skeletons_Taunt', loop: false, timeScale: 1, frozen: false, frozenAt: 0 });
   });
 
   /**
-   * Verifies that a walking skeleton loops Walking_A at its speed, capped at MAX_CLIP_RATE
+   * Verifies that a striking skeleton loops the chop of its own weapon
    */
-  it('loops Walking_A at the capped rate while walking', () => {
-    const c = skeletonClip({ phase: 'walking', t: 0 });
-    expect(c.name).toBe('Walking_A');
+  it.each([
+    [0, 'Melee_1H_Attack_Chop'],
+    [1, 'Melee_2H_Attack_Chop'],
+    [2, 'Melee_1H_Attack_Chop'],
+  ])('loops the weapon chop while striking (skeleton %i → %s)', (index, name) => {
+    expect(skeletonClip({ phase: 'striking', index })).toEqual({ name, loop: true, timeScale: 1, frozen: false, frozenAt: 0 });
+    expect(skeletonClip({ phase: 'striking', index }).name).toBe(attackFor(index).clip);
+  });
+
+  /**
+   * Verifies that a walking skeleton loops Skeletons_Walking at its speed, capped at MAX_CLIP_RATE
+   */
+  it('loops Skeletons_Walking at the capped rate while walking', () => {
+    const c = skeletonClip({ phase: 'walking', index: 0 });
+    expect(c.name).toBe('Skeletons_Walking');
     expect(c.loop).toBe(true);
     expect(c.frozen).toBe(false);
-    expect(c.timeScale).toBeCloseTo(Math.min(SKELETON_SPEED / WALK_CLIP_SPEED, MAX_CLIP_RATE), 12);
+    expect(c.timeScale).toBeCloseTo(Math.min(SKELETON_SPEED / SKELETON_WALK_CLIP_SPEED, MAX_CLIP_RATE), 12);
     expect(c.timeScale).toBeGreaterThan(0);
     expect(c.timeScale).toBeLessThanOrEqual(MAX_CLIP_RATE);
   });
 
   /**
-   * Verifies that a burrowing skeleton plays its rise backwards, from the end to the start
+   * Verifies that a collapsing skeleton plays Skeletons_Death once at normal speed
    */
-  it.each([
-    [0, SPAWN_CLIP_TIME],
-    [SPAWN_CLIP_TIME / 2, SPAWN_CLIP_TIME / 2],
-    [SPAWN_CLIP_TIME, 0],
-    [SPAWN_CLIP_TIME * 2, 0],
-  ])('holds Spawn_Ground at the mirrored time while burrowing (t=%d)', (t, at) => {
-    const c = skeletonClip({ phase: 'burrowing', t });
-    expect(c.name).toBe('Spawn_Ground');
-    expect(c.frozen).toBe(true);
-    expect(c.timeScale).toBe(0);
-    expect(c.frozenAt).toBeCloseTo(at, 12);
+  it('plays Skeletons_Death once while collapsing', () => {
+    expect(skeletonClip({ phase: 'collapsing', index: 1 })).toEqual({ name: 'Skeletons_Death', loop: false, timeScale: 1, frozen: false, frozenAt: 0 });
+  });
+
+  /**
+   * Verifies that a burrowing skeleton holds the last pose of Skeletons_Death (the bone pile)
+   */
+  it('holds Skeletons_Death at its end while burrowing', () => {
+    expect(skeletonClip({ phase: 'burrowing', index: 2 })).toEqual({
+      name: 'Skeletons_Death',
+      loop: false,
+      timeScale: 0,
+      frozen: true,
+      frozenAt: SKELETON_DEATH_CLIP_TIME,
+    });
   });
 
   /**
    * Verifies that free and vanishing skeletons hold a still idle pose
    */
   it.each(['free', 'vanishing'] as SkeletonPhase[])('holds Idle_A while %s', (phase) => {
-    expect(skeletonClip({ phase, t: 0.3 })).toEqual({ name: 'Idle_A', loop: false, timeScale: 0, frozen: true, frozenAt: 0 });
+    expect(skeletonClip({ phase, index: 0 })).toEqual({ name: 'Idle_A', loop: false, timeScale: 0, frozen: true, frozenAt: 0 });
   });
 
   /**
-   * Verifies that every skeleton clip is one of the known CLIPS
+   * Verifies that every skeleton clip, for every phase and weapon, is one of the known CLIPS
    */
   it('only uses known clips', () => {
-    const all: SkeletonPhase[] = ['free', 'rising', 'striking', 'walking', 'vanishing', 'burrowing'];
-    for (const phase of all) expect(CLIPS).toContain(skeletonClip({ phase, t: 0 }).name);
+    for (const phase of SKELETON_PHASES) {
+      for (const index of INDEXES) expect(CLIPS, `${phase} / ${index}`).toContain(skeletonClip({ phase, index }).name);
+    }
+  });
+
+  /**
+   * Verifies that every skeleton clip other than the idle hold belongs to the ambush theme
+   */
+  it('takes every animated skeleton clip from AMBUSH_CLIPS', () => {
+    for (const phase of SKELETON_PHASES) {
+      for (const index of INDEXES) {
+        const { name } = skeletonClip({ phase, index });
+        if (name !== 'Idle_A') expect(AMBUSH_CLIPS as readonly string[], `${phase} / ${index}`).toContain(name);
+      }
+    }
   });
 });
 
 describe('skeletonDepth', () => {
   /**
-   * Verifies that only a burrowing skeleton sinks, linearly over SPAWN_CLIP_TIME, capped
+   * Verifies that only a burrowing skeleton sinks, linearly over BURROW_TIME, capped
    */
   it('sinks only while burrowing, down to BURROW_DEPTH', () => {
     expect(skeletonDepth({ phase: 'burrowing', t: 0 })).toBe(0);
-    expect(skeletonDepth({ phase: 'burrowing', t: SPAWN_CLIP_TIME / 2 })).toBeCloseTo(BURROW_DEPTH / 2, 12);
-    expect(skeletonDepth({ phase: 'burrowing', t: SPAWN_CLIP_TIME })).toBeCloseTo(BURROW_DEPTH, 12);
-    expect(skeletonDepth({ phase: 'burrowing', t: SPAWN_CLIP_TIME * 4 })).toBe(BURROW_DEPTH);
+    expect(skeletonDepth({ phase: 'burrowing', t: BURROW_TIME / 2 })).toBeCloseTo(BURROW_DEPTH / 2, 12);
+    expect(skeletonDepth({ phase: 'burrowing', t: BURROW_TIME })).toBeCloseTo(BURROW_DEPTH, 12);
+    expect(skeletonDepth({ phase: 'burrowing', t: BURROW_TIME * 4 })).toBe(BURROW_DEPTH);
   });
 
   /**
-   * Verifies that every other phase stays on the ground
+   * Verifies that every other phase, collapsing included, stays on the ground
    */
-  it.each(['free', 'rising', 'striking', 'walking', 'vanishing'] as SkeletonPhase[])('is 0 while %s', (phase) => {
+  it.each(['free', 'rising', 'taunting', 'striking', 'walking', 'vanishing', 'collapsing'] as SkeletonPhase[])('is 0 while %s', (phase) => {
     expect(skeletonDepth({ phase, t: 5 })).toBe(0);
   });
 });
@@ -947,7 +1259,7 @@ describe('skeletonScale', () => {
   /**
    * Verifies that every other phase keeps full size
    */
-  it.each(['free', 'rising', 'striking', 'walking', 'burrowing'] as SkeletonPhase[])('is 1 while %s', (phase) => {
+  it.each(['free', 'rising', 'taunting', 'striking', 'walking', 'collapsing', 'burrowing'] as SkeletonPhase[])('is 1 while %s', (phase) => {
     expect(skeletonScale({ phase, t: 5 })).toBe(1);
   });
 });

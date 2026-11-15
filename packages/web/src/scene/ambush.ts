@@ -1,20 +1,61 @@
-import { DEATH_CLIP_TIME, HIT_CLIP_TIME, hold, play, SPAWN_CLIP_TIME, USE_ITEM_CLIP_TIME, WALK_CLIP_SPEED, MAX_CLIP_RATE, type ClipChoice } from './characters.ts';
+import { DEATH_CLIP_TIME, HIT_CLIP_TIME, hold, play, MAX_CLIP_RATE, SKELETON_LOOKS, type ClipChoice, type ClipName } from './characters.ts';
 import { seeded } from './dungeon.ts';
 import type { Point } from './layout.ts';
 import { killPoint } from './outside.ts';
 
 // The death of a main agent whose session was deleted, as a pure state machine (no
 // three.js, testable in node). The agent walks out to a kill point on the forest path;
-// skeletons rise from the ground around it, strike, and it falls and sinks into the ground.
-// Then each skeleton walks into the nearest tree or goes back underground. At most
+// skeletons climb out of the ground around it, taunt it, strike, and it falls and sinks into
+// the ground. Then each skeleton walks into the nearest tree, or collapses into a pile of bones
+// that sinks back underground. At most
 // SKELETON_COUNT skeletons are out at once; doomed agents with none free wait their turn.
 
 /** Skeletons that can be out at the same time. */
 export const SKELETON_COUNT = 3;
 /** Distance from a doomed agent at which the skeletons rise, in metres. */
 export const STRIKE_RANGE = 1.1;
-/** Time into the strike at which the blow lands. */
-export const IMPACT_TIME = USE_ITEM_CLIP_TIME / 2;
+
+// ---- Measured clips (KayKit Character Animations 1.1, Rig_Medium). A test checks the clip
+// lengths against the files; the impact times and SKELETON_WALK_CLIP_SPEED were measured by
+// hand (bones sampled with three.js, confirmed by eye) and are only range-checked.
+/** Length of Skeletons_Spawn_Ground: the skeleton climbs out from about 2.8 m underground. */
+export const RISE_CLIP_TIME = 3.5667;
+/** The rise is played faster, so the knight does not wait too long. */
+export const RISE_RATE = 1.5;
+/** Seconds a skeleton takes to rise. */
+export const RISE_TIME = RISE_CLIP_TIME / RISE_RATE;
+/** Length of Skeletons_Taunt, played once between the rise and the first blow. */
+export const TAUNT_CLIP_TIME = 1.0333;
+/**
+ * Lengths of the attacks, and when the blow lands in each: the moment the right hand moves
+ * fastest, measured on the clips.
+ */
+export const CHOP_1H_CLIP_TIME = 1.0667;
+export const CHOP_1H_IMPACT = 0.6;
+export const CHOP_2H_CLIP_TIME = 1.6333;
+export const CHOP_2H_IMPACT = 0.75;
+/** Length of Skeletons_Death: the skeleton collapses into a pile of bones (still from ~0.4 s). */
+export const SKELETON_DEATH_CLIP_TIME = 2;
+/**
+ * Speed (units per second, at KIT_SCALE) at which Skeletons_Walking keeps the feet on the
+ * ground, measured like WALK_CLIP_SPEED (twice the foot swing per cycle over the cycle length).
+ */
+export const SKELETON_WALK_CLIP_SPEED = 0.41;
+
+/** The attack of a skeleton, matching its weapon: the axe chops with both hands. */
+export interface Attack {
+  clip: ClipName;
+  /** Time into the clip at which the blow lands. */
+  impact: number;
+}
+const CHOP_1H: Attack = Object.freeze({ clip: 'Melee_1H_Attack_Chop', impact: CHOP_1H_IMPACT });
+const CHOP_2H: Attack = Object.freeze({ clip: 'Melee_2H_Attack_Chop', impact: CHOP_2H_IMPACT });
+export function attackFor(index: number): Attack {
+  return SKELETON_LOOKS[index]?.right?.model === 'Skeleton_Axe' ? CHOP_2H : CHOP_1H;
+}
+/** Seconds from a skeleton's rise to its first blow landing. */
+export const strikeAt = (index: number): number => RISE_TIME + TAUNT_CLIP_TIME + attackFor(index).impact;
+
 /** The body lies still this long before sinking. */
 export const LIE_TIME = 1.5;
 /** Time for the body to sink out of sight, and how deep it goes. */
@@ -28,11 +69,12 @@ export const TREE_REACH = 9;
 export const TRUNK_RADIUS = 0.35;
 /** Time for a skeleton to shrink into a tree. */
 export const VANISH_TIME = 0.6;
-/** How deep a skeleton goes while sinking back underground. */
-export const BURROW_DEPTH = 1.6;
+/** Time for a pile of bones to sink out of sight, and how deep it goes. */
+export const BURROW_TIME = 1.2;
+export const BURROW_DEPTH = 0.8;
 
 export type VictimPhase = 'walking' | 'waiting' | 'struck' | 'hit' | 'dying' | 'lying' | 'sinking' | 'gone';
-export type SkeletonPhase = 'free' | 'rising' | 'striking' | 'walking' | 'vanishing' | 'burrowing';
+export type SkeletonPhase = 'free' | 'rising' | 'taunting' | 'striking' | 'walking' | 'vanishing' | 'collapsing' | 'burrowing';
 
 export interface Victim {
   id: string;
@@ -46,6 +88,8 @@ export interface Victim {
   arrivedAt: number;
   /** Heading to face while struck (towards the first skeleton). */
   facing: number;
+  /** Seconds in `struck` before the first skeleton's blow lands (its rise, taunt and swing). */
+  strikeAt: number;
 }
 
 export interface Skeleton {
@@ -110,12 +154,15 @@ export function skeletonSpawns(victim: Point, n: number, seed: string): Point[] 
 
 /** Seconds a victim spends in a phase before the next one; walking and waiting end on events. */
 const VICTIM_TIMES: Partial<Record<VictimPhase, number>> = {
-  struck: SPAWN_CLIP_TIME + IMPACT_TIME,
   hit: HIT_CLIP_TIME,
   dying: DEATH_CLIP_TIME,
   lying: LIE_TIME,
   sinking: SINK_TIME,
 };
+/** Seconds `v` spends in its current phase, or undefined when it ends on an event. */
+function phaseTime(v: Victim): number | undefined {
+  return v.phase === 'struck' ? v.strikeAt : VICTIM_TIMES[v.phase];
+}
 const NEXT_VICTIM_PHASE: Partial<Record<VictimPhase, VictimPhase>> = {
   struck: 'hit',
   hit: 'dying',
@@ -150,7 +197,7 @@ export class Ambush {
     let slot = 0;
     while (used.has(slot)) slot++;
     const point = killPoint(slot);
-    this.victims.set(id, { id, slot, point, phase: 'walking', t: 0, arrivedAt: 0, facing: 0 });
+    this.victims.set(id, { id, slot, point, phase: 'walking', t: 0, arrivedAt: 0, facing: 0, strikeAt: 0 });
     return point;
   }
 
@@ -176,7 +223,7 @@ export class Ambush {
   step(dt: number): void {
     for (const v of this.victims.values()) {
       v.t += dt;
-      const time = VICTIM_TIMES[v.phase];
+      const time = phaseTime(v);
       const next = NEXT_VICTIM_PHASE[v.phase];
       if (time !== undefined && next && v.t >= time) {
         v.phase = next;
@@ -197,8 +244,10 @@ export class Ambush {
       const n = counts[i];
       if (n === 0) return;
       const spawns = skeletonSpawns(v.point, n, v.id);
+      let first = 0;
       spawns.forEach((p, k) => {
         const s = free.shift()!;
+        if (k === 0) first = s.index;
         s.phase = 'rising';
         s.sortie++;
         s.t = 0;
@@ -211,6 +260,7 @@ export class Ambush {
       v.phase = 'struck';
       v.t = 0;
       v.facing = headingTo(v.point, spawns[0]);
+      v.strikeAt = strikeAt(first);
     });
   }
 
@@ -220,11 +270,14 @@ export class Ambush {
     const v = this.victims.get(s.victim);
     switch (s.phase) {
       case 'rising':
-        if (s.t >= SPAWN_CLIP_TIME) this.go(s, 'striking');
+        if (s.t >= RISE_TIME) this.go(s, 'taunting');
+        break;
+      case 'taunting':
+        if (s.t >= TAUNT_CLIP_TIME) this.go(s, 'striking');
         break;
       case 'striking':
         // Strikes until the body lies still (or its figure is gone), then leaves.
-        if (!v || v.phase === 'lying' || v.phase === 'sinking' || v.phase === 'gone') this.go(s, s.tree ? 'walking' : 'burrowing');
+        if (!v || v.phase === 'lying' || v.phase === 'sinking' || v.phase === 'gone') this.go(s, s.tree ? 'walking' : 'collapsing');
         break;
       case 'walking': {
         const tree = s.tree!;
@@ -244,8 +297,11 @@ export class Ambush {
       case 'vanishing':
         if (s.t >= VANISH_TIME) this.go(s, 'free');
         break;
+      case 'collapsing':
+        if (s.t >= SKELETON_DEATH_CLIP_TIME) this.go(s, 'burrowing');
+        break;
       case 'burrowing':
-        if (s.t >= SPAWN_CLIP_TIME) this.go(s, 'free');
+        if (s.t >= BURROW_TIME) this.go(s, 'free');
         break;
     }
   }
@@ -286,25 +342,32 @@ export function victimSink(v: Pick<Victim, 'phase' | 't'>): number {
   return SINK_DEPTH * Math.min(1, v.t / SINK_TIME);
 }
 
-/** Clip of a skeleton. Going back underground plays its rising clip backwards. */
-export function skeletonClip(s: Pick<Skeleton, 'phase' | 't'>): ClipChoice {
+/**
+ * Clip of a skeleton. It strikes with the attack of its weapon; going back underground, it
+ * collapses into a pile of bones that stays still while it sinks.
+ */
+export function skeletonClip(s: Pick<Skeleton, 'phase' | 'index'>): ClipChoice {
   switch (s.phase) {
     case 'rising':
-      return play('Spawn_Ground', 1, false);
+      return play('Skeletons_Spawn_Ground', RISE_RATE, false);
+    case 'taunting':
+      return play('Skeletons_Taunt', 1, false);
     case 'striking':
-      return play('Use_Item');
+      return play(attackFor(s.index).clip);
     case 'walking':
-      return play('Walking_A', Math.min(SKELETON_SPEED / WALK_CLIP_SPEED, MAX_CLIP_RATE));
+      return play('Skeletons_Walking', Math.min(SKELETON_SPEED / SKELETON_WALK_CLIP_SPEED, MAX_CLIP_RATE));
+    case 'collapsing':
+      return play('Skeletons_Death', 1, false);
     case 'burrowing':
-      return hold('Spawn_Ground', Math.max(0, SPAWN_CLIP_TIME - s.t));
+      return hold('Skeletons_Death', SKELETON_DEATH_CLIP_TIME);
     default:
       return hold('Idle_A');
   }
 }
 
-/** Vertical offset of a skeleton: it sinks while going back underground. */
+/** Vertical offset of a skeleton: its pile of bones sinks while going back underground. */
 export function skeletonDepth(s: Pick<Skeleton, 'phase' | 't'>): number {
-  return s.phase === 'burrowing' ? BURROW_DEPTH * Math.min(1, s.t / SPAWN_CLIP_TIME) : 0;
+  return s.phase === 'burrowing' ? BURROW_DEPTH * Math.min(1, s.t / BURROW_TIME) : 0;
 }
 
 /** Size factor of a skeleton: it shrinks into its tree. */
