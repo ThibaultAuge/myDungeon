@@ -409,13 +409,14 @@ function AgentFigureImpl({ agent, name, color, spot, start, selected, onSelect, 
 
   // A failed command (mishap.ts): soot on the figure and a comic bubble, nothing else.
   const [mishap, setMishap] = useState<{ n: number; kind: MishapKind; bubble: boolean } | null>(null);
+  /** A ref, as for the slaps: a re-run of the effect must never reuse a number `Soot` already armed. */
+  const mishaps = useRef(0);
   useEffect(() => {
     if (exit) return;
-    let n = 0;
     let bubbleTimer: ReturnType<typeof setTimeout> | undefined;
     let sootTimer: ReturnType<typeof setTimeout> | undefined;
     const off = onMishap(agent.id, (kind) => {
-      setMishap({ n: ++n, kind, bubble: true });
+      setMishap({ n: ++mishaps.current, kind, bubble: true });
       clearTimeout(bubbleTimer);
       clearTimeout(sootTimer);
       bubbleTimer = setTimeout(() => setMishap((m) => m && { ...m, bubble: false }), MISHAP_BUBBLE_MS);

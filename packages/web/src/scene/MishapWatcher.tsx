@@ -21,6 +21,8 @@ export function MishapWatcher() {
     // Failures wait for the snapshot that follows them: the event is sent at once while
     // snapshots are throttled, so until then the agent may still be shown in its previous
     // room (or not exist yet, for a subagent whose first hook is the failure).
+    // Accepted limit: the server places the agent by its CURRENT tool, so a parallel tool call
+    // that starts before that snapshot can move it out of the engine room (a missed boiler).
     let pending: HookEventSummary[] = [];
     let settle: ReturnType<typeof setTimeout> | undefined;
     const resolve = () => {
