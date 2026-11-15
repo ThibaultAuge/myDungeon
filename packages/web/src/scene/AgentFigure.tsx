@@ -372,6 +372,8 @@ function AgentFigureImpl({ agent, name, color, spot, start, selected, onSelect, 
   });
   /** Sideways shift of a pacing agent from its place, eased so it never jumps. */
   const paceShift = useRef(0);
+  /** Cobwebs over a sleeper, shown only while the lying pose is (set every frame). */
+  const webs = useRef<Group>(null);
   const paceStart = useMemo(() => paceSeed(agent.id), [agent.id]);
   /** Number of the slap on screen (a new one remounts the effect), null when none is. */
   const [slap, setSlap] = useState<number | null>(null);
@@ -510,6 +512,10 @@ function AgentFigureImpl({ agent, name, color, spot, start, selected, onSelect, 
     if (still || exit) m.potionAt = -1;
     else if (drunk >= 0) m.potionAt = drunk + delta >= POTION_S ? -1 : drunk + delta;
     const gulping = potionPhase(m.potionAt ?? -1) === 'drinking';
+    // The endless wait at the altar; reduced motion keeps a pacing agent in its calm pose.
+    const stage: AltarStage = exit || (still && altarStage === 'pacing') ? 'calm' : altarStage;
+    // A slap or a gulp freezes the pacing where it is (heading and sideways shift).
+    const paceFrozen = stage === 'pacing' && (hitting || gulping);
     // Only while the potion acts, plus one frame to stand straight again: no work when idle.
     if (sway.current && drunk >= 0) {
       const lean = staggerSway(m.potionAt ?? -1);
@@ -553,13 +559,18 @@ function AgentFigureImpl({ agent, name, color, spot, start, selected, onSelect, 
         onArrive(agent.id);
       }
       // The endless wait at the altar: pacing faces the way it walks, sitting turns its back.
-      const stage = exit || (still && altarStage === 'pacing') ? 'calm' : altarStage;
-      const heading = altarHeading(stage, spot.facing, clock.elapsedTime + paceStart);
-      g.rotation.y = turnToward(g.rotation.y, heading, turnFraction(stage === 'pacing' ? WALK_TURN_RATE : REST_TURN_RATE, dt, still));
+      if (!paceFrozen) {
+        const heading = altarHeading(stage, spot.facing, clock.elapsedTime + paceStart);
+        g.rotation.y = turnToward(g.rotation.y, heading, turnFraction(stage === 'pacing' ? WALK_TURN_RATE : REST_TURN_RATE, dt, still));
+      }
     }
     // The endless wait at the altar poses a figure standing at its place (never a doomed one).
     const atPlace = !exit && !spawning && path.current.length === 0;
-    m.altar = atPlace && altarStage !== 'calm' ? (isAsleep(altarStage) ? 'sleeping' : altarStage) : null;
+    m.altar = atPlace && stage !== 'calm' ? (isAsleep(stage) ? 'sleeping' : stage) : null;
+    // Zzz and cobwebs follow the pose actually shown, not the stage: never over a figure that
+    // walks (the queue moves up), or stands up for a slap or a gulp.
+    const asleep = m.altar === 'sleeping' && !hitting && !gulping;
+    if (webs.current) webs.current.visible = asleep;
     m.kneeling = !exit && path.current.length === 0 && !!spot.kneel && m.altar === null;
     m.scripted = doomed && path.current.length === 0 ? victimClip(doomed.phase) : null;
     // Touch the DOM only when walking starts or stops: no React render per frame. The tag
@@ -568,11 +579,13 @@ function AgentFigureImpl({ agent, name, color, spot, start, selected, onSelect, 
     const tag = anchor.current;
     const travelling = m.moving && badge.current?.dataset.destination === destination;
     if (tag && tag.hasAttribute('data-travelling') !== travelling) tag.toggleAttribute('data-travelling', travelling);
+    if (tag && tag.hasAttribute('data-asleep') !== asleep) tag.toggleAttribute('data-asleep', asleep);
     g.position.copy(pos);
     g.position.y = groundY(pos) - (doomed ? victimSink(doomed) : 0);
     // Pacing shifts the drawn figure sideways only, never `pos`: the walk and reroutes ignore it.
-    const paceTarget = m.altar === 'pacing' && !still && !hitting ? paceOffset(clock.elapsedTime + paceStart).offset : 0;
-    paceShift.current = still ? 0 : approach(paceShift.current, paceTarget, dt * PACE_EASE);
+    const paceTarget = m.altar === 'pacing' ? paceOffset(clock.elapsedTime + paceStart).offset : 0;
+    if (still) paceShift.current = 0;
+    else if (!paceFrozen) paceShift.current = approach(paceShift.current, paceTarget, dt * PACE_EASE);
     if (paceShift.current !== 0) {
       const axis = paceAxis(spot.facing);
       g.position.x += axis.x * paceShift.current;
@@ -671,7 +684,11 @@ function AgentFigureImpl({ agent, name, color, spot, start, selected, onSelect, 
         </>
       )}
       {/* Left waiting at the altar for ten minutes: cobwebs grow over the sleeping agent. */}
-      {!exit && altarStage === 'webbed' && <AltarCobwebs />}
+      {!exit && altarStage === 'webbed' && (
+        <group ref={webs} visible={false}>
+          <AltarCobwebs />
+        </group>
+      )}
       {/* Waiting for a prompt: the small amber gem. At the altar, a speech bubble rides on the name tag. */}
       {waiting && !urgent && !exit && (
         <mesh ref={bubble} position={[0, BUBBLE_Y, 0]}>

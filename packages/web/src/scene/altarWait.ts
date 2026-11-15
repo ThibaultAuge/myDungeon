@@ -77,11 +77,15 @@ function notify(): void {
   for (const watcher of [...watchers]) watcher();
 }
 
-/** Forces (or with null, releases) the stage shown by an agent's figure, whatever its wait. */
-export function forceAltarStage(id: string, stage: AltarStage | null): void {
-  if (stage === null ? !forced.delete(id) : forced.get(id) === stage) return;
+/**
+ * Forces (or with null, releases) the stage shown by an agent's figure, whatever its wait.
+ * Returns whether anything changed.
+ */
+export function forceAltarStage(id: string, stage: AltarStage | null): boolean {
+  if (stage === null ? !forced.delete(id) : forced.get(id) === stage) return false;
   if (stage !== null) forced.set(id, stage);
   notify();
+  return true;
 }
 
 /** Releases every forced stage. */
@@ -113,6 +117,9 @@ export function altarForceVersion(): number {
 export function shownAltarStage(agent: Pick<AgentView, 'id' | 'state' | 'waitReason' | 'room' | 'since'>, now: number): AltarStage {
   return forced.get(agent.id) ?? altarStage(agent, now);
 }
+
+/** The French stage names, in order, shown in the console command's help. */
+const FRENCH_STAGE_NAMES = ['calme', 'cent-pas', 'assis', 'endormi', 'toile'] as const;
 
 /** Names accepted by the console command: the French ones of the user, plus the code ids. */
 const STAGE_NAMES: Readonly<Record<string, AltarStage>> = Object.freeze({
@@ -155,37 +162,50 @@ export interface AltarCommandDeps {
  *   none is selected; `autel('endormi', '<agent id>')` on that agent.
  * - `autel()` or `autel(null)` releases the forced stage(s), so the real wait shows again.
  *
+ * Returns true when at least one figure was forced or released, false otherwise (nothing
+ * targeted, bad argument, or a release where nothing was forced), like the other gags'
+ * commands (`docs/commandes-console.md`).
+ *
  * Developer tool: its console messages are not part of the interface, so stay in English.
  */
 export function installAltarCommand(target: object, deps: AltarCommandDeps): () => void {
-  const host = target as { agentOffice?: Record<string, unknown> };
-  const ns = (host.agentOffice ??= {});
-  const command = (stageArg?: unknown, id?: unknown): string[] => {
+  const host = target as { agentOffice?: unknown };
+  // Same guard as the potion command: anything but an object is replaced.
+  if (typeof host.agentOffice !== 'object' || host.agentOffice === null) host.agentOffice = {};
+  const ns = host.agentOffice as Record<string, unknown>;
+  const command = (stageArg?: unknown, id?: unknown): boolean => {
     const stage = parseStageArg(stageArg);
     if (stage === undefined) {
-      deps.log(`autel: unknown stage ${JSON.stringify(stageArg)}; use ${Object.keys(STAGE_NAMES).slice(0, 5).join(', ')} or null`);
-      return [];
+      deps.log(`autel: unknown stage ${JSON.stringify(stageArg)}; use ${FRENCH_STAGE_NAMES.join(', ')} or null`);
+      return false;
     }
     if (id !== undefined && typeof id !== 'string') {
       deps.log('autel: the agent id must be a string');
-      return [];
+      return false;
     }
     if (stage === null && id === undefined) {
       const ids = [...forced.keys()];
       clearForcedAltarStages();
       deps.log(`autel: released ${ids.length} forced stage(s)`);
-      return ids;
+      return ids.length > 0;
     }
     const selected = deps.selected();
     const ids = id !== undefined ? [id] : selected ? [selected] : deps.atAltar();
-    if (ids.length === 0) deps.log('autel: no agent selected and none at the altar; pass an agent id');
-    for (const one of ids) forceAltarStage(one, stage);
-    if (ids.length > 0) deps.log(`autel: ${stage ?? 'released'} on ${ids.join(', ')}`);
-    return ids;
+    if (ids.length === 0) {
+      deps.log('autel: no agent selected and none at the altar; pass an agent id');
+      return false;
+    }
+    // A release counts only where a stage was forced; forcing a stage counts even if it was already.
+    const done = ids.filter((one) => forceAltarStage(one, stage) || stage !== null);
+    deps.log(done.length > 0 ? `autel: ${stage ?? 'released'} on ${done.join(', ')}` : 'autel: nothing to release');
+    return done.length > 0;
   };
   ns.autel = command;
   return () => {
-    if (ns.autel === command) delete ns.autel;
+    if (ns.autel !== command) return;
+    delete ns.autel;
+    // Forced stages are a test of this scene: they do not outlive it.
+    clearForcedAltarStages();
   };
 }
 

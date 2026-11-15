@@ -510,6 +510,16 @@ describe('dictionaries', () => {
   });
 
   /**
+   * Verifies that the altar sleeper's snore text is trimmed and non-empty in every language
+   */
+  it.each(ALL_LANGS)('%s has a trimmed, non-empty altar snore', (lang) => {
+    const v = MESSAGES[lang].altarWait.snore;
+    expect(typeof v).toBe('string');
+    expect(v.trim()).not.toBe('');
+    expect(v).toBe(v.trim());
+  });
+
+  /**
    * Verifies that German and English are actually translated, not French copies
    */
   it.each(['de', 'en'] as const)('%s differs from French for key interface texts', (lang) => {

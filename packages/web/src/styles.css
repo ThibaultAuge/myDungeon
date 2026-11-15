@@ -520,7 +520,9 @@ select,
 }
 
 .agent-tag-anchor[data-travelling] .request-bubble,
-.agent-tag-anchor[data-travelling] .snore {
+.agent-tag-anchor[data-travelling] .snore,
+/* Zzz only while the sleeping pose shows (AgentFigure sets data-asleep every frame). */
+.agent-tag-anchor:not([data-asleep]) .snore {
   visibility: hidden;
 }
 

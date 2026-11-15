@@ -21,5 +21,6 @@ Astuce : les mages portent un grand chapeau qui cache leurs mains. Pour bien voi
 | Commande | Effet | Déclencheur réel |
 |---|---|---|
 | `agentOffice.potion(id?)` | L'agent boit la potion d'oubli : gorgée, titubation, étoiles et bulle « Où suis-je ? » (≈ 4,6 s). | Hook `PreCompact` (compaction du contexte) |
+| `agentOffice.autel(palier?, id?)` | Impose un palier de l'attente interminable à l'autel : `'calme'`, `'cent-pas'`, `'assis'`, `'endormi'` (Zzz) ou `'toile'` (toiles d'araignée). Le palier reste jusqu'à `agentOffice.autel(null, id)` ; `agentOffice.autel()` les retire tous. Sans `id` et sans sélection, vise tous les agents à l'autel. | Attente à l'autel (permission, question, erreur) : 1, 3, 5 et 10 min |
 
 Un nouveau gag qui ajoute une commande la déclare ici, sur une ligne de ce tableau.

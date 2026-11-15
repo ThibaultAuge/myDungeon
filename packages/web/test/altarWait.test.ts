@@ -79,6 +79,23 @@ describe('altarStage', () => {
     expect(altarStage(waiter(waited), NOW)).toBe('calm');
   });
 
+  /** Verifies an infinite wait from a broken timestamp counts as no wait, not as webbed */
+  it.each([Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY])('treats a since of %s as calm', (since) => {
+    expect(altarStage(waiter(0, { since }), NOW)).toBe('calm');
+  });
+
+  /** Verifies the stage only grows as the wait goes on */
+  it('never goes back to an earlier stage as time passes', () => {
+    const agent = waiter(0);
+    let last = 0;
+    for (let t = 0; t <= 15 * 60_000; t += 7_000) {
+      const rank = ALTAR_STAGES.indexOf(altarStage(agent, NOW + t));
+      expect(rank, `at ${t} ms`).toBeGreaterThanOrEqual(last);
+      last = rank;
+    }
+    expect(last).toBe(ALTAR_STAGES.length - 1);
+  });
+
   /** Verifies the asleep stages */
   it('says which stages sleep', () => {
     expect(ALTAR_STAGES.filter(isAsleep)).toEqual(['sleeping', 'webbed']);
@@ -179,6 +196,40 @@ describe('forced stages', () => {
     forceAltarStage('forced-2', 'pacing');
     expect(watcher).toHaveBeenCalledTimes(2);
   });
+
+  /** Verifies switching a forced stage to another one notifies and is shown */
+  it('notifies when a forced stage changes to another stage', () => {
+    const watcher = vi.fn();
+    const off = onAltarForce(watcher);
+    forceAltarStage('forced-4', 'pacing');
+    forceAltarStage('forced-4', 'sleeping');
+    expect(watcher).toHaveBeenCalledTimes(2);
+    expect(shownAltarStage(waiter(0, { id: 'forced-4' }), NOW)).toBe('sleeping');
+    off();
+  });
+
+  /** Verifies a forced stage only applies to its own agent */
+  it('keeps forced stages per agent', () => {
+    forceAltarStage('forced-5', 'webbed');
+    expect(shownAltarStage(waiter(0, { id: 'other' }), NOW)).toBe('calm');
+    expect(shownAltarStage(waiter(200_000, { id: 'other' }), NOW)).toBe('sitting');
+  });
+
+  /** Verifies a watcher that unsubscribes while notified does not stop the others */
+  it('still notifies every watcher when one unsubscribes during the notification', () => {
+    const second = vi.fn();
+    let offFirst = () => {};
+    const first = vi.fn(() => offFirst());
+    offFirst = onAltarForce(first);
+    const offSecond = onAltarForce(second);
+    forceAltarStage('forced-6', 'sitting');
+    expect(first).toHaveBeenCalledTimes(1);
+    expect(second).toHaveBeenCalledTimes(1);
+    forceAltarStage('forced-6', 'pacing');
+    expect(first).toHaveBeenCalledTimes(1);
+    expect(second).toHaveBeenCalledTimes(2);
+    offSecond();
+  });
 });
 
 describe('parseStageArg', () => {
@@ -212,19 +263,20 @@ describe('installAltarCommand', () => {
     const target: { agentOffice?: Record<string, unknown> } = {};
     const log = vi.fn();
     const off = installAltarCommand(target, { selected: () => selected, atAltar: () => atAltar, log });
-    const autel = target.agentOffice!.autel as (stage?: unknown, id?: unknown) => string[];
+    const autel = target.agentOffice!.autel as (stage?: unknown, id?: unknown) => boolean;
     return { target, log, off, autel };
   }
 
   /** Verifies the command targets the given id first, then the selection, then the altar */
   it('picks its targets', () => {
     const { autel } = setup('sel', ['q1', 'q2']);
-    expect(autel('toile', 'given')).toEqual(['given']);
+    expect(autel('toile', 'given')).toBe(true);
     expect(forcedAltarStage('given')).toBe('webbed');
-    expect(autel('assis')).toEqual(['sel']);
+    expect(autel('assis')).toBe(true);
     expect(forcedAltarStage('sel')).toBe('sitting');
     const none = setup(null, ['q1', 'q2']);
-    expect(none.autel('endormi')).toEqual(['q1', 'q2']);
+    expect(none.autel('endormi')).toBe(true);
+    expect(forcedAltarStage('q1')).toBe('sleeping');
     expect(forcedAltarStage('q2')).toBe('sleeping');
   });
 
@@ -235,23 +287,65 @@ describe('installAltarCommand', () => {
     autel(null, 'q1');
     expect(forcedAltarStage('q1')).toBeUndefined();
     expect(forcedAltarStage('q2')).toBe('webbed');
-    expect(autel()).toEqual(['q2']);
+    expect(autel()).toBe(true);
     expect(forcedAltarStage('q2')).toBeUndefined();
   });
 
   /** Verifies bad arguments change nothing and say why */
   it('refuses bad arguments', () => {
     const { autel, log } = setup('sel');
-    expect(autel('dormir')).toEqual([]);
-    expect(autel('toile', 42)).toEqual([]);
+    expect(autel('dormir')).toBe(false);
+    expect(autel('toile', 42)).toBe(false);
     expect(forcedAltarStage('sel')).toBeUndefined();
     expect(log).toHaveBeenCalledTimes(2);
+  });
+
+  /** Verifies the selection is the only target, the agents at the altar untouched */
+  it('forces only the selected agent when one is selected', () => {
+    const { autel } = setup('sel', ['q1']);
+    expect(autel('cent-pas')).toBe(true);
+    expect(forcedAltarStage('sel')).toBe('pacing');
+    expect(forcedAltarStage('q1')).toBeUndefined();
+  });
+
+  /** Verifies a release with no id clears every forced stage, even with a selection */
+  it('releases every forced stage despite a selection', () => {
+    forceAltarStage('elsewhere', 'webbed');
+    const { autel } = setup('sel');
+    autel('assis');
+    expect(autel(null)).toBe(true);
+    expect(forcedAltarStage('sel')).toBeUndefined();
+    expect(forcedAltarStage('elsewhere')).toBeUndefined();
+  });
+
+  /** Verifies releasing when nothing is forced returns false and logs it */
+  it('returns false when there is nothing to release', () => {
+    const { autel, log } = setup('sel', ['q1']);
+    expect(autel()).toBe(false);
+    expect(log).toHaveBeenCalledWith(expect.stringContaining('released 0'));
+  });
+
+  /** Verifies an unknown stage changes nothing even with a valid agent id */
+  it('refuses an unknown stage given with an agent id', () => {
+    const { autel } = setup(null);
+    expect(autel('dormir', 'given')).toBe(false);
+    expect(forcedAltarStage('given')).toBeUndefined();
+  });
+
+  /** Verifies a release by id leaves the other forced agents alone */
+  it('releases one agent by id without touching the selection', () => {
+    const { autel } = setup('sel');
+    autel('toile');
+    forceAltarStage('given', 'sitting');
+    expect(autel(null, 'given')).toBe(true);
+    expect(forcedAltarStage('given')).toBeUndefined();
+    expect(forcedAltarStage('sel')).toBe('webbed');
   });
 
   /** Verifies nothing to target is reported */
   it('reports when no agent is targeted', () => {
     const { autel, log } = setup(null, []);
-    expect(autel('toile')).toEqual([]);
+    expect(autel('toile')).toBe(false);
     expect(log).toHaveBeenCalledWith(expect.stringContaining('no agent'));
   });
 
@@ -273,5 +367,34 @@ describe('installAltarCommand', () => {
     const newer = target.agentOffice!.autel;
     offOld();
     expect(target.agentOffice!.autel).toBe(newer);
+  });
+
+  /** Verifies a release of an agent with nothing forced reports false */
+  it('reports a release where nothing was forced as false', () => {
+    const target: { agentOffice?: Record<string, unknown> } = {};
+    const log = vi.fn();
+    installAltarCommand(target, { selected: () => null, atAltar: () => [], log });
+    const autel = target.agentOffice!.autel as (stage?: unknown, id?: unknown) => boolean;
+    expect(autel(null, 'never-forced')).toBe(false);
+    expect(log).toHaveBeenCalledWith('autel: nothing to release');
+    expect(autel('toile', 'never-forced')).toBe(true);
+    expect(autel('toile', 'never-forced')).toBe(true);
+    expect(autel(null, 'never-forced')).toBe(true);
+  });
+
+  /** Verifies the uninstall releases every forced stage: they never outlive the scene */
+  it('releases the forced stages on uninstall', () => {
+    const target: { agentOffice?: Record<string, unknown> } = {};
+    const off = installAltarCommand(target, { selected: () => null, atAltar: () => [], log: () => {} });
+    forceAltarStage('scene-1', 'webbed');
+    off();
+    expect(forcedAltarStage('scene-1')).toBeUndefined();
+  });
+
+  /** Verifies a non-object namespace is replaced, as the potion command does */
+  it.each([1, 'x', null, true])('replaces a %j namespace with an object', (value) => {
+    const target: { agentOffice?: unknown } = { agentOffice: value };
+    installAltarCommand(target, { selected: () => null, atAltar: () => [], log: () => {} });
+    expect(typeof (target.agentOffice as Record<string, unknown>).autel).toBe('function');
   });
 });
