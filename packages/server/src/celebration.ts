@@ -16,8 +16,12 @@ const LAUNCHERS = new Set(['npx', 'bunx', 'sudo', 'time', 'command', 'env', 'exe
 const SEPARATORS = /&&|\|\||[;|&(){}`\n\r]/;
 /** Linear pattern (no nested quantifier): a test summary that reports failures (vitest, jest, mocha, cargo, pytest, maven). */
 const FAILURE = /\b[1-9]\d* (?:failed|failing)\b|\bFAIL(?:ED)?\b|Tests failed|BUILD FAILURE/;
-/** Start of a heredoc and its delimiter: `<<EOF`, `<<-EOF`, `<<'EOF'`, `<<"EOF"`. */
-const HEREDOC = /<<-?[ \t]*(['"]?)(\w{1,64})\1/;
+/**
+ * Start of a heredoc and its delimiter: `<<EOF`, `<<-EOF`, `<<'END-MSG'`, `<<"EOF"`. Not a
+ * here-string (`<<<`). Known limits (a missed celebration at worst): `<<` inside quotes or in
+ * arithmetic, and a second heredoc on the same line, are not told apart.
+ */
+const HEREDOC = /(?<!<)<<(?!<)-?[ \t]*(['"]?)([^\s'"<>|&;()]{1,64})\1/;
 
 /** Last path component, lower case, without a Windows executable extension. */
 function program(word: string): string {
@@ -49,7 +53,8 @@ function dropHeredocs(command: string): string {
 
 /**
  * Blanks quoted strings (`git commit -m "wip; git push later"`): their separators and words are
- * text. Each quoted string becomes a lone `Q`; an unclosed quote swallows the rest of the line.
+ * text. Each quoted string becomes a lone `Q`. As in the shell, a quote runs to its closing
+ * character across lines (`"$(cat <<'EOF'` … `)"`), or to the end of the command when unclosed.
  */
 function dropQuoted(command: string): string {
   let out = '';

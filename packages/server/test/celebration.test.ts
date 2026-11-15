@@ -162,3 +162,15 @@ describe('more masked failures', () => {
     expect(celebrationsFor(post('git push', { tool_response: { stdout: '', interrupted: true } }))).toEqual([]);
   });
 });
+
+describe('heredoc edge cases', () => {
+  it('does not take a here-string for a heredoc', () => {
+    expect(celebrationsFor(post('jq . <<< "$x"\nnpm test'))).toEqual(['tests']);
+  });
+  it('accepts delimiters with a dash', () => {
+    expect(celebrationsFor(post("git commit -F - <<'END-MSG'\ngit push later\nEND-MSG"))).toEqual(['commit']);
+  });
+  it('lets a quote run across lines', () => {
+    expect(celebrationsFor(post('git commit -m "line one\nnpm test"\ngit push'))).toEqual(['push']);
+  });
+});

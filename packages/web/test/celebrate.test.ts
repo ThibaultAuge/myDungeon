@@ -12,6 +12,7 @@ import {
   LAUNCH_Y,
   ROCKET_ALPHA,
   ROCKET_FADE,
+  ROCKET_RISE,
   ROCKET_TIME,
   SPARKS,
   SPARK_DIRECTIONS,
@@ -808,12 +809,10 @@ describe('rocketAt', () => {
     expect(r).toEqual({ x: BURST.x, y: LAUNCH_Y, z: BURST.z, alpha: 0 });
   });
 
-  /** Verifies that the rocket fades in, holds at ROCKET_ALPHA, then fades out before bursting */
+  /** Verifies that the rocket brightens over its whole climb, peaks, then fades out before bursting */
   it.each([
-    ['half the fade-in', ROCKET_FADE / 2, ROCKET_ALPHA / 2],
-    ['the end of the fade-in', ROCKET_FADE, ROCKET_ALPHA],
-    ['mid flight', ROCKET_TIME / 2, ROCKET_ALPHA],
-    ['the start of the fade-out', ROCKET_TIME - ROCKET_FADE, ROCKET_ALPHA],
+    ['half the rise', ROCKET_RISE / 2, ROCKET_ALPHA / 2],
+    ['the end of the rise', ROCKET_RISE, ROCKET_ALPHA],
     ['half the fade-out', ROCKET_TIME - ROCKET_FADE / 2, ROCKET_ALPHA / 2],
   ] as const)('has the expected brightness at %s', (_label, t, expected) => {
     expect(rocketAt(BURST, BURST.delay + t).alpha).toBeCloseTo(expected, 6);
@@ -823,11 +822,14 @@ describe('rocketAt', () => {
   it('changes brightness smoothly, with no sudden step on or off', () => {
     const step = 0.001;
     const maxStep = (ROCKET_ALPHA * step) / ROCKET_FADE;
+    const maxRise = (ROCKET_ALPHA * step) / ROCKET_RISE;
     let prev = rocketAt(BURST, BURST.delay - 0.05).alpha;
     let peak = 0;
     for (let k = 0; k <= Math.round((ROCKET_TIME + 0.1) / step); k++) {
       const a = rocketAt(BURST, BURST.delay - 0.05 + k * step).alpha;
       expect(Math.abs(a - prev)).toBeLessThanOrEqual(maxStep * 1.01 + 1e-9);
+      // Brightening is always slow (no fast onset): only burst openings count against WCAG 2.3.1.
+      expect(a - prev).toBeLessThanOrEqual(maxRise * 1.01 + 1e-9);
       expect(a).toBeGreaterThanOrEqual(0);
       peak = Math.max(peak, a);
       prev = a;

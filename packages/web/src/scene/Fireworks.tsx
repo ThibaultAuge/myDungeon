@@ -103,15 +103,22 @@ let nextShow = 1;
  */
 export function Fireworks() {
   const [show, setShow] = useState<{ id: number; bursts: Burst[] } | null>(null);
+  const running = useRef(false);
   useEffect(
     () =>
       onCelebrate((kind) => {
         // A show runs to its end: stacking or restarting shows would multiply the bursts per second.
-        if (kind === 'tests') setShow((prev) => prev ?? { id: nextShow++, bursts: fireworkBursts(CX, CZ) });
+        if (kind !== 'tests' || running.current) return;
+        running.current = true;
+        setShow({ id: nextShow++, bursts: fireworkBursts(CX, CZ) });
       }),
     [],
   );
   if (!show) return null;
   const id = show.id;
-  return <Show key={id} bursts={show.bursts} onDone={() => setShow((prev) => (prev?.id === id ? null : prev))} />;
+  const onDone = () => {
+    running.current = false;
+    setShow((prev) => (prev?.id === id ? null : prev));
+  };
+  return <Show key={id} bursts={show.bursts} onDone={onDone} />;
 }

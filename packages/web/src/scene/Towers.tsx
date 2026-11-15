@@ -1,4 +1,4 @@
-import { Suspense, useRef } from 'react';
+import { Suspense, useEffect, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { BoxGeometry, BufferAttribute, CylinderGeometry, Vector3, type BufferGeometry, type Group, type Material } from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
@@ -60,7 +60,7 @@ const anchor = new Vector3();
  */
 export const towerHeights = new Float32Array(TOWERS.length).fill(1);
 
-function TowerMesh({ tower, index, material }: { tower: Tower; index: number; material: Material | Material[] }) {
+function TowerMesh({ tower, index, material }: { tower: Tower; index: number; material: Material }) {
   const group = useRef<Group>(null);
   const prev = useRef(Number.NaN);
   useFrame(({ camera, pointer }, dt) => {
@@ -83,7 +83,11 @@ function TowerMesh({ tower, index, material }: { tower: Tower; index: number; ma
 
 function TowerSet() {
   // The wall's own (shared, never modified) kit material: same texture and shading as the walls.
-  const material = useKitParts('dungeon', 'wall')[0].material;
+  const kit = useKitParts('dungeon', 'wall')[0].material;
+  // The merged geometry has no groups: it needs one material, never an array.
+  const material = Array.isArray(kit) ? kit[0] : kit;
+  // Unmounted (or not loaded yet), the towers stand for the heralds: never a stale lowered height.
+  useEffect(() => () => void towerHeights.fill(1), []);
   return (
     <>
       {TOWERS.map((tower, i) => (

@@ -120,12 +120,18 @@ export const STILL_FADE = 0.5;
 export const STILL_PEAK = 0.6;
 /** A rocket climbs this long before it bursts. */
 export const ROCKET_TIME = 0.6;
-/** A rocket is a dim trail, faded in and out over this long. */
+/**
+ * A rocket is a dim trail that brightens slowly over its whole climb (no fast onset: the only
+ * fast brightenings of a show are the burst openings, ≤ 3 per second), then fades out over
+ * `ROCKET_FADE` as its burst opens.
+ */
 export const ROCKET_ALPHA = 0.5;
 export const ROCKET_FADE = 0.12;
+/** Time a rocket takes to reach full brightness. */
+export const ROCKET_RISE = ROCKET_TIME - ROCKET_FADE;
 /** A burst lives this long after it opens. */
 export const BURST_TIME = 1.6;
-/** A burst brightens over this long instead of flashing on (WCAG 2.3.1: no sudden step). */
+/** A burst brightens over this long rather than in one frame (WCAG 2.3.1 rests on the rate: burst openings ≤ 3 per second). */
 export const SPARK_RAMP = 0.25;
 /** Sparks of one burst. */
 export const SPARKS = 60;
@@ -201,7 +207,7 @@ export function rocketAt(b: Burst, time: number): Spark {
   const k = t / ROCKET_TIME;
   // Fast at first, slowing as it nears the top.
   const up = 1 - (1 - k) ** 2;
-  const fade = Math.min(1, t / ROCKET_FADE, (ROCKET_TIME - t) / ROCKET_FADE);
+  const fade = Math.min(t / ROCKET_RISE, (ROCKET_TIME - t) / ROCKET_FADE);
   return { x: b.x, y: LAUNCH_Y + (b.y - LAUNCH_Y) * up, z: b.z, alpha: ROCKET_ALPHA * fade };
 }
 
