@@ -80,6 +80,10 @@ export const fr = {
     /** Comic word over an agent whose test run failed (the alchemy flask blows up). */
     flask: 'BLOUP !',
   },
+  potion: {
+    /** Dazed words of an agent that just drank the potion of oblivion (context compaction), in a bubble over its head. */
+    bubble: 'Où suis-je ?',
+  },
   info: {
     label: (name: string) => `Informations sur ${name}`,
     slap: 'Baffer',

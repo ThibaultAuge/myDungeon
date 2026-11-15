@@ -14,6 +14,7 @@ import {
   LOOKS,
   MAIN_BODY,
   MAX_CLIP_RATE,
+  POTION_PROP,
   PROP_GRIP,
   RUN_CLIP_SPEED,
   RUN_THRESHOLD,
@@ -324,9 +325,15 @@ describe('PROP_GRIP and gripFor', () => {
     expect([...toolModels].filter((m) => !Object.hasOwn(PROP_GRIP, m))).toEqual([]);
   });
 
-  /** Verifies that every grip belongs to a tools prop actually held in LOOKS (no stale entry) */
-  it('only calibrates tools props that LOOKS uses', () => {
-    expect(Object.keys(PROP_GRIP).filter((m) => !toolModels.has(m))).toEqual([]);
+  /** Verifies that every grip belongs to a tools prop held in LOOKS or to the potion bottle (no stale entry) */
+  it('only calibrates tools props that LOOKS uses, and the potion bottle', () => {
+    expect(Object.keys(PROP_GRIP).filter((m) => !toolModels.has(m) && m !== POTION_PROP.model)).toEqual([]);
+  });
+
+  /** Verifies that the potion bottle, a dungeon shelf model not made to be held, has a calibrated grip */
+  it('has a grip for the potion bottle', () => {
+    expect(POTION_PROP.pack).toBe('dungeon');
+    expect(Object.hasOwn(PROP_GRIP, POTION_PROP.model)).toBe(true);
   });
 
   /** Verifies that every grip has a finite positive scale and finite position and rotation */
@@ -647,6 +654,68 @@ describe('clipFor', () => {
     }
   });
 
+  // ---- potion gulp
+
+  const GULP: ClipChoice = { name: 'Use_Item', loop: false, timeScale: 1, frozen: false, frozenAt: 0 };
+
+  /** Verifies that a drinking still figure plays Use_Item once at normal speed */
+  it('plays Use_Item once at rate 1 while drinking', () => {
+    expect(clip({ drinking: true })).toEqual(GULP);
+  });
+
+  /** Verifies that the gulp wins over walking and running (the walk pauses) */
+  it.each([0, WALK_CLIP_SPEED, RUN_THRESHOLD, RUN_CLIP_SPEED, 100])('lets drinking win over moving at speed %d', (speed) => {
+    expect(clip({ drinking: true, moving: true, speed })).toEqual(GULP);
+  });
+
+  /** Verifies that the gulp wins over kneeling and every agent state */
+  it.each(STATES)('lets drinking win over kneeling in state %s', (state) => {
+    expect(clip({ drinking: true, state })).toEqual(GULP);
+    expect(clip({ drinking: true, kneeling: true, state })).toEqual(GULP);
+  });
+
+  /** Verifies that a slap during the gulp plays the hit clip instead */
+  it.each(HIT_CLIPS)('lets %s win over drinking', (hit) => {
+    expect(clip({ drinking: true, hit })).toEqual({ name: hit, loop: false, timeScale: 1, frozen: false, frozenAt: 0 });
+  });
+
+  /** Verifies that a spawning figure keeps Spawn_Ground even while drinking */
+  it('lets spawning win over drinking', () => {
+    expect(clip({ drinking: true, spawning: true }).name).toBe('Spawn_Ground');
+  });
+
+  /** Verifies that a scripted clip wins over the gulp */
+  it('lets a scripted clip win over drinking', () => {
+    const scripted = play('Death_A', 1, false);
+    expect(clip({ drinking: true, scripted })).toEqual(scripted);
+  });
+
+  /** Verifies that reduced motion ignores drinking and gives the same clip as without it */
+  it('ignores drinking under reduced motion', () => {
+    const variants: Partial<ClipInput>[] = [
+      {},
+      { state: 'working' },
+      { state: 'done' },
+      { moving: true, speed: RUN_CLIP_SPEED },
+      { kneeling: true },
+      { spawning: true },
+      { hit: 'Hit_A' },
+    ];
+    for (const v of variants) {
+      const withDrink = clip({ ...v, drinking: true, reducedMotion: true });
+      expect(withDrink, JSON.stringify(v)).toEqual(clip({ ...v, reducedMotion: true }));
+      expect(withDrink.name, JSON.stringify(v)).not.toBe('Use_Item');
+    }
+  });
+
+  /** Verifies that drinking false or undefined leaves the usual choice unchanged */
+  it('chooses as before when drinking is false or undefined', () => {
+    for (const v of [{}, { state: 'working' as const }, { moving: true, speed: 2 }, { kneeling: true }, { hit: 'Hit_B' as const }]) {
+      expect(clip({ ...v, drinking: false }), JSON.stringify(v)).toEqual(clip(v));
+      expect(clip({ ...v, drinking: undefined }), JSON.stringify(v)).toEqual(clip(v));
+    }
+  });
+
   // ---- invariants over every combination
 
   const SPEEDS = [-1, 0, WALK_CLIP_SPEED, RUN_THRESHOLD - 1e-9, RUN_THRESHOLD, RUN_CLIP_SPEED, 100];
@@ -706,6 +775,17 @@ describe('clipFor', () => {
       const applies = !!input.hit && !input.spawning && !input.reducedMotion;
       expect(c.name === input.hit, JSON.stringify(input)).toBe(applies);
       expect((HIT_CLIPS as readonly string[]).includes(c.name), JSON.stringify(input)).toBe(applies);
+    }
+  });
+
+  /** Verifies that drinking gives the gulp exactly when no spawn, slap or reduced motion applies */
+  it('returns the gulp if and only if drinking applies, the usual clip otherwise', () => {
+    for (const input of ALL) {
+      const at = JSON.stringify(input);
+      const c = clipFor({ ...input, drinking: true });
+      const applies = !input.spawning && !input.hit && !input.reducedMotion;
+      if (applies) expect(c, at).toEqual(play('Use_Item', 1, false));
+      else expect(c, at).toEqual(clipFor(input));
     }
   });
 

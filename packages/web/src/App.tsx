@@ -1,6 +1,7 @@
 import { useEffect, type ReactNode } from 'react';
 import { connect, loadEnvironments, useOffice } from './store.ts';
 import { OfficeScene } from './scene/Office.tsx';
+import { dungeonColor } from './scene/heraldry.ts';
 import { AgentDialog } from './ui/AgentDialog.tsx';
 import { AgentInfo } from './ui/AgentInfo.tsx';
 import { EnvSwitcher } from './ui/EnvSwitcher.tsx';
@@ -122,7 +123,7 @@ function EnvPage({ envId }: { envId: string }) {
         <h1 className="sr-only">{t.office.heading(name || t.env.unknown)}</h1>
         <div className="office__scene">
           <div className="office__canvas" role="img" aria-label={t.office.canvas}>
-            <OfficeScene />
+            <OfficeScene dungeon={env && name ? { name, color: dungeonColor(env.id, env.virtual) } : undefined} />
           </div>
           <Legend />
           <AgentInfo sessions={sessions} />

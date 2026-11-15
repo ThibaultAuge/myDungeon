@@ -197,6 +197,27 @@ export function onMishap(id: string, listener: FigureListener): () => void {
   };
 }
 
+/**
+ * Installs the test commands `agentOffice.boiler(id?)` and `agentOffice.flask(id?)` on `host`
+ * (the window), next to the other gags' commands (docs/commandes-console.md). They play the
+ * mishap on agent `id`, or on the selected agent when no id is given; the room effect plays
+ * either way. Return true when a figure reacted. Kept in production builds on purpose: purely
+ * visual, no request to the server.
+ */
+export function installMishapCommands(selected: () => string | null, host: object): void {
+  const holder = host as { agentOffice?: unknown };
+  // Something else already sits under that name (set by hand in the console): replace it.
+  if (typeof holder.agentOffice !== 'object' || holder.agentOffice === null) holder.agentOffice = {};
+  const commands = holder.agentOffice as Record<string, unknown>;
+  const command = (kind: MishapKind) => (id?: string) => {
+    const target = typeof id === 'string' ? id : selected();
+    triggerMishap(target, kind);
+    return target !== null && hasMishapTarget(target);
+  };
+  commands.boiler = command('boiler');
+  commands.flask = command('flask');
+}
+
 /** Called on every mishap, for the room effects (boiler, flask). Returns the unsubscribe function. */
 export function onRoomMishap(listener: RoomListener): () => void {
   roomListeners.add(listener);

@@ -71,6 +71,9 @@ export const en: Messages = {
     boiler: 'POOF!',
     flask: 'BLOOP!',
   },
+  potion: {
+    bubble: 'Where am I?',
+  },
   info: {
     label: (name: string) => `About ${name}`,
     slap: 'Slap',

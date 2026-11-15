@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import type { AgentView, HookEventSummary, SessionView } from '@agent-office/shared';
 import { useOffice } from '../store.ts';
-import { hasMishapTarget, MISHAP_SETTLE_MS, mishapFor, mishapTarget, triggerMishap, type MishapKind } from './mishap.ts';
+import { MISHAP_SETTLE_MS, mishapFor, mishapTarget, triggerMishap } from './mishap.ts';
 
 function findAgent(sessions: SessionView[], sessionId: string, id: string): AgentView | undefined {
   const s = sessions.find((x) => x.id === sessionId);
@@ -9,33 +9,10 @@ function findAgent(sessions: SessionView[], sessionId: string, id: string): Agen
   return s.main.id === id ? s.main : s.subagents.find((a) => a.id === id);
 }
 
-/** Console command: plays a mishap on an agent (default: the selected one, else the first main agent). */
-function consoleTrigger(kind: MishapKind) {
-  return (id?: string): string | null => {
-    const { selectedAgentId, sessions } = useOffice.getState();
-    const target = id ?? selectedAgentId ?? sessions[0]?.main.id ?? null;
-    triggerMishap(target, kind);
-    return target !== null && hasMishapTarget(target) ? target : null;
-  };
-}
-
-interface GagCommands {
-  [name: string]: unknown;
-  boiler?: (id?: string) => string | null;
-  flask?: (id?: string) => string | null;
-}
-
-declare global {
-  interface Window {
-    /** Test commands of the scene's gags, one key per gag, shared by every gag module. */
-    agentOfficeGags?: GagCommands;
-  }
-}
-
 /**
  * Turns the hook events of the current route into mishaps (a failed command in the engine
- * room, a failed test run), and installs the console test commands
- * `agentOfficeGags.boiler(id?)` and `agentOfficeGags.flask(id?)`. Renders nothing.
+ * room, a failed test run). Renders nothing. The console test commands
+ * (`agentOffice.boiler`, `agentOffice.flask`) are installed by `installMishapCommands`.
  */
 export function MishapWatcher() {
   useEffect(() => {
@@ -78,17 +55,9 @@ export function MishapWatcher() {
       // No snapshot coming (it may have gone out just before the event): decide anyway.
       settle ??= setTimeout(resolve, MISHAP_SETTLE_MS);
     });
-
-    const boiler = consoleTrigger('boiler');
-    const flask = consoleTrigger('flask');
-    window.agentOfficeGags = { ...window.agentOfficeGags, boiler, flask };
     return () => {
       unsubscribe();
       clearTimeout(settle);
-      const gags = window.agentOfficeGags;
-      // Only our own commands: a remount may already have installed new ones.
-      if (gags?.boiler === boiler) delete gags.boiler;
-      if (gags?.flask === flask) delete gags.flask;
     };
   }, []);
   return null;

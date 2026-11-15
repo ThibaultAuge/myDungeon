@@ -6,6 +6,7 @@ import {
   SOOT_HOLD_MS,
   SOOT_MS,
   hasMishapTarget,
+  installMishapCommands,
   isTestCommand,
   mishapFor,
   mishapTarget,
@@ -494,5 +495,65 @@ describe('hasMishapTarget', () => {
   it('is not made true by a room listener', () => {
     subRoom(vi.fn());
     expect(hasMishapTarget(freshId())).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------- installMishapCommands
+
+describe('installMishapCommands', () => {
+  type Commands = { boiler?: (id?: string) => boolean; flask?: (id?: string) => boolean; [key: string]: unknown };
+  type Host = { agentOffice?: Commands | null | string };
+
+  it('creates the agentOffice namespace with boiler and flask, keeping other commands', () => {
+    const potion = () => true;
+    const host: Host = { agentOffice: { potion } };
+    installMishapCommands(() => null, host);
+    const commands = host.agentOffice as Commands;
+    expect(typeof commands.boiler).toBe('function');
+    expect(typeof commands.flask).toBe('function');
+    expect(commands.potion).toBe(potion);
+  });
+
+  it.each([[{}], [{ agentOffice: null }], [{ agentOffice: 'oops' }]] as Host[][])('replaces a missing or non-object namespace %#', (host) => {
+    installMishapCommands(() => null, host);
+    expect(typeof (host.agentOffice as Commands).boiler).toBe('function');
+  });
+
+  it('targets the selected agent without an id and returns true when its figure reacts', () => {
+    const selected = freshId();
+    const figure = vi.fn();
+    const room = vi.fn();
+    sub(selected, figure);
+    subRoom(room);
+    const host: Host = {};
+    installMishapCommands(() => selected, host);
+    expect((host.agentOffice as Commands).flask!()).toBe(true);
+    expect(figure).toHaveBeenCalledWith('flask');
+    expect(room).toHaveBeenCalledWith('flask');
+  });
+
+  it('targets the given id over the selection', () => {
+    const selected = freshId();
+    const other = freshId();
+    const onSelected = vi.fn();
+    const onOther = vi.fn();
+    sub(selected, onSelected);
+    sub(other, onOther);
+    const host: Host = {};
+    installMishapCommands(() => selected, host);
+    expect((host.agentOffice as Commands).boiler!(other)).toBe(true);
+    expect(onOther).toHaveBeenCalledWith('boiler');
+    expect(onSelected).not.toHaveBeenCalled();
+  });
+
+  it('returns false with no selection or no figure, but still plays the room effect', () => {
+    const room = vi.fn();
+    subRoom(room);
+    const host: Host = {};
+    installMishapCommands(() => null, host);
+    const commands = host.agentOffice as Commands;
+    expect(commands.boiler!()).toBe(false);
+    expect(commands.boiler!(freshId('ghost'))).toBe(false);
+    expect(room).toHaveBeenCalledTimes(2);
   });
 });
