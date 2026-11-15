@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import { DECOR_RECIPES } from '../src/scene/decor.ts';
 import { OUTER } from '../src/scene/dungeon.ts';
@@ -24,9 +25,11 @@ import {
   PINE_MODELS,
   ROCK_MODELS,
   SIGN,
+  SIGN_YAW,
   SIGN_CLEARANCE,
   SIGN_WIDTH,
   WATER_Y,
+  alongSign,
   distanceToPath,
   distanceToRect,
   nearModel,
@@ -394,11 +397,10 @@ describe('SIGN and PENNANTS', () => {
    * Verifies that no point of the sign's board lies on the path band
    */
   it('keeps the whole board off the path', () => {
-    // The board's nearest edge to the path is its west end, SIGN.x - SIGN_WIDTH / 2.
-    expect(distanceToPath(SIGN.x - SIGN_WIDTH / 2, SIGN.z, PATH)).toBeGreaterThan(PATH_HALF_WIDTH);
+    // The board is turned by SIGN_YAW: sample its foot from the west end to the east end.
     for (let i = 0; i <= 20; i++) {
-      const x = SIGN.x - SIGN_WIDTH / 2 + (SIGN_WIDTH * i) / 20;
-      expect(distanceToPath(x, SIGN.z, PATH), `x = ${x.toFixed(2)}`).toBeGreaterThan(PATH_HALF_WIDTH);
+      const p = alongSign(-1 + i / 10);
+      expect(distanceToPath(p.x, p.z, PATH), `t = ${(-1 + i / 10).toFixed(1)}`).toBeGreaterThan(PATH_HALF_WIDTH);
     }
   });
 
@@ -409,7 +411,9 @@ describe('SIGN and PENNANTS', () => {
     expect(SIGN.z).toBeGreaterThan(MOAT.z1);
     expect(distanceToRect(SIGN.x, SIGN.z, MOAT)).toBeGreaterThan(0);
     expect(distanceToRect(SIGN.x, SIGN.z, BRIDGE)).toBeGreaterThan(0);
-    expect(SIGN.x - SIGN_WIDTH / 2).toBeGreaterThan(PATH[0].x);
+    expect(alongSign(-1).x).toBeGreaterThan(PATH[0].x);
+    // Both ends of the turned board stay on dry ground too.
+    for (const t of [-1, 1]) expect(alongSign(t).z).toBeGreaterThan(MOAT.z1);
   });
 
   /**
@@ -860,5 +864,32 @@ describe('scatterUndergrowth', () => {
     expect(UNDERGROWTH.some((u) => u.z > MOAT.z1)).toBe(true);
     expect(UNDERGROWTH.some((u) => u.x < OUTER.x0)).toBe(true);
     expect(UNDERGROWTH.some((u) => u.x > OUTER.x1)).toBe(true);
+  });
+});
+
+describe('alongSign', () => {
+  /**
+   * Verifies that the board foot spans SIGN_WIDTH around the sign, turned south-west by SIGN_YAW
+   */
+  it('spans the board width around the sign, turned by SIGN_YAW towards the path', () => {
+    const west = alongSign(-1);
+    const east = alongSign(1);
+    expect(Math.hypot(east.x - west.x, east.z - west.z)).toBeCloseTo(SIGN_WIDTH, 6);
+    expect(alongSign(0)).toEqual(SIGN);
+    // Face turned south-west: the west end comes closer to the castle than the east end.
+    expect(SIGN_YAW).toBeLessThan(0);
+    expect(west.z).toBeLessThan(east.z);
+    // The board's whole length stays inside the tree clearance (true whatever the yaw).
+    for (const p of [west, east]) expect(Math.hypot(p.x - SIGN.x, p.z - SIGN.z)).toBeLessThan(SIGN_CLEARANCE);
+  });
+
+  /**
+   * Verifies that alongSign follows three.js's own Y rotation, the one DungeonSign renders with
+   */
+  it('matches the rotation three.js applies to the board', () => {
+    const end = new Vector3(SIGN_WIDTH / 2, 0, 0).applyAxisAngle(new Vector3(0, 1, 0), SIGN_YAW);
+    const p = alongSign(1);
+    expect(p.x).toBeCloseTo(SIGN.x + end.x, 9);
+    expect(p.z).toBeCloseTo(SIGN.z + end.z, 9);
   });
 });

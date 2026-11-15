@@ -49,9 +49,16 @@ description: Use when changing the night environment around the castle — fores
   `Forest` only when `dungeon.name` is set; `App.tsx` `EnvPage` passes
   `{ name: envName(env, t), color: dungeonColor(env.id, env.virtual) }`, nothing when the
   env is unknown. Placed at `SIGN` (east of the path just past the drawbridge,
-  z = `BRIDGE.z1` + 1.8), board 5.6 × 1.7 m (`SIGN_WIDTH`) on two posts, whole sign leaning
+  z = `BRIDGE.z1` + 2.4), board 5.6 × 1.7 m (`SIGN_WIDTH`) on two posts, whole sign leaning
   back (−0.5 rad) toward the overhead camera; a 3.2 m board was unreadable from the default
-  camera (~50 m). The +z face of the board's `BoxGeometry` (material array) carries a
+  camera (~50 m). The board is turned by `SIGN_YAW` (−0.25 rad) so its face looks slightly
+  south-west toward the path instead of parallel to the castle wall (user decision: only
+  slightly; −0.4 looked too strong from the camera). `DungeonSign` nests an outer group
+  rotated `[0, SIGN_YAW, 0]` and an inner one `[LEAN, 0, 0]`, so the lean happens in the
+  board's own frame; a single Euler `[LEAN, SIGN_YAW, 0]` (XYZ order) would lean around world
+  X. Reuse the pure `alongSign(t)` (t = −1 west end … 1 east end) for any point along the
+  turned board's foot instead of recomputing the rotation; `forest.test.ts` checks it against
+  three.js `applyAxisAngle`. `SIGN_CLEARANCE` still covers the turned board. The +z face of the board's `BoxGeometry` (material array) carries a
   `CanvasTexture`: wood planks, bands in the dungeon colour, the name in serif sized by
   `fitLabel`. A small flag on the left post, plus two `Pennant`s (pole, crossbar,
   swallowtail cloth, 5 m) at `PENNANTS`, either side of the bridge landing
@@ -80,7 +87,7 @@ description: Use when changing the night environment around the castle — fores
   `NIGHT_SKY`, `Rect`, `MOAT`, `BRIDGE`, `distanceToRect`, `PATH_HALF_WIDTH`, `pathPoints`,
   `distanceToPath`, `Tree`, `TreeKind`, the clearance / limit constants, `treeAllowed`,
   `scatterTrees`, the KayKit model lists, `FOREST_MATERIAL_SOURCE`, `KAYKIT_TREE_SCALE`,
-  `nearModel`, `Undergrowth`, `scatterUndergrowth`, `SIGN_WIDTH`, `SIGN`, `PENNANTS`.
+  `nearModel`, `Undergrowth`, `scatterUndergrowth`, `SIGN_WIDTH`, `SIGN`, `SIGN_YAW`, `alongSign`, `PENNANTS`.
 - `packages/web/src/scene/heraldry.ts` — pure: `DUNGEON_PALETTE`, `VIRTUAL_COLOR`, `fnv1a`,
   `dungeonColor`, `fitLabel`.
 - `packages/web/src/scene/DungeonSign.tsx` — memoised `DungeonSign({ name, color })`,

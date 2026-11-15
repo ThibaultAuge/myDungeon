@@ -121,10 +121,22 @@ export const SIGN_WIDTH = 5.6;
 
 /**
  * The wooden sign bearing the dungeon's name, beside the path just past the drawbridge, east
- * of it so it never stands in the way of the figures walking in. It faces +z, the default
- * camera.
+ * of it so it never stands in the way of the figures walking in. It faces roughly +z, the
+ * default camera, turned towards the path by SIGN_YAW.
  */
-export const SIGN: Point = { x: (GATE.lo + GATE.hi) / 2 + PATH_HALF_WIDTH + 0.4 + SIGN_WIDTH / 2, z: BRIDGE.z1 + 1.8 };
+export const SIGN: Point = { x: (GATE.lo + GATE.hi) / 2 + PATH_HALF_WIDTH + 0.4 + SIGN_WIDTH / 2, z: BRIDGE.z1 + 2.4 };
+
+/**
+ * Turn of the sign around the vertical axis: its face looks south-west, presented to the
+ * path rather than parallel to the castle wall.
+ */
+export const SIGN_YAW = -0.25;
+
+/** A point along the board's foot, from its west end (t = -1) to its east end (t = 1). */
+export function alongSign(t: number): Point {
+  const h = (t * SIGN_WIDTH) / 2;
+  return { x: SIGN.x + h * Math.cos(SIGN_YAW), z: SIGN.z - h * Math.sin(SIGN_YAW) };
+}
 
 /** The two dungeon-coloured pennants framing the landing of the drawbridge, on firm ground. */
 export const PENNANTS: Point[] = [

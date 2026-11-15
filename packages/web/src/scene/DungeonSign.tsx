@@ -1,6 +1,6 @@
 import { memo, useEffect, useMemo } from 'react';
 import { BoxGeometry, CanvasTexture, CylinderGeometry, DoubleSide, MeshStandardMaterial, Shape, ShapeGeometry, SRGBColorSpace } from 'three';
-import { GROUND_Y, PENNANTS, SIGN, SIGN_WIDTH } from './forest.ts';
+import { GROUND_Y, PENNANTS, SIGN, SIGN_WIDTH, SIGN_YAW } from './forest.ts';
 import { fitLabel } from './heraldry.ts';
 
 // The dungeon's name on a wooden sign past the drawbridge, and its colour on two pennants
@@ -140,7 +140,9 @@ export const DungeonSign = memo(function DungeonSign({ name, color }: { name: st
   const postH = 3.4;
   return (
     <group name="dungeon-sign">
-      <group position={[SIGN.x, GROUND_Y, SIGN.z]} rotation={[LEAN, 0, 0]}>
+      {/* Turned towards the path first, then leant back in its own frame. */}
+      <group position={[SIGN.x, GROUND_Y, SIGN.z]} rotation={[0, SIGN_YAW, 0]}>
+      <group rotation={[LEAN, 0, 0]}>
         {[-postX, postX].map((x) => (
           <mesh key={x} geometry={UNIT_BOX} material={DARK_WOOD} position={[x, postH / 2 - 0.4, -0.1]} scale={[0.22, postH, 0.22]} castShadow raycast={noRaycast} />
         ))}
@@ -148,6 +150,7 @@ export const DungeonSign = memo(function DungeonSign({ name, color }: { name: st
         {/* A small flag of the dungeon's colour on top of the left post. */}
         <mesh geometry={UNIT_BOX} material={DARK_WOOD} position={[-postX, postH - 0.4 + 0.5, -0.1]} scale={[0.07, 1, 0.07]} raycast={noRaycast} />
         <mesh geometry={FLAG} material={cloth} position={[-postX + 0.33, postH - 0.4 + 0.95, -0.08]} raycast={noRaycast} />
+      </group>
       </group>
       {PENNANTS.map((p) => (
         <Pennant key={p.x} x={p.x} z={p.z} cloth={cloth} />
