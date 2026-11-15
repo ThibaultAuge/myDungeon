@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it, vi } from 'vitest';
 import { DEFAULT_LANG, LANGS, MESSAGES, STORAGE_KEY, detectLang, initialLang, isLang, saveLang, type Lang } from '../src/i18n/index.ts';
 import { plural } from '../src/i18n/plural.ts';
+import { LOOKS } from '../src/scene/characters.ts';
 import { POST_IDS } from '../src/scene/layout.ts';
 
 const ALL_LANGS: Lang[] = ['fr', 'de', 'en'];
@@ -399,6 +400,65 @@ describe('dictionaries', () => {
   it.each(['de', 'en'] as const)('%s translates the postCard labels', (lang) => {
     expect(MESSAGES[lang].postCard.who).not.toBe(MESSAGES.fr.postCard.who);
     expect(MESSAGES[lang].postCard.close).not.toBe(MESSAGES.fr.postCard.close);
+  });
+
+  /**
+   * Verifies that every agent type with a look has exactly one role per language
+   */
+  it.each(ALL_LANGS)('%s has a role for every LOOKS type and no other', (lang) => {
+    const roles = MESSAGES[lang].agentRoles as Record<string, unknown>;
+    const types = Object.keys(LOOKS);
+    expect(types.length).toBeGreaterThan(0);
+    expect(Object.keys(roles).sort()).toEqual([...types].sort());
+  });
+
+  /**
+   * Verifies that each agent role is a trimmed, non-empty string
+   */
+  it.each(ALL_LANGS)('%s agent roles are trimmed non-empty strings', (lang) => {
+    const roles = MESSAGES[lang].agentRoles as Record<string, unknown>;
+    for (const type of Object.keys(LOOKS)) {
+      const v = roles[type];
+      expect(typeof v, type).toBe('string');
+      expect((v as string).trim(), type).not.toBe('');
+      expect(v, `${type} has stray whitespace`).toBe((v as string).trim());
+    }
+  });
+
+  /**
+   * Verifies that agent role keys are lower case, as the role lookup lower-cases the type
+   */
+  it.each(ALL_LANGS)('%s keys agent roles in lower case only', (lang) => {
+    const keys = Object.keys(MESSAGES[lang].agentRoles);
+    expect(keys.filter((k) => k !== k.toLowerCase())).toEqual([]);
+  });
+
+  /**
+   * Verifies that the roster and introduction card labels are trimmed and non-empty
+   */
+  it.each(ALL_LANGS)('%s has non-empty roster and restCard labels', (lang) => {
+    const t = MESSAGES[lang];
+    for (const [name, v] of [
+      ['roster.title', t.roster.title],
+      ['restCard.kind', t.restCard.kind],
+      ['restCard.close', t.restCard.close],
+      ['restCard.unknownRole', t.restCard.unknownRole],
+    ] as const) {
+      expect(typeof v, name).toBe('string');
+      expect(v.trim(), name).not.toBe('');
+      expect(v, name).toBe(v.trim());
+    }
+  });
+
+  /**
+   * Verifies that the introduction card texts are translated, not French copies
+   */
+  it.each(['de', 'en'] as const)('%s translates the roster, restCard and agent roles', (lang) => {
+    const t = MESSAGES[lang];
+    expect(t.roster.title).not.toBe(MESSAGES.fr.roster.title);
+    expect(t.restCard.close).not.toBe(MESSAGES.fr.restCard.close);
+    expect(t.restCard.unknownRole).not.toBe(MESSAGES.fr.restCard.unknownRole);
+    expect(t.agentRoles.oracle).not.toBe(MESSAGES.fr.agentRoles.oracle);
   });
 
   /**

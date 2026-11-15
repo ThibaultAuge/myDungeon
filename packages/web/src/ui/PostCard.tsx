@@ -25,8 +25,11 @@ export function PostCard() {
     const onKey = (e: KeyboardEvent) => {
       // Leave an Escape that another widget or an input method already handled.
       if (e.key !== 'Escape' || e.defaultPrevented || e.isComposing) return;
+      // Focus in a resting agent's card: that one closes first.
+      if (document.querySelector('.rest-card')?.contains(document.activeElement)) return;
       // Focus moves only if it was in the card; otherwise it stays where the user left it.
-      const inCard = document.querySelector('.post-card')?.contains(document.activeElement);
+      // The resting agent's card shares the `.post-card` look: excluded.
+      const inCard = document.querySelector('.post-card:not(.rest-card)')?.contains(document.activeElement);
       // One Escape closes one thing: the agent dialog (on window) keeps its own for the next press.
       e.preventDefault();
       selectPost(null);
