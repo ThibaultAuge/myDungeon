@@ -5,6 +5,7 @@ import type { HookEventSummary } from '@agent-office/shared';
 import { reducedMotion } from '../motion.ts';
 import { useOffice } from '../store.ts';
 import { agentPositions } from './AgentFigure.tsx';
+import { gagCommands } from './gagCommands.ts';
 import { Kit } from './KitInstances.tsx';
 import { ROOM_BY_ID } from './layout.ts';
 import {
@@ -122,9 +123,7 @@ export function PigeonFlights() {
 
   // Test command, kept on purpose: `agentOffice.pigeon('dropping')` in the browser console.
   useEffect(() => {
-    const w = window as unknown as { agentOffice?: unknown };
-    if (typeof w.agentOffice !== 'object' || w.agentOffice === null) w.agentOffice = {};
-    const ns = w.agentOffice as Record<string, unknown>;
+    const ns = gagCommands(window);
     // Same contract as the other gags' commands (docs/commandes-console.md): true when a pigeon left.
     const command = (issue: PigeonOutcome = 'back', agentId?: string): boolean => {
       if (!isPigeonOutcome(issue)) return false;

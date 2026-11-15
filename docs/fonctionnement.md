@@ -39,6 +39,8 @@ L'événement `PreCompact` (compactage du contexte, manuel avec `/compact` ou au
 
 Les gags de la chaudière et de la fiole se déclenchent dans le navigateur, à partir de `PostToolUseFailure`, déjà installé avec les autres. Le navigateur n'envoie rien en retour : le gag ne fait que lire l'événement diffusé. Le détail est dans [La chaudière et la fiole](utilisation.md#la-chaudière-et-la-fiole).
 
+Les gags du héraut et du feu d'artifice reposent sur `PostToolUse`, déjà installé avec les autres, et seulement sur les outils réussis. Le serveur classe la commande `Bash` ou `PowerShell` : il reconnaît un `git commit`, un `git push` ou une suite de tests, et n'envoie à la page que le type de célébration (`commit`, `push` ou `tests`). Ni la commande ni la sortie ne partent vers le navigateur. Pour classer, le serveur lit au plus les 4 premiers Ko de la commande et les 64 derniers Ko de la sortie. Les textes entre guillemets et les corps de heredoc, comme le message d'un commit, sont ignorés. Le détail est dans [Le héraut des tours d'angle](utilisation.md#le-héraut-des-tours-dangle) et [Le feu d'artifice](utilisation.md#le-feu-dartifice).
+
 Les hooks sont des commandes **asynchrones** : ils ne ralentissent jamais Claude. Le relais transmet l'événement au serveur, **ignore sa réponse**, n'affiche rien et se termine toujours sans erreur. Le serveur ne peut donc jamais influencer Claude : il observe seulement. Si le serveur est arrêté, rien ne change pour Claude.
 
 - `npm run hooks:install -- --rotate` régénère le jeton.

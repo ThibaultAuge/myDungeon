@@ -2,6 +2,7 @@
 // looks (paces, sits down, falls asleep, gathers cobwebs). A purely visual gag: nothing is
 // sent to the server. Pure module, no three.js, testable in node.
 import type { AgentView } from '@agent-office/shared';
+import { gagCommands } from './gagCommands.ts';
 
 /** How far an agent waiting at the altar has given up, from fresh to buried in cobwebs. */
 export type AltarStage = 'calm' | 'pacing' | 'sitting' | 'sleeping' | 'webbed';
@@ -169,10 +170,7 @@ export interface AltarCommandDeps {
  * Developer tool: its console messages are not part of the interface, so stay in English.
  */
 export function installAltarCommand(target: object, deps: AltarCommandDeps): () => void {
-  const host = target as { agentOffice?: unknown };
-  // Same guard as the potion command: anything but an object is replaced.
-  if (typeof host.agentOffice !== 'object' || host.agentOffice === null) host.agentOffice = {};
-  const ns = host.agentOffice as Record<string, unknown>;
+  const ns = gagCommands(target);
   const command = (stageArg?: unknown, id?: unknown): boolean => {
     const stage = parseStageArg(stageArg);
     if (stage === undefined) {

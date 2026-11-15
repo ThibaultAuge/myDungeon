@@ -591,3 +591,53 @@ export const CUT_CURVE = 0.3;
 export function inForeground(cursorX: number, cursorY: number, x: number, y: number): boolean {
   return y < cursorY - CUT_CURVE * (x - cursorX) ** 2;
 }
+
+/** How fast a tall piece goes down or up (per second, as a share of the remaining way). */
+export const CUT_SPEED = 10;
+
+/**
+ * Next height of a piece lowered by the cutaway, from 0 (sunk) to 1 (standing): eases toward
+ * `target`, snaps when close. NaN (first frame) jumps straight to the target, and so does
+ * reduced motion.
+ */
+export function cutHeight(prev: number, target: number, dt: number, reduced: boolean): number {
+  if (Number.isNaN(prev)) return target;
+  const k = reduced ? 1 : Math.min(1, dt * CUT_SPEED);
+  const h = prev + (target - prev) * k;
+  return Math.abs(target - h) < 0.002 ? target : h;
+}
+
+/** Radius of a corner tower: small, a herald stands on it. */
+export const TOWER_R = 0.8;
+/** The tower centre sits this far outside the map corner, so its inner part stays inside the walls. */
+export const TOWER_OFFSET = 0.2;
+/** Height of the tower top (where the herald stands); the walls are 3 m high. */
+export const TOWER_H = 3.8;
+/** The shaft goes down below the ground, so a south tower rises out of the moat. */
+export const TOWER_BASE = -1.2;
+
+export interface Tower {
+  x: number;
+  z: number;
+  /** Cutaway anchor: the map corner pillar's, so tower and pillar go down together. */
+  ax: number;
+  az: number;
+  /** Heading (rotation around Y) of a figure on the tower looking into the castle courtyard. */
+  facing: number;
+}
+
+/** The four little towers at the corners of the castle, where the herald sounds his trumpet. */
+export const TOWERS: readonly Tower[] = (['n', 's'] as Side[]).flatMap((zs) =>
+  (['w', 'e'] as Side[]).map((xs) => {
+    const dx = xs === 'w' ? -1 : 1;
+    const dz = zs === 'n' ? -1 : 1;
+    return Object.freeze({
+      x: (xs === 'w' ? OUTER.x0 : OUTER.x1) + dx * TOWER_OFFSET,
+      z: (zs === 'n' ? OUTER.z0 : OUTER.z1) + dz * TOWER_OFFSET,
+      ax: PERIMETER_LINE[xs],
+      az: PERIMETER_LINE[zs],
+      // KayKit characters face +Z at rotation 0. Facing inward, the north heralds face the default view.
+      facing: Math.atan2(-dx, -dz),
+    });
+  }),
+);

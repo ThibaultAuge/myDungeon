@@ -2,7 +2,7 @@ import { useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { Matrix4, Vector3, type InstancedMesh } from 'three';
 import { reducedMotion } from '../motion.ts';
-import { corridorFloor, foundation, inForeground, KIT_SCALE, OUTER, roomFloor, tallModel, wallLayout, type CutItem, type Placement } from './dungeon.ts';
+import { corridorFloor, cutHeight, foundation, inForeground, KIT_SCALE, OUTER, roomFloor, tallModel, wallLayout, type CutItem, type Placement } from './dungeon.ts';
 import { useKitParts, type Pack } from './kit.ts';
 import { itemMatrix, KitInstances } from './KitInstances.tsx';
 import { ROOMS } from './layout.ts';
@@ -40,9 +40,6 @@ export function Floors() {
   );
 }
 
-/** How fast a wall goes down or up (per second, as a share of the remaining way). */
-const WALL_SPEED = 10;
-
 const anchor = new Vector3();
 const m = new Matrix4();
 const mp = new Matrix4();
@@ -60,15 +57,14 @@ function CutawayKit({ model, items }: { model: string; items: CutItem[] }) {
   const height = useMemo(() => new Float32Array(items.length).fill(Number.NaN), [items]);
 
   useFrame(({ camera, pointer }, dt) => {
-    const k = reducedMotion() ? 1 : Math.min(1, dt * WALL_SPEED);
+    const still = reducedMotion();
     let changed = false;
     for (let i = 0; i < items.length; i++) {
       const it = items[i];
       anchor.set(it.ax, 0, it.az).project(camera);
       const target = inForeground(pointer.x, pointer.y, anchor.x, anchor.y) ? 0 : 1;
       const prev = height[i];
-      let h = Number.isNaN(prev) ? target : prev + (target - prev) * k;
-      if (Math.abs(target - h) < 0.002) h = target;
+      const h = cutHeight(prev, target, dt, still);
       if (h === prev) continue;
       height[i] = h;
       changed = true;

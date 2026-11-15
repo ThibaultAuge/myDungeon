@@ -3,6 +3,7 @@
 // like the slap: nothing is sent to the server and the agent's work is not touched.
 // Pure module, no three.js, testable in node.
 import type { HookEventSummary, SessionView } from '@agent-office/shared';
+import { gagCommands } from './gagCommands.ts';
 import { USE_ITEM_CLIP_TIME } from './characters.ts';
 
 /** The hook that makes an agent drink. */
@@ -98,11 +99,7 @@ export function onPotion(id: string, listener: Listener): () => void {
   };
 }
 
-/** The console namespace shared by the gags' test commands, created by the first one. */
-export interface GagCommands {
-  [name: string]: unknown;
-  potion?: (id?: string) => boolean;
-}
+export type { GagCommands } from './gagCommands.ts';
 
 /**
  * Installs the test command `agentOffice.potion(id?)` on `host` (the window): it makes the agent
@@ -110,10 +107,7 @@ export interface GagCommands {
  * Kept in production builds on purpose: purely visual, no request to the server.
  */
 export function installPotionCommand(selected: () => string | null, host: object): void {
-  const holder = host as { agentOffice?: unknown };
-  // Something else already sits under that name (set by hand in the console): replace it.
-  if (typeof holder.agentOffice !== 'object' || holder.agentOffice === null) holder.agentOffice = {};
-  const commands = holder.agentOffice as GagCommands;
+  const commands = gagCommands(host);
   commands.potion = (id?: string) => {
     const target = typeof id === 'string' ? id : selected();
     return target !== null && drinkPotion(target);

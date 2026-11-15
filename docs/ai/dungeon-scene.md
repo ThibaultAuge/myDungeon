@@ -1,5 +1,5 @@
 ---
-description: Use when changing the 3D dungeon map — rooms, floors, walls, castle gate, cutaway, props, lighting, KayKit models or their import — clickable workstations (posts, hover glow, post card and list), pointer/cursor handling of 3D targets, agent figures (walking motion, character models, role looks and held props, animations, destination badge, agent slap gag, potion of oblivion gag on PreCompact, boiler/flask mishap gag on tool failures), room or post icons, or when previewing the web scene.
+description: Use when changing the 3D dungeon map — rooms, floors, walls, castle gate, cutaway, props, lighting, KayKit models or their import — workstations (posts, hover glow, post card and list), pointer handling of 3D targets, agent figures (walking, models, role looks, held props, clips, destination badge), the slap, potion and mishap gags, the agentOffice console namespace, room or post icons, or when previewing the web scene.
 ---
 
 # 3D dungeon scene (KayKit assets)
@@ -53,7 +53,11 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cast
 - Cutaway (user-designed rule): each tall wall piece, with the torch/banner sharing its
   anchor, sinks when its anchor projects below an upside-down parabola through the mouse
   cursor (`inForeground`, NDC, `CUT_CURVE = 0.3`). Low barrier walls always stand. The
-  pointer starts at screen centre and keeps its last position.
+  pointer starts at screen centre and keeps its last position. Sinking height steps through
+  the pure `cutHeight(prev, target, dt, reduced)` (`dungeon.ts`, `CUT_SPEED` 10), shared by
+  `CutawayKit` (`Structure.tsx`) and the corner towers.
+- Corner towers (four, outside the `OUTER` corners, celebration heralds stand on them):
+  `docs/ai/celebrations.md`.
 - Lighting: Canvas shadows, drei `SoftShadows`, `NeutralToneMapping`, one shadow-casting
   sun. Floors and small shapes/models (< 0.3 m, or scale < 0.6) cast no shadow.
 - Rooms have no title signs (removed at the user's request).
@@ -271,10 +275,12 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cast
     `styles.css`. `aria-hidden`, decorative (accessibility audit accepted, like the slap).
   - Test command: `installPotionCommand(selected, window)`, called in `store.ts`, installs
     `window.agentOffice.potion(id?)` (selected agent when no id; returns true if a figure
-    reacted). Kept in production builds on purpose (visual only, no network). The
-    `window.agentOffice` namespace (`GagCommands`) is shared with the other gags' test
-    commands: each installs its own key; a non-object value is replaced. Rest figure ids
-    are lower case (`rest:hermione`).
+    reacted). Kept in production builds on purpose (visual only, no network). Rest figure
+    ids are lower case (`rest:hermione`).
+- Console namespace: `gagCommands(window)` (`gagCommands.ts`, pure, type `GagCommands`)
+  returns the shared `window.agentOffice` record, creating it or replacing a non-object
+  value; used by `potion.ts`, `mishap.ts`, `altarWait.ts`, `celebrate.ts` and
+  `Pigeons.tsx`, each adding its own key.
 - Mishap gag, boiler and flask (user request: purely visual, client-only, no server or
   shared change): a failed tool call blows up a room prop and covers the agent in soot.
   - Trigger: the store's `events` list (`HookEventSummary`, already broadcast), only
@@ -328,8 +334,10 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cast
   `foundation`, `OUTER`, `PERIMETER_T`, `BOUND_LINE`, `PERIMETER_LINE`, `PERIMETER_INNER`,
   `PERIMETER_PILLAR_EXTRA`, `perimeterSides`, `WallRun`, `wallRuns`, `edgeRuns`,
   `sharedSides`, `wallLayout`, `GATE_JAMB`, `GATE_H`, `WALL_T`, `WALL_INSET`, `CUT_CURVE`,
-  `inForeground`.
-- `packages/web/src/scene/Structure.tsx` — `Floors` (instanced) and `Walls`.
+  `inForeground`, `CUT_SPEED`, `cutHeight` (towers: `docs/ai/celebrations.md`).
+- `packages/web/src/scene/Structure.tsx` — `Floors` (instanced), `Walls`, `CutawayKit`.
+- `packages/web/src/scene/gagCommands.ts` — shared `agentOffice` console namespace
+  (`packages/web/test/gagCommands.test.ts`).
 - `packages/web/src/scene/KitInstances.tsx` — `<KitInstances>` (one InstancedMesh per model
   part, for repeated pieces; optional `material` override and `receiveShadow`) and `<Kit>`
   (single model, for furniture).
@@ -425,9 +433,11 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cast
   new per-figure bubble rather than adding another drei `<Html>`.
 - New gag fields on `Motion` must be optional (absent = inactive), like `potionAt` /
   `potionId`: several sibling gags edit the same interface, and the skeletons' `Motion`
-  literal must stay untouched. A gag's console test command adds its own key under
-  `window.agentOffice` (see `installPotionCommand`), never replaces the namespace object,
-  and gets a row in the human list `docs/commandes-console.md` (owned by `otis`).
+  literal must stay untouched. A gag's console test command adds its own key on the record
+  returned by `gagCommands(window)`, never replaces the namespace object, and gets a row in
+  the human list `docs/commandes-console.md` (owned by `otis`).
+- Scene-wide reactions to hooks (heralds, fireworks) are classified server-side:
+  `docs/ai/celebrations.md`.
 - Endless wait at the altar (pacing, sitting, Zzz, cobwebs, `agentOffice.autel`):
   `docs/ai/altar-wait.md`.
 - Potion verification: build web, run a second server (port 4779, `AGENT_OFFICE_TOKEN`
@@ -522,7 +532,8 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cast
 - Tests must not import `kit.ts` or any `.tsx` file (drei / `import.meta.env`); test
   `dungeon.ts`, `layout.ts`, `walk.ts`, `characters.ts`, `slap.ts`, `slapSwing.ts`,
   `destinations.ts`, `forest.ts`, `outside.ts`, `stage.ts`, `ambush.ts`, `tavern.ts`,
-  `decor.ts`, `merge.ts`, `potion.ts`, `mishap.ts`, `altarWait.ts`, `pigeon.ts` and the manifest JSON.
+  `decor.ts`, `merge.ts`, `potion.ts`, `mishap.ts`, `altarWait.ts`, `pigeon.ts`, `celebrate.ts`,
+  `gagCommands.ts` and the manifest JSON.
 - Walk speed was set so figures reach the room before short tasks finish (user request).
   The chibi legs walk naturally at 0.57 (`Walking_A`) and 1.4 u/s (`Running_A`) at
   `KIT_SCALE`, so feet slide at cruise speed by design. Accepted limits: a reroute to a

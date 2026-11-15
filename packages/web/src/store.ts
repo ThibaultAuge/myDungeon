@@ -1,7 +1,8 @@
 import { create } from 'zustand';
-import type { EnvironmentView, HookEventSummary, ServerMessage, SessionView } from '@agent-office/shared';
+import { NO_ENV_ID, type EnvironmentView, type HookEventSummary, type ServerMessage, type SessionView } from '@agent-office/shared';
 import { initialLang, saveLang, type Lang } from './i18n/index.ts';
 import type { PostId } from './scene/layout.ts';
+import { celebrate } from './scene/celebrate.ts';
 import { drinkPotion, installPotionCommand, potionTarget } from './scene/potion.ts';
 import { installMishapCommands } from './scene/mishap.ts';
 import { isRestId, restType } from './scene/tavern.ts';
@@ -137,6 +138,10 @@ function onMessage(msg: ServerMessage): void {
     });
   } else if (msg.type === 'event') {
     useOffice.setState((s) => ({ events: [msg.event, ...s.events].slice(0, MAX_EVENTS) }));
+    const route = useOffice.getState().route;
+    if (route.page === 'env' && (msg.event.envId ?? NO_ENV_ID) === route.envId) {
+      for (const kind of msg.event.celebrations ?? []) celebrate(kind);
+    }
     // Context compaction: the agent drinks the potion of oblivion (a purely visual gag).
     const drinker = potionTarget(msg.event, useOffice.getState().sessions);
     if (drinker) drinkPotion(drinker);

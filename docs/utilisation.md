@@ -56,6 +56,8 @@ Le détail du fonctionnement est dans [lieux.md](lieux.md#la-taverne-et-le-cycle
 
 Déplace la souris pour découvrir les salles. Les murs situés devant le curseur s'enfoncent dans le sol, et il ne reste qu'un muret qui marque le contour des pièces. Les murs situés derrière restent debout.
 
+Les quatre tours d'angle, bâties dans la pierre des murs, s'enfoncent avec eux. Voir [Les tours d'angle](lieux.md#les-tours-dangle).
+
 ## Les postes de travail
 
 Le mobilier de chaque pièce forme des postes de travail.
@@ -197,6 +199,46 @@ Le déclencheur, les commandes de test reconnues et les commandes pour tester ce
 Ces effets sont purement esthétiques, comme la baffe et la potion : rien n'est envoyé au serveur, et rien n'agit sur le travail de l'agent. Ils lisent seulement les événements de hooks déjà diffusés, et supposent les hooks installés.
 
 - **Réduction des animations.** Ni fumée, ni lueur : la bulle reste fixe, et la suie disparaît d'un coup au lieu de s'estomper.
+
+## Le héraut des tours d'angle
+
+Quand un agent réussit un `git commit` ou un `git push` dans une commande `Bash` ou `PowerShell`, un héraut sort d'une trappe sur une tour d'angle libre. Il se tourne vers la cour, sonne de la trompette, puis redescend dans la trappe. Des notes ♪ flottent autour de lui pendant qu'il joue.
+
+- **Commit.** Une sonnerie courte, d'environ 5 s en tout.
+- **Push.** Une fanfare longue, d'environ 8,6 s en tout, avec un fanion rouge au bout de la trompette.
+
+Le héraut ne représente aucun agent. Il ne change rien à la liste des sessions.
+
+- Une tour porte au plus un héraut. Si les quatre tours sont occupées, rien ne se passe.
+- Si la coupe fait baisser la tour, le héraut reste caché tant qu'elle est basse.
+- Si une même commande fait un commit puis un push, seule la fanfare du push joue. Un `--dry-run` ne compte pas.
+- Un commit ou un push qui échoue ne déclenche rien.
+- Seuls les événements du donjon affiché déclenchent le gag. Un commit fait dans un autre donjon n'apparaît pas ici.
+- Un gag ne se joue que pour un événement reçu pendant que la page est ouverte : une reconnexion ne le rejoue pas.
+- **Limite acceptée.** Un push d'une branche déjà à jour sonne quand même la fanfare.
+
+Ces effets sont purement esthétiques : rien n'agit sur le travail de l'agent. Le serveur ne fait que lire la commande et la sortie, puis n'envoie à la page que le type de célébration (`commit`, `push` ou `tests`). Le fonctionnement est décrit dans [Fonctionnement](fonctionnement.md).
+
+- **Réduction des animations.** Le héraut se tient immobile sur sa tour, sans monter ni descendre.
+
+Le déclencheur et les commandes pour tester ce gag sont décrits dans [Commandes console](commandes-console.md).
+
+## Le feu d'artifice
+
+Quand une suite de tests passe, cinq gerbes éclatent dans le ciel au-dessus du château, pendant environ 4,3 s. Le gag ne joue que si la sortie de la commande ne signale aucun échec.
+
+Les commandes reconnues sont `npm`, `pnpm`, `yarn` ou `bun` lancés avec `test`, `vitest`, `jest` (sans `watch`), `playwright test`, `pytest`, `mvn test` ou `mvn verify`, `gradle test` ou `gradle check`, `cargo test`, `go test`, `dotnet test` et `node --test`.
+
+- Un passage de tests pendant un spectacle est ignoré.
+- Seuls les événements du donjon affiché déclenchent le gag.
+- Un gag ne se joue que pour un événement reçu pendant que la page est ouverte : une reconnexion ne le rejoue pas.
+- **Limite acceptée.** Un échec masqué par un tube (`|`) n'est repéré que si la sortie contient `FAIL`, `FAILED`, « N failed » ou `BUILD FAILURE`. Dans les autres cas, le feu part alors que les tests ont échoué.
+
+Ce feu est purement esthétique : rien n'agit sur le travail de l'agent. Le serveur ne fait que lire la commande et la sortie, puis n'envoie à la page que le type de célébration (`tests`).
+
+- **Réduction des animations.** Pas de gerbes qui partent : un bouquet fixe, plus discret, s'allume puis s'éteint en fondu, pendant environ 2 s.
+
+Le déclencheur et les commandes pour tester ce gag sont décrits dans [Commandes console](commandes-console.md).
 
 ## La fiche d'agent
 

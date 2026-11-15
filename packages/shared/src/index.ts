@@ -108,6 +108,9 @@ export interface EnvironmentView {
   activeSessions: number;
 }
 
+/** What a successful shell command celebrates: a herald for git, fireworks for passing tests. */
+export type Celebration = 'commit' | 'push' | 'tests';
+
 export interface HookEventSummary {
   /** Server-side sequence number, unique per server run. */
   seq: number;
@@ -119,6 +122,8 @@ export interface HookEventSummary {
   agentType?: string;
   tool?: string;
   detail?: string;
+  /** Set when the event is a successful git commit / push or test run. Never the command text. */
+  celebrations?: Celebration[];
   /** An HTTP call (curl…) of an agent working in the dovecote: launched, then its outcome. Never the response itself. */
   httpCall?: 'start' | 'ok' | 'error';
 }

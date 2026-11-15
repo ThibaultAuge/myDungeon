@@ -10,6 +10,8 @@ Agents’ l**AI**r est un petit repaire en 3D. Le nom reste en anglais dans tout
 - **Une potion d'oubli** : quand une session compacte son contexte, son agent boit une fiole et titube, purement pour rire.
 - **Une chaudière qui explose** : quand un outil échoue dans la salle des machines, elle fait « pouf » et l'agent se noircit de suie, purement pour rire.
 - **Une fiole qui explose** : quand les tests échouent, la fiole du labo explose en vert et l'agent se couvre de suie verte, purement pour rire.
+- **Un héraut qui sonne** : quand un `git commit` ou un `git push` réussit, un héraut monte sur une tour d'angle et sonne de la trompette, purement pour rire.
+- **Un feu d'artifice** : quand une suite de tests passe, des gerbes éclatent au-dessus du château, purement pour rire.
 - **Entrées et sorties** : le chevalier d'une session entre au château par le pont-levis. Quand la session disparaît, il sort par la porte et meurt sous les coups de squelettes.
 - **Trois états lisibles** : il travaille, il attend ton prochain message, il a terminé.
 - **L'autel des requêtes** : les agents qui ont besoin de toi (permission, question, erreur) font la queue.

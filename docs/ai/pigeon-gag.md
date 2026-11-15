@@ -46,8 +46,8 @@ description: Use when changing the Samuel-Morse pigeon gag — HTTP-call detecti
   (0.85 for subagents, chosen by the `#main` id suffix), from `agentPositions`
   (`AgentFigure.tsx`); falls back to the lectern. Higher would be hidden by the name tag.
   Reduced motion: no flight and no feathers, only the static splat.
-- Console command `agentOffice.pigeon(issue?, id?)`, installed by `PigeonFlights` under
-  `window.agentOffice` (same contract as the other gags; human doc
+- Console command `agentOffice.pigeon(issue?, id?)`, installed by `PigeonFlights` through
+  `gagCommands(window)` (shared namespace: `docs/ai/dungeon-scene.md`; human doc
   `docs/commandes-console.md`): issue `back | plucked | lost | dropping`; target = id ??
   selected agent ?? first non-done dovecote agent ?? lectern. Returns false for an unknown
   issue, an explicit id with no figure on stage, or a full sky. Uses `Pigeons.force`.

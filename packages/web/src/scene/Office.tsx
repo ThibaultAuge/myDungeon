@@ -13,14 +13,17 @@ import { altarForceVersion, installAltarCommand, onAltarForce, shownAltarStage }
 import { Ambush } from './ambush.ts';
 import { AmbushScene } from './Ambush.tsx';
 import { DungeonSign } from './DungeonSign.tsx';
+import { Fireworks } from './Fireworks.tsx';
 import { Forest } from './Forest.tsx';
 import { Ghosts, isGhost } from './ghost.ts';
 import { GhostFigure } from './GhostFigure.tsx';
 import { NIGHT_SKY, scatterTrees } from './forest.ts';
 import { assignSpots, BOUNDS, SPAWN, type SeatMemory, type SeatRequest, type Spot } from './layout.ts';
 import { ENTRY_SPOT, PAN_MARGIN } from './outside.ts';
+import { Heralds } from './Herald.tsx';
 import { PigeonFlights } from './Pigeons.tsx';
 import { OfficeRooms } from './Room.tsx';
+import { Towers } from './Towers.tsx';
 import { MishapProps } from './MishapProps.tsx';
 import { MishapWatcher } from './MishapWatcher.tsx';
 import { Stage } from './stage.ts';
@@ -265,6 +268,10 @@ export function OfficeScene({ dungeon }: { dungeon?: Dungeon }) {
       <Forest />
       {dungeon?.name && <DungeonSign name={dungeon.name} color={dungeon.color} />}
       <OfficeRooms />
+      {/* Celebrations (purely visual): corner towers with their heralds, fireworks. */}
+      <Towers />
+      <Heralds />
+      <Fireworks />
       <MishapWatcher />
       <MishapProps />
       {resting.map((agent) => (
