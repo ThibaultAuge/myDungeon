@@ -1045,8 +1045,106 @@ select,
 
 .dialogue__text {
   margin: 2px 0 0;
-  white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+
+/* Markdown of a message: blocks spaced evenly, line breaks of the text kept. */
+.dialogue__text > * {
+  margin: 0;
+}
+
+.dialogue__text > * + * {
+  margin-top: 6px;
+}
+
+.dialogue__text p,
+.dialogue__text li,
+.dialogue__text td,
+.dialogue__text th,
+.md-quote {
+  white-space: pre-wrap;
+}
+
+.dialogue__text code {
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 0.9em;
+  padding: 0 3px;
+  border-radius: 3px;
+  background: rgba(243, 234, 216, 0.1);
+}
+
+.md-heading {
+  font-weight: 600;
+  color: #e9c97f;
+}
+
+.md-heading--1 {
+  font-size: 1.12em;
+}
+
+.md-list {
+  padding-left: 1.4em;
+}
+
+.md-list .md-list {
+  margin-top: 2px;
+}
+
+.md-quote {
+  padding-left: 10px;
+  border-left: 3px solid rgba(201, 164, 92, 0.5);
+  color: var(--dlg-muted);
+}
+
+.md-code {
+  padding: 6px 8px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.35);
+  font-size: 12px;
+  /* Wrapped rather than scrolled: a wide block would make the whole log scroll sideways. */
+  white-space: pre-wrap;
+}
+
+.md-code code {
+  padding: 0;
+  background: none;
+  font-size: inherit;
+}
+
+.md-rule {
+  border: 0;
+  border-top: 1px solid rgba(201, 164, 92, 0.4);
+}
+
+.md-table {
+  border-collapse: collapse;
+  max-width: 100%;
+  font-size: 13px;
+}
+
+.md-table th,
+.md-table td {
+  padding: 3px 8px;
+  border: 1px solid rgba(201, 164, 92, 0.4);
+  text-align: left;
+  vertical-align: top;
+  /* Not "anywhere": short headers such as "Statut" must keep their column whole. */
+  overflow-wrap: break-word;
+}
+
+/* Long paths in cells are code: they may break anywhere, so the table fits the box. */
+.md-table code {
+  overflow-wrap: anywhere;
+}
+
+.md-table th {
+  color: #e9c97f;
+  font-weight: 600;
+  background: rgba(201, 164, 92, 0.14);
+}
+
+.md-table tbody tr:nth-child(even) {
+  background: rgba(243, 234, 216, 0.04);
 }
 
 .dialogue__entry--tool {
@@ -1070,6 +1168,7 @@ select,
 }
 
 .dialogue__cut {
+  font-size: 12px;
   color: var(--dlg-muted);
   font-style: italic;
 }
@@ -1104,6 +1203,14 @@ select,
   .agent-info__close,
   .agent-info__slap {
     border-color: CanvasText;
+  }
+  /* Backgrounds are dropped in forced colours: a border keeps code visible. */
+  .md-code,
+  .dialogue__text code {
+    border: 1px solid CanvasText;
+  }
+  .md-code code {
+    border: 0;
   }
   .agent-dialog__log:focus-visible,
   .agent-dialog__close:focus-visible,

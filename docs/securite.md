@@ -10,7 +10,7 @@ Agent Office est un outil mono-utilisateur, lancé à la main sur ton propre pos
 - **Conversations.** `GET /api/transcript` renvoie la conversation de l'agent ouvert, sans authentification (voir « Accès aux conversations » ci-dessous).
 - **Chemin du transcript.** Il est déduit de l'état du serveur, jamais d'une valeur envoyée par le navigateur ou par un hook.
 - **Métadonnées seulement.** Pour distinguer une session qui a travaillé d'un fantôme, le serveur fait un `lstat` du transcript de chaque processus Claude en cours. Il ne lit jamais ce fichier et ne suit aucun lien symbolique.
-- **Lecture bornée.** Le serveur ne lit qu'une partie bornée de la conversation. Le texte est affiché comme du texte, jamais interprété en HTML.
+- **Lecture bornée.** Le serveur ne lit qu'une partie bornée de la conversation. Le texte est mis en forme en Markdown, sans jamais être interprété en HTML.
 - **Limite connue.** Les routes `/api/*` (inventaire et `/api/transcript`) et le WebSocket ne demandent pas d'authentification. Tout programme local peut donc lire les titres, dossiers, prompts et commandes (tronqués), ainsi que la conversation de l'agent ouvert. Toute action future sur les agents aura sa propre protection.
 - **Sur un poste partagé**, restreins les droits du dossier du projet. Un lecteur secondaire comme `F:\` donne souvent le contrôle total aux « Utilisateurs authentifiés ». Dans une invite de commandes administrateur :
 

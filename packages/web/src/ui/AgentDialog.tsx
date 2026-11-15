@@ -3,6 +3,7 @@ import type { AgentView, DialogueEntry, SessionView } from '@agent-office/shared
 import { agentName, sessionColor, stateLabel } from '../format.ts';
 import { useT } from '../i18n/useT.ts';
 import { useOffice } from '../store.ts';
+import { MessageText } from './MessageText.tsx';
 import { rowId } from './SessionList.tsx';
 import { useTranscript } from './useTranscript.ts';
 
@@ -31,10 +32,10 @@ function Entry({ entry, name, userName, timeFmt }: { entry: DialogueEntry; name:
       <p className="dialogue__meta">
         <span className="dialogue__speaker">{entry.role === 'user' ? userName : name}</span> {time}
       </p>
-      <p className="dialogue__text">
-        {entry.text}
-        {entry.truncated && <span className="dialogue__cut"> … ({t.dialog.truncated})</span>}
-      </p>
+      <div className="dialogue__text">
+        <MessageText text={entry.text} />
+        {entry.truncated && <p className="dialogue__cut">… ({t.dialog.truncated})</p>}
+      </div>
     </li>
   );
 }
