@@ -1,7 +1,9 @@
-import { useEffect, type ReactNode } from 'react';
+import { useEffect, useSyncExternalStore, type ReactNode } from 'react';
 import { connect, loadEnvironments, useOffice } from './store.ts';
 import { OfficeScene } from './scene/Office.tsx';
 import { dungeonColor } from './scene/heraldry.ts';
+import { isFps, onFpsChange } from './scene/fps.ts';
+import { FpsHint } from './ui/FpsHint.tsx';
 import { AgentDialog } from './ui/AgentDialog.tsx';
 import { AgentInfo } from './ui/AgentInfo.tsx';
 import { EnvSwitcher } from './ui/EnvSwitcher.tsx';
@@ -107,6 +109,7 @@ function EnvPage({ envId }: { envId: string }) {
   const environments = useOffice((s) => s.environments);
   const env = environments.find((e) => e.id === envId);
   const { t } = useT();
+  const fps = useSyncExternalStore(onFpsChange, isFps);
   const name = env ? envName(env, t) : '';
   useEffect(() => {
     document.title = name ? `${name} · ${APP_NAME}` : APP_NAME;
@@ -121,11 +124,13 @@ function EnvPage({ envId }: { envId: string }) {
       </Header>
       <main className="office">
         <h1 className="sr-only">{t.office.heading(name || t.env.unknown)}</h1>
-        <div className="office__scene">
+        {/* In the first-person view the name tags would show through every wall: hidden (CSS). */}
+        <div className={`office__scene${fps ? ' office__scene--fps' : ''}`}>
           <div className="office__canvas" role="img" aria-label={t.office.canvas}>
             <OfficeScene dungeon={env && name ? { name, color: dungeonColor(env.id, env.virtual) } : undefined} />
           </div>
           <Legend />
+          <FpsHint />
           <AgentInfo sessions={sessions} />
           <PostCard />
           <RestCard />

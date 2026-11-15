@@ -4,6 +4,7 @@ import { BoxGeometry, BufferAttribute, CylinderGeometry, Vector3, type BufferGeo
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { reducedMotion } from '../motion.ts';
 import { cutHeight, inForeground, TOWER_BASE, TOWER_H, TOWER_R, TOWERS, type Tower } from './dungeon.ts';
+import { isFps } from './fps.ts';
 import { useKitParts } from './kit.ts';
 
 const SHAFT_H = TOWER_H - TOWER_BASE;
@@ -67,7 +68,8 @@ function TowerMesh({ tower, index, material }: { tower: Tower; index: number; ma
     const g = group.current;
     if (!g) return;
     anchor.set(tower.ax, 0, tower.az).project(camera);
-    const target = inForeground(pointer.x, pointer.y, anchor.x, anchor.y) ? 0 : 1;
+    // Every tower stands in the first-person view.
+    const target = !isFps() && inForeground(pointer.x, pointer.y, anchor.x, anchor.y) ? 0 : 1;
     const h = cutHeight(prev.current, target, dt, reducedMotion());
     if (h === prev.current) return;
     prev.current = h;

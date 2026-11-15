@@ -16,6 +16,7 @@ Agents’ l**AI**r est un petit repaire en 3D. Le nom reste en anglais dans tout
 - **Trois états lisibles** : il travaille, il attend ton prochain message, il a terminé.
 - **L'autel des requêtes** : les agents qui ont besoin de toi (permission, question, erreur) font la queue.
 - **L'attente interminable** : plus un agent attend ta réponse à l'autel, plus il se lasse. Il fait les cent pas, s'assoit, s'endort, puis se couvre de toiles d'araignée, purement pour rire.
+- **Une promenade à la première personne** : Maj+F te pose sur le sentier devant la porte du château. ZQSD ou les flèches pour marcher (WASD sur un clavier QWERTY), Maj pour courir, la souris ou A/E pour pivoter, Échap pour revenir à la vue d'ensemble. Seuls les murs arrêtent le visiteur.
 - **Une fiche par agent** : contexte de sa session, serveurs web locaux, conversation en lecture seule.
 - **Trois langues** : français, allemand et anglais.
 - **Temps réel, sans influence sur Claude** : les hooks et les fichiers locaux de l'app desktop alimentent le serveur, qui ne fait qu'observer.
