@@ -1,7 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import type { AgentView, SessionView } from '@agent-office/shared';
 import type { SeatMemory } from '../src/scene/layout.ts';
-import { NEUTRAL_COLOR, inheritSeats, restId, restingAgent, restingTypes, sessionChanges, startOrigins } from '../src/scene/tavern.ts';
+import {
+  NEUTRAL_COLOR,
+  inheritSeats,
+  isRestId,
+  restId,
+  restType,
+  restingAgent,
+  restingTypes,
+  sessionChanges,
+  startOrigins,
+} from '../src/scene/tavern.ts';
 
 /** A subagent on stage, working by default. */
 function sub(id: string, agentType: string, overrides: Partial<AgentView> = {}): AgentView {
@@ -44,6 +54,102 @@ describe('restId', () => {
    */
   it('differs between types', () => {
     expect(restId('neo')).not.toBe(restId('oracle'));
+  });
+});
+
+describe('isRestId', () => {
+  /**
+   * Verifies that ids built by restId are recognised as resting figures
+   */
+  it.each(['Explore', 'neo', 'samuel-morse', 'plugin:agent'])('recognises restId(%j)', (type) => {
+    expect(isRestId(restId(type))).toBe(true);
+  });
+
+  /**
+   * Verifies that the id of a resting figure built by restingAgent is a rest id
+   */
+  it('recognises the id of a resting figure', () => {
+    expect(isRestId(restingAgent('dexter').id)).toBe(true);
+  });
+
+  /**
+   * Verifies that real agent ids and other strings are never taken for resting figures
+   */
+  it.each(['', 'neo', 'cli:x#main', 'local_1', 'agent-123', 'Rest:neo', 'REST:neo', 'xrest:neo', ' rest:neo', 'rest', 'restaurant'])(
+    'rejects %j',
+    (id) => {
+      expect(isRestId(id)).toBe(false);
+    },
+  );
+});
+
+describe('restType', () => {
+  /**
+   * Verifies that a rest id resolves to its roster type
+   */
+  it('returns the roster type behind a rest id', () => {
+    expect(restType('rest:neo', ['dexter', 'neo'])).toBe('neo');
+  });
+
+  /**
+   * Verifies that the roster's own spelling is returned, not the lower-case id form
+   */
+  it('keeps the roster spelling of the type', () => {
+    expect(restType('rest:explore', ['Explore'])).toBe('Explore');
+    expect(restType(restId('Samuel-Morse'), ['dexter', 'Samuel-Morse'])).toBe('Samuel-Morse');
+  });
+
+  /**
+   * Verifies that restType inverts restId for every type of a mixed-case roster
+   */
+  it('round-trips restId for every roster type', () => {
+    const roster = ['dexter', 'Explore', 'samuel-morse', 'plugin:agent', 'GENERAL-PURPOSE'];
+    for (const t of roster) expect(restType(restId(t), roster), t).toBe(t);
+  });
+
+  /**
+   * Verifies that a rest id whose type left the roster resolves to nothing
+   */
+  it('returns undefined when the type is gone from the roster', () => {
+    expect(restType('rest:neo', ['dexter', 'oracle'])).toBeUndefined();
+  });
+
+  /**
+   * Verifies that an empty roster resolves no rest id
+   */
+  it('returns undefined for an empty roster', () => {
+    expect(restType('rest:neo', [])).toBeUndefined();
+  });
+
+  /**
+   * Verifies that a real agent id never resolves, even when it equals a roster type
+   */
+  it.each(['neo', 'cli:x#main', '', 'Rest:neo'])('returns undefined for the non-rest id %j', (id) => {
+    expect(restType(id, ['neo', 'cli:x#main', ''])).toBeUndefined();
+  });
+
+  /**
+   * Verifies that a rest id does not match a type that only shares its prefix
+   */
+  it('does not match on a prefix of the type', () => {
+    expect(restType('rest:ne', ['neo'])).toBeUndefined();
+    expect(restType('rest:neo', ['neon'])).toBeUndefined();
+  });
+
+  /**
+   * Verifies that the first roster entry wins when two spellings share a rest id
+   */
+  it('returns the first matching roster entry', () => {
+    expect(restType('rest:neo', ['Neo', 'neo'])).toBe('Neo');
+  });
+
+  /**
+   * Verifies that the roster is left untouched
+   */
+  it('does not mutate the roster', () => {
+    const roster = ['b', 'a'];
+    restType('rest:a', roster);
+    expect(roster).toEqual(['b', 'a']);
   });
 });
 

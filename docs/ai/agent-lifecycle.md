@@ -1,5 +1,5 @@
 ---
-description: Use when changing where agents rest or wait (tavern, altar queue), how agent figures appear, leave or return (subagent tavern cycle, main agents walking in from the forest, the skeleton ambush when a session ends, stopped sessions, ghosts of sessions that never worked, everActive), the agent roster (snapshot.roster, agent definitions, seen types), or when testing the scene with fake hooks.
+description: Use when changing where agents rest or wait (tavern, altar queue), how agent figures appear, leave or return (subagent tavern cycle, main agents walking in from the forest, the skeleton ambush when a session ends, stopped sessions, ghosts of sessions that never worked, everActive), the agent roster (snapshot.roster, agent definitions, seen types), the introduction card of resting subagent types (RestCard, RosterList), or when testing the scene with fake hooks.
 ---
 
 # Agent life cycle: tavern, altar, forest entry, ambush, roster
@@ -8,8 +8,8 @@ description: Use when changing where agents rest or wait (tavern, altar queue), 
 - Design (user-defined, French): `docs/lieux.md`, section "La taverne et le
   cycle de vie d'un agent". The code below implements it.
 - Tavern: one neutral figure (`NEUTRAL_COLOR`) per roster type with no agent of that type
-  on stage. Resting figures have id `rest:<type>` and are not selectable. They wear their
-  type's role look (`lookFor`, `docs/ai/dungeon-scene.md`).
+  on stage. Resting figures have id `rest:<type>` and are selectable (introduction card
+  below). They wear their type's role look (`lookFor`, `docs/ai/dungeon-scene.md`).
 - Call: when a session starts a subagent of a resting type, the new figure starts from that
   resting figure's seat and walks to its post in the session colour. Simultaneous extras
   of the same type start from the lockers (`SPAWN`).
@@ -28,6 +28,33 @@ description: Use when changing where agents rest or wait (tavern, altar queue), 
 - Stopped sessions (`live: false`, not archived) keep their main agent visible, resting in
   the tavern in the session colour, but NOT selectable: the side panel lists live sessions
   only (accessibility decision: no 3D-only clickable target). Exception: ghosts below.
+
+### Tavern introduction card (resting subagent types)
+User request: clicking a resting figure introduces its type.
+- Selection: `Office.tsx` gives resting figures `onSelect={select}`, `selected` and name
+  `typeLabel(type)`. Because `onSelect` switches on all pointer interactions in
+  `AgentFigure`, they also get hover, right-click slap and the slap anchor. Their props stay
+  stable for `React.memo`.
+- Store (`select`): a rest id never opens the conversation box. A snapshot keeps a rest
+  selection while the type is still in `roster`, even while that type is out working (card
+  stays, no figure to follow: accepted).
+- `ui/RestCard.tsx`: shown while the selected id is a rest id whose type `restType` finds;
+  type name (`typeLabel`), "Subagent" label (`restCard.kind`), role (`agentRole`). Reuses
+  the `.post-card*` classes plus `.rest-card` / `.rest-card-region`, in an `aria-live`
+  region. Escape closes it unless focus is in the workstation card; `PostCard` symmetrically
+  skips when focus is in `.rest-card` and targets `.post-card:not(.rest-card)`. × and Escape
+  return focus to the roster button; if the card unmounts on its own with focus inside,
+  focus goes to that button or `#roster-list-title`. Its slap button is the keyboard route
+  to the slap while the figure rests. With both cards open, the workstation card moves left
+  (`styles.css`).
+- `ui/RosterList.tsx`: side-panel "Tavern company" list (`roster.title`) of every roster
+  type, rendered before `PostList` in `App.tsx`; button ids `rosterButtonId(type)` =
+  `roster-button-<lower type>`. It is the keyboard / screen-reader route to the card
+  (accessibility rule: no 3D-only clickable target).
+- Names and roles: `typeLabel`, `agentRole`, `agentRoles` keys: `docs/ai/i18n.md`.
+- Accepted limits: unknown or custom types show the generic `restCard.unknownRole` (agent
+  definition descriptions are never used: no display text from the server); with both cards
+  open and focus elsewhere, Escape closes the card opened first.
 
 ### Ghosts: stopped sessions that never worked
 User design: `plans/plan-fantomes-2026-11-15.md` (French).
@@ -146,8 +173,12 @@ do this; subagents keep the tavern cycle above.
 
 ## Relevant Files
 - `packages/web/src/scene/tavern.ts` — pure, no three.js: `NEUTRAL_COLOR`, `restId`,
+  `isRestId`, `restType(id, roster)` (roster spelling, undefined once the type is gone),
   `restingAgent`, `restingTypes`, `startOrigins` (`rest` / `lockers` / `seat` / `forest`),
   `sessionChanges`, `inheritSeats`.
+- `packages/web/src/ui/RestCard.tsx`, `packages/web/src/ui/RosterList.tsx` — tavern
+  introduction card and its side-panel list; `packages/web/src/ui/PostCard.tsx` (Escape
+  coordination), `packages/web/src/App.tsx`, `packages/web/src/styles.css`.
 - `packages/web/src/scene/stage.ts` — pure: `Stage` (`update`, `leaving`, `fromForest`,
   `hidden`, `key`, `gone`, `shown`), `Leaving`.
 - `packages/web/src/scene/outside.ts` — pure: `PAN_MARGIN`, `groundY`, `PATH`,
@@ -167,7 +198,8 @@ do this; subagents keep the tavern cycle above.
   `Character` and `Motion` (`Motion.scripted`).
 - `packages/web/src/scene/RequestBubble.tsx` — altar speech bubble.
 - `packages/web/src/scene/layout.ts` — `wallSeats` / `candidateSeats` (cached per room).
-- `packages/web/src/store.ts` — `snapshotReceived`; `packages/shared/src/index.ts` —
+- `packages/web/src/store.ts` — `snapshotReceived`, rest selection in `select` and on
+  snapshot; `packages/shared/src/index.ts` —
   roster in the snapshot.
 - `packages/server/src/inventory.ts` — `AGENT_NAME`, `AGENT_ID`, `HOOK_AGENT_TYPE`,
   `agentNameFromDefinition`, `listAgentTypes`, `isRemotePath`, `linkedBelow`,
@@ -191,6 +223,9 @@ do this; subagents keep the tavern cycle above.
   `AgentFigure.tsx` URL found in `performance.getEntriesByType('resource')` (after HMR the
   modules carry `?t=`, so a plain `import('/src/scene/AgentFigure.tsx')` gives a different
   map). Pan with synthetic right-button pointer events to see the kill point (z ≈ 23–30).
+- Test for a rest id with `isRestId` and resolve its type with `restType`; never parse
+  `rest:` ids inline. A new card on the scene reuses the `.post-card*` classes and the
+  Escape / focus coordination of `RestCard` and `PostCard`.
 - Reuse `setWaiting` for any new waiting reason, and keep the tavern/altar split above.
 - Test the scene without real sessions: the server only accepts the Vite origin on port
   5173, so from a worktree build the web client and run a second server on another port

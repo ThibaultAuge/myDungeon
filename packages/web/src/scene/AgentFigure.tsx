@@ -256,7 +256,10 @@ interface Props {
   /** Where the figure appears, read on mount only: the lockers, a resting seat, or its own spot. */
   start: Spot;
   selected: boolean;
-  /** Absent for the resting figures, which cannot be selected. */
+  /**
+   * Absent for figures that cannot be selected (stopped sessions, doomed figures). It also
+   * switches on every pointer interaction: hover, right-click slap and the slap anchor.
+   */
   onSelect?(id: string): void;
   /** Called once when a finished agent reaches its spot in the tavern. */
   onArrive?(id: string): void;

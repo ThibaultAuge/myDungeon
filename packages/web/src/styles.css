@@ -328,8 +328,9 @@ select,
   width: min(320px, calc(100% - 24px));
 }
 
-/* The agent card holds the top right: the workstation card moves to the top left. */
-.office__scene:has(.agent-info) .post-card-region {
+/* The agent card (or a resting agent's card) holds the top right: the workstation card moves to the top left. */
+.office__scene:has(.agent-info) .post-card-region,
+.office__scene:has(.rest-card) .post-card-region:not(.rest-card-region) {
   right: auto;
   left: 12px;
 }
@@ -992,7 +993,8 @@ select,
 .agent-dialog__log:focus-visible,
 .agent-dialog__close:focus-visible,
 .agent-dialog .link-button:focus-visible,
-.post-card__close:focus-visible {
+.post-card__close:focus-visible,
+.rest-card h2:focus-visible {
   outline: 2px solid var(--dlg-gold);
   outline-offset: 2px;
 }
@@ -1111,7 +1113,8 @@ select,
   .agent-info__slap:focus-visible,
   .agent-info a:focus-visible,
   .agent-info .link-button:focus-visible,
-  .agent-info h2:focus-visible {
+  .agent-info h2:focus-visible,
+  .rest-card h2:focus-visible {
     outline-color: Highlight;
   }
 }

@@ -47,8 +47,22 @@ export function envName(e: EnvironmentView, t: Messages): string {
   return e.virtual ? t.env.none : e.name;
 }
 
+/**
+ * Display name of a subagent type: each word starts with a capital (`oracle` → `Oracle`,
+ * `samuel-morse` → `Samuel-Morse`, `plugin:agent` → `Plugin:Agent`). Ids stay as they are.
+ */
+export function typeLabel(agentType: string): string {
+  return agentType.replace(/(^|[-:])(\p{Ll})/gu, (_, sep: string, c: string) => sep + c.toUpperCase());
+}
+
 export function agentName(a: AgentView, s: SessionView, t: Messages): string {
-  return a.kind === 'main' ? sessionTitle(s, t) : a.agentType;
+  return a.kind === 'main' ? sessionTitle(s, t) : typeLabel(a.agentType);
+}
+
+/** The short presentation of an agent type: its known role, or a generic line for a type of its own. */
+export function agentRole(agentType: string, t: Messages): string {
+  const key = agentType.toLowerCase();
+  return Object.hasOwn(t.agentRoles, key) ? t.agentRoles[key as keyof Messages['agentRoles']] : t.restCard.unknownRole;
 }
 
 export function elapsed(since: number, now: number, t: Messages): string {

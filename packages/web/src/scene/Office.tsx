@@ -4,7 +4,7 @@ import { OrbitControls, SoftShadows } from '@react-three/drei';
 import { NeutralToneMapping } from 'three';
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 import type { AgentView, SessionView } from '@agent-office/shared';
-import { agentName, sessionColor } from '../format.ts';
+import { agentName, sessionColor, typeLabel } from '../format.ts';
 import { useT } from '../i18n/useT.ts';
 import { useOffice } from '../store.ts';
 import { useNow } from '../useNow.ts';
@@ -240,11 +240,13 @@ export function OfficeScene() {
         <AgentFigure
           key={agent.id}
           agent={agent}
-          name={agent.agentType}
+          name={typeLabel(agent.agentType)}
           color={NEUTRAL_COLOR}
           spot={spots.get(agent.id)!}
           start={spots.get(agent.id)!}
-          selected={false}
+          selected={selected === agent.id}
+          // Clicking a resting figure opens its short introduction (keyboard route: RosterList).
+          onSelect={select}
         />
       ))}
       {/* One list, so a figure whose session leaves keeps its mount (and position) as it walks
