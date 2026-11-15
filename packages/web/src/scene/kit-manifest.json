@@ -254,7 +254,8 @@
       "crate_potatoes",
       "jar_A_medium",
       "jar_C_large",
-      "jar_B_small"
+      "jar_B_small",
+      "food_ingredient_cheese"
     ]
   },
   "resources": {

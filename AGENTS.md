@@ -30,5 +30,6 @@ npm workspaces: `packages/server`, `packages/web`, `packages/shared`.
 - `docs/ai/agent-info.md` — Use when changing the selected-agent details card (AgentInfo), session details sent to the client (SessionView.info, worktree, branch, model, effort, permission mode, CLI version), or the detection of a session's local web servers (ports.ts, SessionView.servers).
 - `docs/ai/ui-theme.md` — Use when changing the web UI's colours or chrome styling — root CSS tokens, the single dark dungeon theme, top bar, side panel, home page and its castle-gate background image (and how to re-capture it).
 - `docs/ai/pigeon-gag.md` — Use when changing the Samuel-Morse pigeon gag — HTTP-call detection of dovecote agents (http-call.ts, HookEventSummary.httpCall), pigeon flights, outcomes and their 3D rendering (pigeon.ts, Pigeons.tsx), or the agentOffice.pigeon console command.
+- `docs/ai/rat-gag.md` — Use when changing the rat gag — a procedural rat scurrying between corridor holes or stealing the tavern's cheese (rat.ts, RatScene, the KayKit cheese) — the agentOffice.rat console command, or when adding another scurrying creature.
 
 Human docs (French): `README.md` (pitch, install, tests, index of the `docs/` files).
