@@ -2,7 +2,7 @@
 // successful git commit (short) or push (long fanfare), fireworks go off after a passing test
 // suite. The server only sends the kind (never the command). Pure module, no three.js.
 import type { Celebration } from '@agent-office/shared';
-import { hold, play, SPAWN_CLIP_TIME, type ClipChoice } from './characters.ts';
+import { hold, play, SPAWN_CLIP_TIME, type ClipChoice, type ClipName } from './characters.ts';
 import { gagCommands } from './gagCommands.ts';
 
 export type HeraldKind = 'commit' | 'push';
@@ -63,13 +63,65 @@ export function heraldDuration(kind: HeraldKind): number {
 /** How far the herald goes down through the tower's trapdoor as he leaves. */
 export const HERALD_SINK = 1.2;
 
-/** The herald's clip: he climbs out of the trapdoor, raises the trumpet, then goes back down. */
-export function heraldClip(phase: HeraldPhase, t: number): ClipChoice {
+/**
+ * Lengths of the herald's one-shot gestures, in seconds at timeScale 1, read from
+ * Rig_Medium_Simulation.glb (a test checks them against the file).
+ */
+export const CHEERING_CLIP_TIME = 5 / 3;
+export const WAVING_CLIP_TIME = 2.1333;
+
+/**
+ * The clip that raises the trumpet (bone `handslotr`) to the herald's mouth: the fist comes up
+ * to the chin and stays there (Use_Item held it out to the side, Holding_* at the belt).
+ */
+export const TRUMPET_CLIP = 'Ranged_Magic_Raise' satisfies ClipName;
+
+/**
+ * A push's long fanfare is cut in three: the herald sounds the first half, waves at the crowd
+ * once (one Waving cycle), then sounds the second half. A commit's short call is one block.
+ */
+export const PUSH_FANFARE_PART = (TRUMPET_TIME.push - WAVING_CLIP_TIME) / 2;
+
+/**
+ * Where a firework show caught the herald, as a time in his trumpeting phase (negative when it
+ * started while he was still rising), or null when he was not on stage for it (leaving or gone).
+ */
+export function heraldCheerAt(phase: HeraldPhase, t: number): number | null {
+  if (phase === 'rising') return t - SPAWN_CLIP_TIME;
+  return phase === 'trumpeting' ? t : null;
+}
+
+/**
+ * The herald's gesture while trumpeting: the trumpet, a wave between a push's two fanfares, or a
+ * cheer for the fireworks. A cheer that overlaps the wave ends it: after the cheer the trumpet
+ * comes back, not the wave, which the figure would restart from its first frame (a faded-out clip
+ * starts over) and cut off at the end of its window.
+ */
+function trumpetingClip(t: number, kind: HeraldKind, cheerAt: number | null): ClipChoice {
+  const waveEnd = PUSH_FANFARE_PART + WAVING_CLIP_TIME;
+  let waves = kind === 'push';
+  if (cheerAt !== null) {
+    const from = Math.max(0, cheerAt);
+    if (t >= from && t < from + CHEERING_CLIP_TIME) return play('Cheering', 1, false);
+    // From the cheer on (a wave already under way before it was shown as it is).
+    if (t >= from && from < waveEnd && from + CHEERING_CLIP_TIME > PUSH_FANFARE_PART) waves = false;
+  }
+  if (waves && t >= PUSH_FANFARE_PART && t < waveEnd) return play('Waving', 1, false);
+  // Played once and held on its last frame: the trumpet stays at the mouth, no loop restart.
+  return play(TRUMPET_CLIP, 1, false);
+}
+
+/**
+ * The herald's clip: he climbs out of the trapdoor, sounds the trumpet (a push's fanfare
+ * broken by a wave), then goes back down. `cheerAt` (see `heraldCheerAt`) makes him cheer
+ * once, for a firework show that went off while he was on stage.
+ */
+export function heraldClip(phase: HeraldPhase, t: number, kind: HeraldKind = 'commit', cheerAt: number | null = null): ClipChoice {
   switch (phase) {
     case 'rising':
       return play('Spawn_Ground', 1, false);
     case 'trumpeting':
-      return play('Use_Item');
+      return trumpetingClip(t, kind, cheerAt);
     case 'sinking':
       // The rising clip held backwards, as the skeletons burrow.
       return hold('Spawn_Ground', Math.max(0, SPAWN_CLIP_TIME - t));

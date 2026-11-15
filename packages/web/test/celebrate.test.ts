@@ -1,8 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Celebration } from '@agent-office/shared';
-import { CLIPS, SPAWN_CLIP_TIME } from '../src/scene/characters.ts';
+import { BASE_CLIPS, CLIPS, HERALD_CLIPS, SPAWN_CLIP_TIME, clipFor, type ClipInput } from '../src/scene/characters.ts';
 import {
   BURSTS,
+  CHEERING_CLIP_TIME,
+  PUSH_FANFARE_PART,
+  TRUMPET_CLIP,
+  WAVING_CLIP_TIME,
+  heraldCheerAt,
   BURST_SPACING,
   BURST_TIME,
   DELAY_JITTER,
@@ -380,13 +385,175 @@ describe('heraldClip', () => {
     expect(heraldClip('rising', 0.4)).toEqual({ name: 'Spawn_Ground', loop: false, timeScale: 1, frozen: false, frozenAt: 0 });
   });
 
-  /** Verifies that the herald loops the use-item clip while sounding the trumpet */
-  it('loops Use_Item while trumpeting', () => {
-    const clip = heraldClip('trumpeting', 1);
-    expect(clip.name).toBe('Use_Item');
-    expect(clip.loop).toBe(true);
-    expect(clip.frozen).toBe(false);
-    expect(clip.timeScale).toBe(1);
+  const once = (name: string) => ({ name, loop: false, timeScale: 1, frozen: false, frozenAt: 0 });
+  const EPS = 1e-6;
+
+  /** Verifies that a commit trumpets with TRUMPET_CLIP played once over its whole call */
+  it('plays TRUMPET_CLIP once, unfrozen, over the whole commit call', () => {
+    const T = TRUMPET_TIME.commit;
+    for (const t of [0, EPS, T / 4, T / 2, T - EPS]) {
+      expect(heraldClip('trumpeting', t, 'commit')).toEqual(once(TRUMPET_CLIP));
+    }
+  });
+
+  /** Verifies that heraldClip defaults to the commit call when no kind is given */
+  it('defaults to the commit kind', () => {
+    // At a time inside a push's wave, the default kind still trumpets (no wave in a commit).
+    const t = PUSH_FANFARE_PART + WAVING_CLIP_TIME / 2;
+    expect(heraldClip('trumpeting', t)).toEqual(heraldClip('trumpeting', t, 'commit'));
+    expect(heraldClip('trumpeting', t).name).toBe(TRUMPET_CLIP);
+    for (const t2 of [0, 1, 2]) expect(heraldClip('trumpeting', t2)).toEqual(heraldClip('trumpeting', t2, 'commit'));
+  });
+
+  /** Verifies that a push sounds a fanfare, waves once, then sounds a second fanfare */
+  it.each([
+    ['the start', 0, TRUMPET_CLIP],
+    ['just before the wave', PUSH_FANFARE_PART - EPS, TRUMPET_CLIP],
+    ['the wave start', PUSH_FANFARE_PART, 'Waving'],
+    ['mid-wave', PUSH_FANFARE_PART + WAVING_CLIP_TIME / 2, 'Waving'],
+    ['just before the wave ends', PUSH_FANFARE_PART + WAVING_CLIP_TIME - EPS, 'Waving'],
+    ['the wave end', PUSH_FANFARE_PART + WAVING_CLIP_TIME, TRUMPET_CLIP],
+    ['the end of the fanfare', TRUMPET_TIME.push - EPS, TRUMPET_CLIP],
+  ] as const)('plays the expected push clip at %s', (_label, t, name) => {
+    expect(heraldClip('trumpeting', t, 'push')).toEqual(once(name));
+  });
+
+  /** Verifies that the push's two fanfare parts are equal and fill the call with the wave */
+  it('splits the push call into two equal fanfares around one wave', () => {
+    const first = PUSH_FANFARE_PART;
+    const last = TRUMPET_TIME.push - (PUSH_FANFARE_PART + WAVING_CLIP_TIME);
+    expect(first).toBeGreaterThan(0);
+    expect(last).toBeCloseTo(first, 12);
+    expect(first + WAVING_CLIP_TIME + last).toBeCloseTo(TRUMPET_TIME.push, 12);
+  });
+
+  /** Verifies that the one-shot gestures fit inside the trumpet calls that use them */
+  it('fits the wave inside a push call and the cheer inside a commit call', () => {
+    expect(WAVING_CLIP_TIME).toBeGreaterThan(0);
+    expect(WAVING_CLIP_TIME).toBeLessThan(TRUMPET_TIME.push);
+    expect(CHEERING_CLIP_TIME).toBeGreaterThan(0);
+    expect(CHEERING_CLIP_TIME).toBeLessThan(TRUMPET_TIME.commit);
+  });
+
+  /** Verifies that a cheer mid-trumpet plays Cheering once for exactly CHEERING_CLIP_TIME */
+  it.each(KINDS)('cheers from cheerAt for CHEERING_CLIP_TIME during a %s call', (kind) => {
+    const at = 0.2;
+    expect(heraldClip('trumpeting', at - EPS, kind, at)).toEqual(once(TRUMPET_CLIP));
+    expect(heraldClip('trumpeting', at, kind, at)).toEqual(once('Cheering'));
+    expect(heraldClip('trumpeting', at + CHEERING_CLIP_TIME / 2, kind, at)).toEqual(once('Cheering'));
+    expect(heraldClip('trumpeting', at + CHEERING_CLIP_TIME - EPS, kind, at)).toEqual(once('Cheering'));
+    expect(heraldClip('trumpeting', at + CHEERING_CLIP_TIME, kind, at).name).not.toBe('Cheering');
+  });
+
+  /** Verifies that a cheer caught while rising starts at the trumpet start and lasts in full */
+  it.each([-0.01, -0.5, -SPAWN_CLIP_TIME])('starts a cheer from rising (cheerAt %d) at t=0', (at) => {
+    expect(heraldClip('trumpeting', 0, 'commit', at)).toEqual(once('Cheering'));
+    expect(heraldClip('trumpeting', CHEERING_CLIP_TIME - EPS, 'commit', at)).toEqual(once('Cheering'));
+    expect(heraldClip('trumpeting', CHEERING_CLIP_TIME, 'commit', at)).toEqual(once(TRUMPET_CLIP));
+  });
+
+  const WAVE_END = PUSH_FANFARE_PART + WAVING_CLIP_TIME;
+
+  /** Verifies that a cheer at the wave start replaces the wave and the trumpet follows */
+  it('goes back to the trumpet, not the wave, after a cheer at the wave start', () => {
+    const at = PUSH_FANFARE_PART;
+    // The cheer is shorter than the wave: part of the wave window is left after it.
+    expect(at + CHEERING_CLIP_TIME).toBeLessThan(WAVE_END);
+    expect(heraldClip('trumpeting', at - EPS, 'push', at)).toEqual(once(TRUMPET_CLIP));
+    expect(heraldClip('trumpeting', at, 'push', at)).toEqual(once('Cheering'));
+    expect(heraldClip('trumpeting', at + CHEERING_CLIP_TIME - EPS, 'push', at)).toEqual(once('Cheering'));
+    expect(heraldClip('trumpeting', at + CHEERING_CLIP_TIME, 'push', at)).toEqual(once(TRUMPET_CLIP));
+    expect(heraldClip('trumpeting', WAVE_END - EPS, 'push', at)).toEqual(once(TRUMPET_CLIP));
+  });
+
+  /** Verifies that a cheer ending inside the wave window cancels the rest of the wave */
+  it('never waves after a cheer that ends inside the wave window', () => {
+    const at = PUSH_FANFARE_PART - 1;
+    const cheerEnd = at + CHEERING_CLIP_TIME;
+    expect(cheerEnd).toBeGreaterThan(PUSH_FANFARE_PART);
+    expect(cheerEnd).toBeLessThan(WAVE_END);
+    expect(heraldClip('trumpeting', at - EPS, 'push', at)).toEqual(once(TRUMPET_CLIP));
+    expect(heraldClip('trumpeting', PUSH_FANFARE_PART, 'push', at)).toEqual(once('Cheering'));
+    expect(heraldClip('trumpeting', cheerEnd, 'push', at)).toEqual(once(TRUMPET_CLIP));
+    for (let t = cheerEnd; t < TRUMPET_TIME.push; t += 0.05) {
+      expect(heraldClip('trumpeting', t, 'push', at).name).not.toBe('Waving');
+    }
+  });
+
+  /** Verifies that a cheer mid-wave keeps the wave before it, then gives way to the trumpet */
+  it('waves before a mid-wave cheer, cheers, then trumpets for the rest of the window', () => {
+    const at = PUSH_FANFARE_PART + 0.3;
+    expect(at + CHEERING_CLIP_TIME).toBeLessThan(WAVE_END);
+    expect(heraldClip('trumpeting', PUSH_FANFARE_PART, 'push', at)).toEqual(once('Waving'));
+    expect(heraldClip('trumpeting', at - EPS, 'push', at)).toEqual(once('Waving'));
+    expect(heraldClip('trumpeting', at, 'push', at)).toEqual(once('Cheering'));
+    expect(heraldClip('trumpeting', at + CHEERING_CLIP_TIME, 'push', at)).toEqual(once(TRUMPET_CLIP));
+    expect(heraldClip('trumpeting', WAVE_END - EPS, 'push', at)).toEqual(once(TRUMPET_CLIP));
+  });
+
+  /** Verifies that a cheer over before the wave starts leaves the whole wave intact */
+  it('plays the full wave after a cheer that ends before it', () => {
+    const at = 0;
+    expect(at + CHEERING_CLIP_TIME).toBeLessThan(PUSH_FANFARE_PART);
+    expect(heraldClip('trumpeting', 0, 'push', at)).toEqual(once('Cheering'));
+    expect(heraldClip('trumpeting', CHEERING_CLIP_TIME, 'push', at)).toEqual(once(TRUMPET_CLIP));
+    expect(heraldClip('trumpeting', PUSH_FANFARE_PART - EPS, 'push', at)).toEqual(once(TRUMPET_CLIP));
+    expect(heraldClip('trumpeting', PUSH_FANFARE_PART, 'push', at)).toEqual(once('Waving'));
+    expect(heraldClip('trumpeting', WAVE_END - EPS, 'push', at)).toEqual(once('Waving'));
+    expect(heraldClip('trumpeting', WAVE_END, 'push', at)).toEqual(once(TRUMPET_CLIP));
+  });
+
+  /** Verifies that a cheer starting once the wave is over leaves the whole wave intact */
+  it.each([0, 0.1])('plays the full wave before a cheer starting %d s after it', (offset) => {
+    const at = WAVE_END + offset;
+    expect(at + CHEERING_CLIP_TIME).toBeLessThan(TRUMPET_TIME.push);
+    expect(heraldClip('trumpeting', PUSH_FANFARE_PART, 'push', at)).toEqual(once('Waving'));
+    expect(heraldClip('trumpeting', WAVE_END - EPS, 'push', at)).toEqual(once('Waving'));
+    expect(heraldClip('trumpeting', at, 'push', at)).toEqual(once('Cheering'));
+    expect(heraldClip('trumpeting', at + CHEERING_CLIP_TIME, 'push', at)).toEqual(once(TRUMPET_CLIP));
+  });
+
+  /** Verifies that a cheer starting mid-wave interrupts the wave at once */
+  it('interrupts a push wave already under way', () => {
+    const at = PUSH_FANFARE_PART + 0.5;
+    expect(heraldClip('trumpeting', at - EPS, 'push', at).name).toBe('Waving');
+    expect(heraldClip('trumpeting', at, 'push', at).name).toBe('Cheering');
+  });
+
+  /** Verifies that a null cheerAt never makes the herald cheer */
+  it.each(KINDS)('never cheers without a cheerAt during a %s call', (kind) => {
+    for (let t = 0; t < TRUMPET_TIME[kind]; t += 0.05) {
+      expect(heraldClip('trumpeting', t, kind, null).name).not.toBe('Cheering');
+      expect(heraldClip('trumpeting', t, kind).name).not.toBe('Cheering');
+    }
+  });
+
+  /** Verifies that a cheer never changes the rising, sinking or gone clips */
+  it.each(KINDS)('ignores the cheer outside the trumpet call for %s', (kind) => {
+    // A cheer late in the call whose window runs past the call's end.
+    const late = TRUMPET_TIME[kind] - 0.1;
+    for (const at of [late, 0, -0.5]) {
+      for (const t of [0, 0.3, SPAWN_CLIP_TIME / 2]) {
+        expect(heraldClip('rising', t, kind, at)).toEqual(heraldClip('rising', t, kind));
+        expect(heraldClip('sinking', t, kind, at)).toEqual(heraldClip('sinking', t, kind));
+      }
+      expect(heraldClip('gone', 0, kind, at)).toEqual(heraldClip('gone', 0, kind));
+    }
+    expect(heraldClip('sinking', 0, kind, late).name).toBe('Spawn_Ground');
+  });
+
+  /** Verifies that reduced motion holds Idle_A even over the herald's scripted clips */
+  it.each([
+    ['trumpet', heraldClip('trumpeting', 0.1, 'commit')],
+    ['wave', heraldClip('trumpeting', PUSH_FANFARE_PART, 'push')],
+    ['cheer', heraldClip('trumpeting', 0.1, 'commit', 0)],
+    ['rise', heraldClip('rising', 0.1)],
+  ] as const)('holds Idle_A under reduced motion over the %s', (_label, scripted) => {
+    const base: ClipInput = { moving: false, speed: 0, state: 'waiting', spawning: false, kneeling: false, reducedMotion: true };
+    const clip = clipFor({ ...base, scripted });
+    expect(clip.name).toBe('Idle_A');
+    expect(clip.frozen).toBe(true);
+    expect(clipFor({ ...base, reducedMotion: false, scripted })).toEqual(scripted);
   });
 
   /** Verifies that sinking holds the spawn clip played backwards, from its end to its start */
@@ -423,12 +590,78 @@ describe('heraldClip', () => {
     expect(clip.frozen).toBe(true);
   });
 
-  /** Verifies that every clip the herald uses is loaded by the figures (listed in CLIPS) */
-  it('only uses clips listed in CLIPS', () => {
+  /** Verifies that every clip the herald can play is loaded (CLIPS) and owned by a theme array */
+  it('only uses clips listed in CLIPS and in HERALD_CLIPS or BASE_CLIPS', () => {
     const phases: HeraldPhase[] = ['rising', 'trumpeting', 'sinking', 'gone'];
-    for (const phase of phases) {
-      expect(CLIPS as readonly string[]).toContain(heraldClip(phase, 0.5).name);
+    const cheers = [null, -0.5, 0, 0.5, PUSH_FANFARE_PART, PUSH_FANFARE_PART + 1];
+    const owned = new Set<string>([...HERALD_CLIPS, ...BASE_CLIPS]);
+    const seen = new Set<string>();
+    for (const kind of KINDS) {
+      for (const cheerAt of cheers) {
+        for (const phase of phases) {
+          for (let t = 0; t <= TRUMPET_TIME.push + 0.1; t += 0.05) seen.add(heraldClip(phase, t, kind, cheerAt).name);
+        }
+      }
     }
+    for (const name of seen) {
+      expect(CLIPS as readonly string[], name).toContain(name);
+      expect(owned.has(name), `${name} in HERALD_CLIPS or BASE_CLIPS`).toBe(true);
+    }
+    // Every gesture of the outing actually shows up somewhere.
+    expect([...seen].sort()).toEqual(['Cheering', 'Idle_A', TRUMPET_CLIP, 'Spawn_Ground', 'Waving'].sort());
+  });
+
+  /** Verifies that the herald's own gestures are listed in HERALD_CLIPS */
+  it('lists the trumpet, wave and cheer clips in HERALD_CLIPS', () => {
+    expect(HERALD_CLIPS as readonly string[]).toEqual(expect.arrayContaining([TRUMPET_CLIP, 'Waving', 'Cheering']));
+  });
+});
+
+describe('heraldCheerAt', () => {
+  /** Verifies that fireworks while rising give a negative time, relative to the trumpet start */
+  it.each([
+    [0, -SPAWN_CLIP_TIME],
+    [0.3, 0.3 - SPAWN_CLIP_TIME],
+    [SPAWN_CLIP_TIME - 0.01, -0.01],
+  ])('maps rising t=%d to %d', (t, expected) => {
+    const at = heraldCheerAt('rising', t);
+    expect(at).not.toBeNull();
+    expect(at!).toBeCloseTo(expected, 12);
+    expect(at!).toBeLessThan(0);
+  });
+
+  /** Verifies that fireworks while trumpeting give the trumpet time itself */
+  it.each([0, 1.2, TRUMPET_TIME.push - 0.01])('maps trumpeting t=%d to itself', (t) => {
+    expect(heraldCheerAt('trumpeting', t)).toBe(t);
+  });
+
+  /** Verifies that fireworks while the herald leaves or is gone yield no cheer */
+  it.each([
+    ['sinking', 0],
+    ['sinking', 0.7],
+    ['gone', 0],
+  ] as const)('returns null while %s (t=%d)', (phase, t) => {
+    expect(heraldCheerAt(phase, t)).toBeNull();
+  });
+
+  /** Verifies that a show caught mid-rise makes the herald cheer from his first trumpet frame */
+  it('chains with heraldPhase so a show during the rise cheers from the trumpet start', () => {
+    const shot = heraldPhase(SPAWN_CLIP_TIME / 2, 'push');
+    const cheerAt = heraldCheerAt(shot.phase, shot.t);
+    const start = heraldPhase(SPAWN_CLIP_TIME, 'push');
+    expect(heraldClip(start.phase, start.t, 'push', cheerAt).name).toBe('Cheering');
+    // The rise itself is untouched.
+    expect(heraldClip(shot.phase, shot.t, 'push', cheerAt).name).toBe('Spawn_Ground');
+  });
+
+  /** Verifies that a show caught mid-trumpet makes the herald cheer from that very moment */
+  it('chains with heraldPhase so a show mid-trumpet cheers from that moment', () => {
+    const elapsed = SPAWN_CLIP_TIME + 0.5;
+    const shot = heraldPhase(elapsed, 'commit');
+    const cheerAt = heraldCheerAt(shot.phase, shot.t);
+    expect(heraldClip(shot.phase, shot.t, 'commit', cheerAt).name).toBe('Cheering');
+    const before = heraldPhase(elapsed - 0.1, 'commit');
+    expect(heraldClip(before.phase, before.t, 'commit', cheerAt).name).toBe(TRUMPET_CLIP);
   });
 });
 

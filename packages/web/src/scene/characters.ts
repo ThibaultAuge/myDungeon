@@ -178,6 +178,9 @@ export const AMBUSH_CLIPS = [
 
 /** The heralds on the corner towers (celebrate.ts, Herald.tsx). */
 export const HERALD_CLIPS = [
+  'Ranged_Magic_Raise',
+  'Waving',
+  'Cheering',
 ] as const satisfies readonly KitClip[];
 
 /** Work gestures, per room or post. */

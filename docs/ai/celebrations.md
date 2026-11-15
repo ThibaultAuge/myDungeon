@@ -30,7 +30,7 @@ the castle.
   reconnect).
 - `celebrate.ts` (pure): bus `celebrate` / `onCelebrate`; herald timing `heraldPhase`
   (`rising → trumpeting → sinking → gone`, `TRUMPET_TIME` commit 2.4 s / push 6 s),
-  `heraldClip` (`Spawn_Ground`, `Use_Item`, `Spawn_Ground` held backwards), `heraldDepth`;
+  `heraldClip` / `heraldCheerAt` (see Heralds below), `heraldDepth`;
   `TowerPool.claim(random, preferred)` (one herald per tower, standing towers first);
   fireworks `fireworkBursts`, `SPARK_DIRECTIONS`, `rocketAt`, `sparkAt`, `stillAlpha`,
   `FIREWORKS_TIME` (derived, about 4.3 s).
@@ -46,6 +46,30 @@ the castle.
   like `SkeletonFigure`; body `Rogue`; procedural brass trumpet in bone `handslotr`
   (`TRUMPET_GRIP`); red pennant for a push; drei `<Html>` notes ♪ (`.herald-notes` in
   `styles.css`, `aria-hidden`). Hidden below tower height 0.35 (notes too).
+- Herald gestures, `heraldClip(phase, t, kind = 'commit', cheerAt = null)`: rising =
+  `Spawn_Ground` once; trumpeting = `TRUMPET_CLIP` (`Ranged_Magic_Raise`) played once and held
+  on its last frame, fist at the chin (`Use_Item` held the trumpet out to the side,
+  `Holding_*` at the belt). A commit's 2.4 s call is one block; a push's 6 s fanfare is cut
+  fanfare / `Waving` (one cycle, `WAVING_CLIP_TIME` 2.1333) / fanfare, `PUSH_FANFARE_PART`
+  derived. Sinking = `Spawn_Ground` held backwards.
+- Cheer: each `HeraldFigure` subscribes to `'tests'`; the first one of its outing sets
+  `cheerAt = heraldCheerAt(phase, t)` (rising → negative, trumpeting → `t`, sinking/gone →
+  null) and the herald plays `Cheering` once (`CHEERING_CLIP_TIME` 5/3) from
+  `max(0, cheerAt)`, then the trumpet comes back. A cheer overlapping the wave window ends the
+  wave: the mixer restarts a faded-out clip from frame 0, so a resumed wave would be a cut-off
+  fragment.
+- Notes ♪ show only while the clip is `TRUMPET_CLIP` (not during wave or cheer). Under
+  reduced motion `clipFor` still holds `Idle_A`; the notes keep following the `heraldClip`
+  timeline.
+- `TRUMPET_GRIP` rotation `[0, 0, π/12]`, calibrated on the held last frame of the raise:
+  bell about 83° up, slightly toward the courtyard. Aimed toward the courtyard, it points at
+  the default camera and shrinks to a stub.
+- The trumpet cleanup effect also clears the `attached` ref: StrictMode's dev mount cleanup
+  can run after the first frame attached the trumpet, and without the reset it never came
+  back.
+- `HERALD_CLIPS` (`characters.ts`) = `Ranged_Magic_Raise`, `Waving`, `Cheering`; it makes
+  every figure load `Rig_Medium_CombatRanged` (~1.0 MB) and `Rig_Medium_Simulation`
+  (~0.86 MB).
 - Fireworks (`Fireworks.tsx`): one additive `Points` per show (`toneMapped` false, canvas
   dot texture), placed behind the castle middle so they show in the sky of the default view.
   A show runs to its end; `'tests'` triggers during a show are ignored.
@@ -65,7 +89,10 @@ the castle.
   `Fireworks`), `packages/web/src/store.ts`, `packages/web/src/main.tsx`,
   `packages/web/src/styles.css` (`.herald-notes`).
 - Tests: `packages/server/test/celebration.test.ts`, `packages/web/test/celebrate.test.ts`,
-  `packages/web/test/gagCommands.test.ts`, `packages/web/test/dungeon.test.ts`.
+  `packages/web/test/gagCommands.test.ts`, `packages/web/test/dungeon.test.ts`,
+  `packages/web/test/heraldClips.test.ts` (checks `CHEERING_CLIP_TIME` / `WAVING_CLIP_TIME`
+  and the presence of `TRUMPET_CLIP` against the GLB; kept out of the shared `dungeon.test.ts`
+  list).
 - Human console command list: [docs/commandes-console.md](../commandes-console.md).
 
 ## Usage
@@ -78,14 +105,24 @@ the castle.
 - Timing, pool and firework math go in `celebrate.ts`; the `.tsx` files only render.
 - Preview: second server on another port with fake `PostToolUse` hooks (`git commit`,
   `git push`, `npm test`; setup in `docs/ai/agent-lifecycle.md`, Usage) or the console
-  commands. Keep the Browser pane shown, or use headless Playwright.
+  commands. A hidden Browser pane renders no frames: use headless Playwright. The server
+  only accepts the Vite origin on port 5173.
+- Herald close-ups: the cutaway lowers a tower whose ground anchor projects below the
+  pointer (`inForeground`), so keep the default camera position, move the pointer to the
+  canvas bottom edge, and narrow the FOV onto a back tower (e.g. target (23.7, 3.2, −13.7),
+  fov 8) through the R3F store found in the fiber dep's `_roots`. Import that dep by its full
+  `http://127.0.0.1:5173/...` URL taken from performance entries; a path-only import yields a
+  separate module instance with empty `_roots`.
+- A new herald gesture: add the clip to `HERALD_CLIPS`, choose it in `trumpetingClip`
+  (`celebrate.ts`), and add its length to `heraldClips.test.ts` if the timing depends on it.
 
 ## Notes
 - Security, keep: no backtracking regex on quote runs (a former quadratic unquote was
   removed); inputs capped (4 KB command, 64 KB output); `FAILURE` stays linear.
 - Accepted limits: `<<` inside quotes or arithmetic, `<<\EOF`, a second heredoc on one line,
   a heredoc message over 4 KB hiding a following push, dotnet's failure summary not
-  recognised.
+  recognised. The herald cheers at the first `'tests'` of his outing even when `Fireworks`
+  ignores it because a show is already running.
 - ACCEPTED RISK (user decision 2026-11-15): the accessibility audit kept a 🔴 on WCAG 2.3.1
   for the fireworks (opposing-luminance pair count per burst; no flash-analyser measurement
   possible). The user chose to accept it. The success signal is visual-only (events stay
