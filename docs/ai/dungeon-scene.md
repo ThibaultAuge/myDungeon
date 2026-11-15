@@ -7,9 +7,12 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cast
 ## Current State
 - The map is built from KayKit CC0 models (Dungeon Pack 1.1, RPG Tools Bits 1.0, Fantasy
   Weapons Bits 1.0, free tiers), grouped in three packs: `dungeon`, `tools`, `weapons`.
-  Agents use KayKit Adventurers 2.0 (CC0): packs `adventurers` (character bodies),
-  `adventurers_anim` (shared `Rig_Medium_General`, `Rig_Medium_MovementBasic` clips) and
-  `adventurers_props` (8 held props, gltf + 4 textures). Pack `forest` (trees around the
+  Agents use KayKit Adventurers 2.0 (CC0): packs `adventurers` (character bodies) and
+  `adventurers_props` (8 held props, gltf + 4 textures). Pack `animations`: the 8
+  `Rig_Medium_*` clip files of KayKit Character Animations 1.1 (CC0; General,
+  MovementBasic, MovementAdvanced, CombatMelee, CombatRanged, Simulation, Special, Tools),
+  shared by every Adventurers and Skeletons body; only the files holding a used clip are
+  fetched (see Clips loading below). Pack `forest` (trees around the
   castle, plus grass tufts and a rock used as room decor): `docs/ai/night-forest.md`.
 - Room-decor packs (KayKit CC0, free tiers): `furniture`, `halloween`, `restaurant`
   (Furniture / Halloween / Restaurant Bits 1.0), `resources` (Resource Bits), `mixed1`,
@@ -145,9 +148,23 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cast
   then pacing, which reduced motion skips; `docs/ai/altar-wait.md`) >
   kneeling at the altar (`PickUp` frozen at `KNEEL_POSE_TIME`) > done (`Idle_A` frozen, no
   transparency) > working (`Interact`) > waiting (`Idle_B`). Reduced motion: still poses,
-  turns snap, no spawn; position still moves. `CLIPS` also lists `Hit_A`, `Death_A` and
-  `Use_Item` (scripted, or the potion gulp); their measured lengths (`SPAWN_CLIP_TIME`, `HIT_CLIP_TIME`,
-  `DEATH_CLIP_TIME`, `USE_ITEM_CLIP_TIME`) are checked against the GLB by a test.
+  turns snap, no spawn; position still moves. Measured clip lengths (`SPAWN_CLIP_TIME`,
+  `HIT_CLIP_TIME`, `DEATH_CLIP_TIME`, `USE_ITEM_CLIP_TIME`) are checked against the GLB by a
+  test (helper pattern in `dungeon.test.ts`).
+- Clips loading: `clipCatalog.ts` holds `ANIM_FILES` (same list and order as the manifest's
+  `animations` models, tested), the frozen `CLIP_FILE` catalog of all 131 clips (T-Pose
+  excluded) → file (checked against the GLBs by a test), the `KitClip` type and
+  `animFilesFor(clips)`. In `characters.ts`, `CLIPS` is the deduplicated union of the theme
+  arrays `BASE_CLIPS`, `ALTAR_CLIPS`, `AMBUSH_CLIPS`, `HERALD_CLIPS`, `WORK_CLIPS`,
+  `BONUS_CLIPS` (each `as const satisfies readonly KitClip[]`, one clip per line, separated
+  by frozen comments so parallel branches merge cleanly); `ClipName` is their union;
+  `ANIM_FILES_USED = animFilesFor(CLIPS)`. `kit.ts` `useAnimFiles()` loads the module-level
+  `ANIM_URLS` (from `ANIM_FILES_USED`) with one `useGLTF(array, false)`; `preloadKit` skips
+  the `animations` pack and preloads the same array (r3f caches an array load under the
+  whole array, so it must be the same key). `AgentFigure`'s `useClips` flattens the loaded
+  animations, filters them by `CLIPS` and warns in DEV on missing or duplicate clips.
+  Agents, ambush skeletons (`Ambush.tsx`) and heralds (`Herald.tsx`) all go through
+  `Character` → `useClips`.
 - `AgentFigure` structure: the parent runs the walk and writes a `Motion` ref (exported,
   with `scripted`); the exported
   `Character` child (own `Suspense` + `CharacterBoundary` error boundary with a capsule
@@ -346,6 +363,9 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cast
 - `packages/web/src/scene/kit.ts` — `useKitGLTF` (drei `useGLTF(url, false)`: Draco off, so
   no third-party decoder fetch); one shared material per pack + material name. `kitUrl` is
   module-private and throws unless the pack / model is listed in the manifest.
+  `useAnimFiles`, `ANIM_URLS`, `preloadKit`.
+- `packages/web/src/scene/clipCatalog.ts` — `ANIM_FILES`, `CLIP_FILE`, `KitClip`,
+  `animFilesFor`. Never edited to add a clip.
 - `packages/web/src/scene/kit-manifest.json` — models and textures per pack; a pack may set
   `"format": "glb"` (self-contained, `textures: []`).
 - `scripts/import-kaykit.mjs` (`npm run kaykit:import`) — copies manifest entries from
@@ -357,8 +377,8 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cast
   `assets-src/gh-<name>/repo/addons/kaykit_<name>_bits/Assets/gltf`; their `LICENSE.txt`
   was fetched separately (the zipball omits it).
 - `packages/web/src/scene/characters.ts` — pure, no three.js: `MAIN_BODY`, `SUB_BODIES`,
-  `LOOKS`, `SKELETON_LOOKS`, `lookFor`, `PROP_GRIP`, `gripFor`, `clipFor`, `CLIPS` and the
-  clip constants / measured clip times.
+  `LOOKS`, `SKELETON_LOOKS`, `lookFor`, `PROP_GRIP`, `gripFor`, `clipFor`, the clip theme
+  arrays, `CLIPS`, `ClipName`, `ANIM_FILES_USED` and the clip constants / measured clip times.
 - `packages/web/src/scene/AgentFigure.tsx` — walk, `Motion`, `Character` (takes a `Look`;
   both exported, reused by `Ambush.tsx`), `Held`, `CharacterBoundary`, tag, destination
   badge toggle, slap handlers and anchor.
@@ -403,12 +423,18 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cast
   show EXTRA-only items that are not in the free zip. The import needs every listed pack
   folder in `assets-src/` (gitignored, so absent from a worktree): make the main checkout's
   `assets-src` reachable at the worktree root first (a junction or a copy works). Skeleton
-  sources: `assets-src/skeletons/KayKit_Skeletons_1.1_FREE`.
+  sources: `assets-src/skeletons/KayKit_Skeletons_1.1_FREE`. Animation sources:
+  `assets-src/animations/KayKit_Character_Animations_1.1/Animations/gltf/Rig_Medium`.
 - New or changed role look: edit `LOOKS` (lower-case type key) and, for a new prop, the
   manifest models of its pack. A `tools` prop also needs a `PROP_GRIP` entry calibrated by
   eye (tested: every `tools` prop in `LOOKS` has a grip, every `adventurers_props` model is
   used). All six bodies (Barbarian, Knight, Mage, Ranger, Rogue, Rogue_Hooded) share the
   Rig_Medium skeleton (23 identical bones), so the shared clip files apply to every body.
+- New clip: add its name on a new line inside the matching theme array of `characters.ts`
+  (any `CLIP_FILE` key; typecheck rejects typos). Its file is then loaded automatically and
+  a clip listed in two themes loads once; touch neither `clipCatalog.ts`, `kit.ts` nor the
+  tests (they assert `ANIM_FILES_USED` only as a lower bound). A new clip-length constant
+  reads its length from the GLB with the `dungeon.test.ts` helper pattern.
 - Grip calibration workflow: in Playwright, import the store by the URL actually loaded
   (take it from performance resource entries; Vite appends `?t=` after edits) and call
   `useOffice.setState({ sessions: [], roster: [...] })` so the tavern shows one resting

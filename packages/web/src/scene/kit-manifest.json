@@ -203,14 +203,20 @@
       "dagger"
     ]
   },
-  "adventurers_anim": {
-    "source": "adventurers/KayKit_Adventurers_2.0_FREE/Animations/gltf/Rig_Medium",
-    "license": "adventurers/KayKit_Adventurers_2.0_FREE/License.txt",
+  "animations": {
+    "source": "animations/KayKit_Character_Animations_1.1/Animations/gltf/Rig_Medium",
+    "license": "animations/KayKit_Character_Animations_1.1/License.txt",
     "format": "glb",
     "textures": [],
     "models": [
       "Rig_Medium_General",
-      "Rig_Medium_MovementBasic"
+      "Rig_Medium_MovementBasic",
+      "Rig_Medium_MovementAdvanced",
+      "Rig_Medium_CombatMelee",
+      "Rig_Medium_CombatRanged",
+      "Rig_Medium_Simulation",
+      "Rig_Medium_Special",
+      "Rig_Medium_Tools"
     ]
   },
   "furniture": {

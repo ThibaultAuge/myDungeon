@@ -67,6 +67,7 @@ import {
   USE_ITEM_CLIP_TIME,
   type PropRef,
 } from '../src/scene/characters.ts';
+import { ANIM_FILES, CLIP_FILE, type AnimFile } from '../src/scene/clipCatalog.ts';
 
 // kit.ts and the .tsx files need drei and import.meta.env: they are not imported here. The
 // manifest is read as plain JSON and the geometry is tested through dungeon.ts directly.
@@ -356,6 +357,19 @@ function gateCorridorEnds(): Point[] {
 
 // ---------------------------------------------------------------- manifest
 
+const animationNamesCache = new Map<AnimFile, Set<string>>();
+
+/** Names of the clips in one file of the animations pack (each file read once). */
+function animationNames(file: AnimFile): Set<string> {
+  let names = animationNamesCache.get(file);
+  if (!names) {
+    const { json } = readGlb(fs.readFileSync(path.join(PUBLIC_KAYKIT, 'animations', `${file}.glb`)));
+    names = new Set((json?.animations ?? []).flatMap((a) => (a.name ? [a.name] : [])));
+    animationNamesCache.set(file, names);
+  }
+  return names;
+}
+
 describe('kit manifest', () => {
   /**
    * Verifies that the manifest declares every pack the scene loads from, forest included
@@ -363,8 +377,8 @@ describe('kit manifest', () => {
   it('declares the map, character and decoration packs with safe names', () => {
     expect(Object.keys(MANIFEST).sort()).toEqual([
       'adventurers',
-      'adventurers_anim',
       'adventurers_props',
+      'animations',
       'dungeon',
       'forest',
       'furniture',
@@ -390,7 +404,7 @@ describe('kit manifest', () => {
    */
   it('gives every pack the gltf (default) or glb format', () => {
     for (const [pack, spec] of packs) expect(['gltf', 'glb'], pack).toContain(formatOf(spec));
-    expect(glbPacks.map(([p]) => p).sort()).toEqual(['adventurers', 'adventurers_anim', 'skeletons']);
+    expect(glbPacks.map(([p]) => p).sort()).toEqual(['adventurers', 'animations', 'skeletons']);
     expect(gltfPacks.map(([p]) => p).sort()).toEqual([
       'adventurers_props',
       'dungeon',
@@ -552,17 +566,36 @@ describe('kit manifest', () => {
   });
 
   /**
-   * Verifies that every clip the figures play exists in one of the adventurers_anim files
+   * Verifies that every clip the figures play exists in the animations file the catalog names
    */
-  it('contains every animation clip played by the figures', () => {
-    const names = new Set<string>();
-    for (const name of MANIFEST.adventurers_anim.models) {
-      const file = path.join(PUBLIC_KAYKIT, 'adventurers_anim', `${name}.glb`);
-      const { json } = readGlb(fs.readFileSync(file));
-      for (const a of json?.animations ?? []) if (a.name) names.add(a.name);
+  it('contains every animation clip played by the figures, in its catalog file', () => {
+    const misplaced = CLIPS.filter((c) => !animationNames(CLIP_FILE[c]).has(c));
+    expect(CLIPS.length).toBeGreaterThan(0);
+    expect(misplaced).toEqual([]);
+  });
+
+  /**
+   * Verifies that the catalog lists the animations pack's files, in the manifest's order
+   */
+  it('catalogs the same animation files as the manifest', () => {
+    expect([...ANIM_FILES]).toEqual(MANIFEST.animations.models);
+  });
+
+  /**
+   * Verifies that the clip catalog matches the files: every clip (but T-Pose) once, in its file
+   */
+  it('catalogs every clip of the animation files, each in the file that holds it', () => {
+    const fromFiles: Record<string, string> = {};
+    const repeated: string[] = [];
+    for (const file of ANIM_FILES) {
+      for (const clip of animationNames(file)) {
+        if (clip === 'T-Pose') continue;
+        if (Object.hasOwn(fromFiles, clip)) repeated.push(clip);
+        fromFiles[clip] = file;
+      }
     }
-    expect(names.size).toBeGreaterThan(0);
-    expect(CLIPS.filter((c) => !names.has(c))).toEqual([]);
+    expect(repeated).toEqual([]);
+    expect({ ...CLIP_FILE }).toEqual(fromFiles);
   });
 
   // ---- skeletons and the scripted clips
@@ -591,8 +624,8 @@ describe('kit manifest', () => {
     ['Use_Item', USE_ITEM_CLIP_TIME],
   ])('times %s as long as the clip in Rig_Medium', (clip, time) => {
     let length: number | undefined;
-    for (const file of MANIFEST.adventurers_anim.models) {
-      const json = glbJson('adventurers_anim', file);
+    for (const file of MANIFEST.animations.models) {
+      const json = glbJson('animations', file);
       const anim = json.animations?.find((a) => a.name === clip);
       if (!anim) continue;
       // A clip lasts until its last keyframe: the largest time of all its sampler inputs.
@@ -607,7 +640,7 @@ describe('kit manifest', () => {
    * Verifies that the sitting pose of the endless wait at the altar lies inside its clip
    */
   it('holds the altar sitting pose inside its clip', () => {
-    const json = glbJson('adventurers_anim', 'Rig_Medium_General');
+    const json = glbJson('animations', CLIP_FILE[SIT_CLIP]);
     const anim = json.animations?.find((a) => a.name === SIT_CLIP);
     expect(anim, `${SIT_CLIP} found`).toBeDefined();
     const length = Math.max(...anim!.samplers.map((s) => json.accessors?.[s.input]?.max?.[0] ?? 0));

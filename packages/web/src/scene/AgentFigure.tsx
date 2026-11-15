@@ -14,7 +14,7 @@ import { CLICK_MAX_DRAG_PX, nearestTarget, setPointerHover, TARGET_USER_DATA } f
 import { DestinationBadge } from './DestinationIcon.tsx';
 import { destinationOf } from './destinations.ts';
 import { KIT_SCALE } from './dungeon.ts';
-import { useKitGLTF } from './kit.ts';
+import { useAnimFiles, useKitGLTF } from './kit.ts';
 import { reroute, SPAWN, type Point, type Spot } from './layout.ts';
 import { exitRoute, groundY, routeFrom } from './outside.ts';
 import { DRINK_S, onPotion, POTION_EFFECT_MS, POTION_S, potionPhase, staggerSway } from './potion.ts';
@@ -83,13 +83,15 @@ function turnFraction(rate: number, dt: number, still: boolean): number {
   return still ? 1 : 1 - Math.exp(-rate * dt);
 }
 
-/** The animation clips shared by every character, loaded once. */
+/**
+ * The animation clips shared by every character (agents, ambush skeletons, heralds), loaded
+ * once: only the `animations` files that hold a clip of CLIPS are fetched.
+ */
 function useClips(): AnimationClip[] {
-  const general = useKitGLTF('adventurers_anim', 'Rig_Medium_General');
-  const movement = useKitGLTF('adventurers_anim', 'Rig_Medium_MovementBasic');
+  const files = useAnimFiles();
   return useMemo(() => {
     const wanted = new Set<string>(CLIPS);
-    const clips = [...general.animations, ...movement.animations].filter((c) => wanted.has(c.name));
+    const clips = files.flatMap((f) => f.animations).filter((c) => wanted.has(c.name));
     if (import.meta.env.DEV) {
       const found = clips.map((c) => c.name);
       const missing = CLIPS.filter((n) => !found.includes(n));
@@ -97,7 +99,7 @@ function useClips(): AnimationClip[] {
       if (missing.length || found.length !== new Set(found).size) console.warn('KayKit clips missing or duplicated', { missing, found });
     }
     return clips;
-  }, [general.animations, movement.animations]);
+  }, [files]);
 }
 
 /** A model held in a hand: a plain clone (shared geometry and materials) inside the hand bone. */
