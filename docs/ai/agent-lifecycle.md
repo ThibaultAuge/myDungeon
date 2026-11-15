@@ -141,7 +141,8 @@ do this; subagents keep the tavern cycle above.
   speech bubble (`RequestBubble`, glyph … / ? / !, fill `#b3261e` for contrast,
   `aria-hidden`) rendered inside the name tag `<Html>` (wrapper class `agent-tag-anchor`,
   name span `agent-tag`). While the figure walks, the destination badge replaces the
-  bubble: `docs/ai/dungeon-scene.md`.
+  bubble: `docs/ai/dungeon-scene.md`. Altar agents degrade with wait time (pacing,
+  sitting, Zzz, cobwebs): `docs/ai/altar-wait.md`.
 - Roster (`snapshot.roster`, `rosterView` in `reducer.ts`): agents defined in
   `~/.claude/agents` and `<env folder>/.claude/agents`, plus types seen at work in that
   environment (`seenTypes`, max 32 per env, kept until server restart), deduped

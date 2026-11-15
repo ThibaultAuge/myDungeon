@@ -18,7 +18,7 @@ Un **donjon de fantasy coloré et joyeux**, pas sombre : proportions trapues, co
 
 ## État de l'implémentation
 
-*Mis à jour le 2026-11-14.*
+*Mis à jour le 2026-11-15.*
 
 ### Fait
 
@@ -32,6 +32,7 @@ Un **donjon de fantasy coloré et joyeux**, pas sombre : proportions trapues, co
 - l'entrée et la sortie du chevalier de l'agent principal : arrivée à pied par le chemin, pont-levis et porte ; chevalier endormi à la taverne pour une session arrêtée qui a travaillé ; à la suppression d'une session, embuscade de trois squelettes (pack KayKit Skeletons 1.1, CC0), avec les départs multiples et le retour pendant une mort ;
 - le fantôme d'une session arrêtée sans avoir jamais travaillé : dessiné dans le code, il erre dans les couloirs et s'évapore au départ de la session ;
 - la bulle de requête à l'autel (« … », « ? », « ! ») et le losange ambre de l'attente d'un prompt ;
+- l'attente interminable à l'autel : pas, assise, sommeil avec bulle « Zzz » et toiles d'araignée selon la durée d'attente, purement visuelle, avec la commande `agentOffice.autel` ;
 - les icônes d'état (marteau, sablier, bulle rouge « … », « Zzz ») dans la liste latérale et la fiche d'agent ;
 - le pictogramme de destination au-dessus d'un agent qui marche ;
 - la boîte de dialogue en lecture seule, ouverte par un clic sur un personnage ou sur sa ligne, lisible sans connexion depuis la page servie en local ;
