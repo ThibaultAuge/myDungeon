@@ -1,6 +1,6 @@
 # Fonctionnement
 
-Ce document explique comment IA IA Land reçoit ses informations, ce que l'installation modifie sur ton poste, et quelles variables d'environnement il lit. Pour l'usage à l'écran, voir [utilisation.md](utilisation.md).
+Ce document explique comment Agents’ lAIr reçoit ses informations, ce que l'installation modifie sur ton poste, et quelles variables d'environnement il lit. Pour l'usage à l'écran, voir [utilisation.md](utilisation.md).
 
 ## Comment ça marche
 

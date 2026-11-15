@@ -1,6 +1,6 @@
 # Sécurité
 
-IA IA Land est un outil mono-utilisateur, lancé à la main sur ton propre poste. Ce document décrit ce qu'il protège, ce qu'il ne protège pas, et comment restreindre l'accès aux fichiers.
+Agents’ lAIr est un outil mono-utilisateur, lancé à la main sur ton propre poste. Ce document décrit ce qu'il protège, ce qu'il ne protège pas, et comment restreindre l'accès aux fichiers.
 
 ## Sécurité
 

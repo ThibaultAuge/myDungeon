@@ -4,8 +4,13 @@ import { fr, type Messages } from './fr.ts';
 
 export type { Messages };
 
-/** Product name (a pun on "La La Land"): a proper noun, identical in every language. */
-export const APP_NAME = 'IA IA Land';
+/**
+ * Product name, a proper noun identical in every language: "lair" with "AI" set in
+ * capitals and shown in bold in the header brand (see `ui/AppName.tsx`).
+ */
+export const APP_NAME_PARTS = { before: 'Agents’ l', bold: 'AI', after: 'r' } as const;
+
+export const APP_NAME = `${APP_NAME_PARTS.before}${APP_NAME_PARTS.bold}${APP_NAME_PARTS.after}`;
 
 export type Lang = 'fr' | 'de' | 'en';
 

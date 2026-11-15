@@ -1,6 +1,6 @@
-# IA IA Land
+# Agents’ lAIr
 
-Displayed product name; code and tooling keep the technical name `agent-office` (see `docs/ai/i18n.md`).
+Displayed product name "Agents’ lAIr", never translated; code and tooling keep the technical name `agent-office` (see `docs/ai/i18n.md`).
 
 3D dungeon (React + react-three-fiber client, Fastify server) that shows Claude Code agents live.
 npm workspaces: `packages/server`, `packages/web`, `packages/shared`.

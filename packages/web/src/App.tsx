@@ -17,6 +17,7 @@ import { envName } from './format.ts';
 import { StatusIcon } from './ui/StatusIcon.tsx';
 import { useT } from './i18n/useT.ts';
 import { APP_NAME } from './i18n/index.ts';
+import { AppName } from './ui/AppName.tsx';
 
 function Header({ children }: { children?: ReactNode }) {
   const connected = useOffice((s) => s.connected);
@@ -32,7 +33,7 @@ function Header({ children }: { children?: ReactNode }) {
           navigate({ page: 'home' });
         }}
       >
-        {APP_NAME}
+        <AppName />
       </a>
       {children}
       <span className={`conn ${connected ? 'conn--ok' : 'conn--ko'}`} role="status">
