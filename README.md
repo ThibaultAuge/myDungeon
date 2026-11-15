@@ -1,6 +1,8 @@
-# Agent Office
+# IA IA Land
 
-Un petit donjon en 3D où chaque agent Claude Code du poste local est un personnage. On voit qui travaille, sur quoi, qui attend une réponse et qui a fini.
+**IA IA Land** est un petit royaume en 3D : le royaume des IA, jeu de mots sur *La La Land*. Chaque environnement de l'app Claude en est un donjon. Dans un donjon, chaque agent Claude Code du poste local est un personnage. On voit qui travaille, sur quoi, qui attend une réponse et qui a fini.
+
+> Les identifiants techniques gardent le nom historique `agent-office` : packages `@agent-office/*`, variables `AGENT_OFFICE_*`, en-tête `x-agent-office-token`, dossier `~/.claude/agent-office`, sauvegardes `settings.json.agent-office-<date>.bak`, et configurations `agent-office`, `agent-office-test` et `agent-office-web` de `.claude/launch.json`.
 
 - **Un donjon en 3D** de 14 lieux, entouré d'une forêt de nuit.
 - **Un personnage par agent**, de la couleur de sa session. Les sous-agents apparaissent, puis retournent à la taverne.

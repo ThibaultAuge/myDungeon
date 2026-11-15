@@ -6,6 +6,10 @@ Ce document décrit ce que tu vois à l'écran et ce que tu peux faire. Pour l'i
 
 La scène montre un donjon de 14 lieux, reliés par des couloirs. Chaque agent est un personnage. Les personnages passent par les portes et les couloirs, jamais à travers un mur. Le plan des lieux est dans [lieux.md](lieux.md).
 
+## Choisir un donjon
+
+La page d'accueil, « Choisis ton donjon », affiche une carte par environnement de l'app Claude. Chaque carte donne son nom, le nombre de sessions en cours (ou « Au calme ») et le premier dossier de l'environnement. Un clic ouvre le donjon. Une fois dans un donjon, le sélecteur « Donjon », en haut de la page, passe à un autre donjon.
+
 ## Où va chaque agent
 
 ### Agent principal et sous-agents génériques
@@ -182,7 +186,7 @@ Qui peut lire ces conversations est décrit dans [securite.md](securite.md).
 
 L'interface existe en français, en allemand et en anglais. Les boutons `FR | DE | EN`, en haut à droite, changent la langue à la volée, sur toutes les pages. À la première visite, la page suit la langue du navigateur, ou le français s'il n'est réglé sur aucune des trois. Le choix est ensuite mémorisé dans le navigateur.
 
-Les titres de sessions, noms d'environnements, tâches et messages des agents s'affichent tels qu'ils ont été écrits. Les journaux du serveur restent en français.
+Les titres de sessions, noms des donjons, tâches et messages des agents s'affichent tels qu'ils ont été écrits. Les journaux du serveur restent en français.
 
 ## Historique
 

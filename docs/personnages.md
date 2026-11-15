@@ -22,7 +22,7 @@ Les tenues prévues selon le mode de travail ne sont pas encore en place. Elles 
 
 Seul l'agent principal de chaque session entre et sort du château, sous la forme d'un chevalier. Les sous-agents suivent toujours le cycle de la taverne, décrit dans [lieux.md](lieux.md#la-taverne-et-le-cycle-de-vie-dun-agent).
 
-- **Arrivée.** Quand une nouvelle session apparaît, son chevalier arrive à pied par le chemin de la forêt, juste au-delà de la zone visible. Il traverse le pont-levis, passe la porte du château, puis marche jusqu'à son poste. Une session qui n'a encore rien fait apparaît en fantôme, et non en chevalier (voir [Le fantôme](#le-fantôme)). Au chargement de la page, ou quand on change d'environnement, les agents déjà présents restent à leur place.
+- **Arrivée.** Quand une nouvelle session apparaît, son chevalier arrive à pied par le chemin de la forêt, juste au-delà de la zone visible. Il traverse le pont-levis, passe la porte du château, puis marche jusqu'à son poste. Une session qui n'a encore rien fait apparaît en fantôme, et non en chevalier (voir [Le fantôme](#le-fantôme)). Au chargement de la page, ou quand on change de donjon, les agents déjà présents restent à leur place.
 - **Session arrêtée.** Une session dont le processus Claude est fermé, mais qui peut encore être reprise, garde son chevalier endormi à la taverne, dans la couleur de la session, si elle a déjà fait du travail réel. Une session qui n'en a jamais fait est un fantôme (voir [Le fantôme](#le-fantôme)). Ce chevalier ne se sélectionne pas en 3D : la liste latérale ne montre que les sessions actives.
 - **Départ.** Quand une session disparaît (supprimée, archivée, purgée au bout de 60 minutes une fois terminée, ou repoussée hors de l'historique des 30 dernières sessions), son chevalier quitte le château par la porte et marche jusqu'à un point du chemin, en dehors du donjon. Un fantôme ne sort pas du château : il s'estompe (voir [Le fantôme](#le-fantôme)).
 - **Embuscade.** Trois squelettes au plus sortent du sol autour du chevalier et le frappent. Ce sont des `Skeleton_Minion` nus, armés d'une épée, d'une hache et d'une épée (pack KayKit Skeletons 1.1, voir [modeles-3d.md](modeles-3d.md)). Le chevalier tombe, puis son corps s'enfonce dans le sol. Chaque squelette marche ensuite vers l'arbre le plus proche, s'il est assez près, et s'y fond. Sinon, il retourne sous terre.
@@ -91,7 +91,7 @@ stateDiagram-v2
 
 ## Les sous-agents spécialisés
 
-Ce sont les agents définis dans `~/.claude/agents/`, ou dans le `.claude/agents/` d'un dossier de l'environnement. Le hook `SubagentStart` donne leur type dans `agent_type`, ce qui permet de choisir la silhouette.
+Ce sont les agents définis dans `~/.claude/agents/`, ou dans le `.claude/agents/` d'un dossier du donjon. Le hook `SubagentStart` donne leur type dans `agent_type`, ce qui permet de choisir la silhouette.
 
 | Agent | Rôle | Cliché visuel | Accessoire | Poste | Aujourd'hui (KayKit) |
 |---|---|---|---|---|---|
@@ -127,7 +127,7 @@ Ils n'ont pas de fichier dans `~/.claude/agents/` mais apparaissent souvent, Exp
 
 Les packs KayKit ne donnent que 5 corps aux sous-agents : le rôle se lit donc dans le corps et l'objet en main.
 
-Le type inconnu est indispensable : chaque environnement peut avoir ses propres agents dans son `.claude/agents/`, et les plugins en ajoutent.
+Le type inconnu est indispensable : chaque donjon peut avoir ses propres agents dans le `.claude/agents/` de ses dossiers, et les plugins en ajoutent.
 
 ## Changer une tenue
 

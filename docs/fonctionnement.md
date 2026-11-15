@@ -1,6 +1,6 @@
 # Fonctionnement
 
-Ce document explique comment Agent Office reçoit ses informations, ce que l'installation modifie sur ton poste, et quelles variables d'environnement il lit. Pour l'usage à l'écran, voir [utilisation.md](utilisation.md).
+Ce document explique comment IA IA Land reçoit ses informations, ce que l'installation modifie sur ton poste, et quelles variables d'environnement il lit. Pour l'usage à l'écran, voir [utilisation.md](utilisation.md).
 
 ## Comment ça marche
 
@@ -23,8 +23,8 @@ flowchart LR
 *Figure : Les trois chemins de données, du relevé à la page.*
 
 - **Les hooks** donnent le temps réel : prompt envoyé, outil utilisé, permission demandée, sous-agent lancé ou terminé, fin de tour, fin de session.
-- **L'inventaire** relit les fichiers de l'app desktop (au fil de leurs modifications, et toutes les 10 s). Il fournit les environnements, les sessions, leur titre et leur session parente, et indique si une session tourne. Au démarrage du serveur, il reconstruit l'état même sans hooks.
-- **Le navigateur** reçoit un instantané complet de l'environnement affiché, au plus toutes les 100 ms. Une reconnexion suffit donc à tout resynchroniser.
+- **L'inventaire** relit les fichiers de l'app desktop (au fil de leurs modifications, et toutes les 10 s). Il fournit les donjons (un par environnement de l'app Claude), les sessions, leur titre et leur session parente, et indique si une session tourne. Au démarrage du serveur, il reconstruit l'état même sans hooks.
+- **Le navigateur** reçoit un instantané complet du donjon affiché, au plus toutes les 100 ms. Une reconnexion suffit donc à tout resynchroniser.
 
 ## Ce que l'installation des hooks modifie
 
@@ -70,7 +70,7 @@ Tout est lu en lecture seule. Seuls ces fichiers sont ouverts :
 - `…\claude-code-sessions\<compte>\<org>\local_*.json` et `archived-sessions.idx` : les sessions de l'app desktop ;
 - `~/.claude/sessions/<pid>.json` : les processus Claude Code en cours (occupé ou au repos) ;
 - `~/.claude/projects/<dossier>/<session>.jsonl` et `…/<session>/subagents/agent-<id>.jsonl` : la conversation de l'agent ouvert dans la boîte de dialogue, en lecture bornée. Le chemin est déduit de l'état du serveur ;
-- `~/.claude/agents/*.md` et `<dossier>/.claude/agents/*.md`, pour chaque dossier de l'environnement affiché : les définitions d'agents, qui forment la liste de la taverne. Seuls les fichiers dont l'en-tête contient un champ `name:` comptent. Ces dossiers sont relus au plus une fois par minute ;
+- `~/.claude/agents/*.md` et `<dossier>/.claude/agents/*.md`, pour chaque dossier du donjon affiché : les définitions d'agents, qui forment la liste de la taverne. Seuls les fichiers dont l'en-tête contient un champ `name:` comptent. Ces dossiers sont relus au plus une fois par minute ;
 - `<dossier de session>/.claude/launch.json` : les ports seulement, dans la limite de 64 KiB. Il sert à détecter les serveurs web d'une session ;
 - pour les sessions du terminal, le serveur vérifie si `<cwd>/.git` est un fichier. C'est le signe d'un worktree ;
 - toutes les 10 s, tant qu'une session est en cours : la liste des ports en écoute et des processus qui les ouvrent. Sous Windows, cela passe par `netstat -ano` et une requête PowerShell sur `Win32_Process`. Ailleurs, par `lsof` et `ps`.

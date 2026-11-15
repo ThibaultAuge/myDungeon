@@ -102,7 +102,7 @@ Deux agents ne se tiennent jamais au même endroit.
 
 La taverne montre l'équipe disponible, même quand rien ne tourne.
 
-1. **Au repos.** Elle contient **un seul exemplaire de chaque type** d'agent connu de l'environnement affiché : une Hermione, un Dexter, un Turing… Ils ont une couleur neutre, puisqu'ils ne travaillent pour aucune session. Un exemplaire au repos ne se sélectionne pas.
+1. **Au repos.** Elle contient **un seul exemplaire de chaque type** d'agent connu du donjon affiché : une Hermione, un Dexter, un Turing… Ils ont une couleur neutre, puisqu'ils ne travaillent pour aucune session. Un exemplaire au repos ne se sélectionne pas.
 2. **Appel.** Quand une session lance un sous-agent de ce type, l'exemplaire de la taverne se lève, prend la couleur de la session et va à son poste.
 3. **Appels simultanés.** Si deux ou trois Hermione sont lancées en même temps (même session ou sessions différentes), les exemplaires manquants sortent des casiers et partent chacun vers une place libre de la Salle des épreuves.
 4. **Fin de tâche.** Le sous-agent qui a fini reprend la couleur neutre et retourne à la taverne. Il disparaît en arrivant. Le type reprend alors une seule figure au repos, sur la place occupée par le dernier agent revenu. Quand une session se termine, ses sous-agents retournent aussi à la taverne.
@@ -116,8 +116,8 @@ Une session arrêtée qui n'a jamais travaillé n'a pas de chevalier à la taver
 
 Elle regroupe :
 
-- les agents définis dans `~/.claude/agents/` et dans le `.claude/agents/` des dossiers de l'environnement affiché. Un fichier ne compte que si son en-tête contient un champ `name:`, comme dans Claude Code ;
-- les types vus au travail dans cet environnement. Les agents intégrés (Explore, general-purpose…) y entrent à leur premier appel, et y restent jusqu'au redémarrage du serveur.
+- les agents définis dans `~/.claude/agents/` et dans le `.claude/agents/` des dossiers du donjon affiché. Un fichier ne compte que si son en-tête contient un champ `name:`, comme dans Claude Code ;
+- les types vus au travail dans ce donjon. Les agents intégrés (Explore, general-purpose…) y entrent à leur premier appel, et y restent jusqu'au redémarrage du serveur.
 
 Les dossiers sont relus au plus une fois par minute.
 

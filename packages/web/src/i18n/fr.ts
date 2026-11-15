@@ -16,8 +16,8 @@ export const fr = {
     label: 'Langue de l’interface',
   },
   home: {
-    title: 'Choisis une entreprise',
-    intro: 'Chaque environnement de l’app Claude est un donjon, avec ses sessions et ses agents.',
+    title: 'Choisis ton donjon',
+    intro: 'Chaque environnement de l’app Claude est un donjon du royaume, avec ses sessions et ses agents.',
     activeSessions: (n: number) => plural('fr', n, `${n} session en cours`, `${n} sessions en cours`),
     quiet: 'Au calme',
     empty: 'Aucun environnement trouvé. Le serveur tourne-t-il ?',
@@ -27,7 +27,7 @@ export const fr = {
     unknown: 'Environnement inconnu',
   },
   envSwitcher: {
-    label: 'Entreprise',
+    label: 'Donjon',
     active: (n: number) => ` (${n} en cours)`,
     open: 'Ouvrir',
   },

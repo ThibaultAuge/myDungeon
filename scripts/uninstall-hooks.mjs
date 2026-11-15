@@ -15,10 +15,10 @@ stripOurs(settings);
 if (JSON.stringify(settings) !== before) {
   const backup = backupSettings();
   writeSettings(settings);
-  console.log(`Hooks Agent Office retirés de ${SETTINGS_FILE}`);
+  console.log(`Hooks IA IA Land retirés de ${SETTINGS_FILE}`);
   if (backup) console.log(`  sauvegarde : ${backup}`);
 } else {
-  console.log('Aucun hook Agent Office dans les réglages.');
+  console.log('Aucun hook IA IA Land dans les réglages.');
 }
 removeRelay();
 console.log(`Dossier du relais supprimé : ${RELAY_DIR}`);

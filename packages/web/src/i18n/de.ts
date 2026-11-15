@@ -10,8 +10,8 @@ export const de: Messages = {
     label: 'Sprache der Oberfläche',
   },
   home: {
-    title: 'Wähle ein Unternehmen',
-    intro: 'Jede Umgebung der Claude-App ist ein Verlies, mit seinen Sitzungen und Agenten.',
+    title: 'Wähle dein Verlies',
+    intro: 'Jede Umgebung der Claude-App ist ein Verlies des Königreichs, mit seinen Sitzungen und Agenten.',
     activeSessions: (n: number) => plural('de', n, `${n} laufende Sitzung`, `${n} laufende Sitzungen`),
     quiet: 'Alles ruhig',
     empty: 'Keine Umgebung gefunden. Läuft der Server?',
@@ -21,7 +21,7 @@ export const de: Messages = {
     unknown: 'Unbekannte Umgebung',
   },
   envSwitcher: {
-    label: 'Unternehmen',
+    label: 'Verlies',
     active: (n: number) => ` (${n} aktiv)`,
     open: 'Öffnen',
   },

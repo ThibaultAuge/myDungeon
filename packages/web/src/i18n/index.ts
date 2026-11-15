@@ -4,6 +4,9 @@ import { fr, type Messages } from './fr.ts';
 
 export type { Messages };
 
+/** Product name (a pun on "La La Land"): a proper noun, identical in every language. */
+export const APP_NAME = 'IA IA Land';
+
 export type Lang = 'fr' | 'de' | 'en';
 
 export const DEFAULT_LANG: Lang = 'fr';
