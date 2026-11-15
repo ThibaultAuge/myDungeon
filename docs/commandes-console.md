@@ -16,6 +16,8 @@ Chaque commande renvoie `true` si une figure a réagi, `false` sinon (aucune sé
 
 Exception : `agentOffice.autel` prend d'abord le palier, puis l'identifiant. Sans aucun argument, `agentOffice.autel()` ne vise aucun agent : il retire tous les paliers imposés.
 
+`agentOffice.rat` ne vise aucun agent : son argument désigne le passage (`'couloir'` ou `'fromage'`), jamais un identifiant.
+
 Astuce : les mages portent un grand chapeau qui cache leurs mains. Pour bien voir un objet tenu, vise un personnage sans chapeau, comme Hancock.
 
 ## Commandes
@@ -26,5 +28,6 @@ Astuce : les mages portent un grand chapeau qui cache leurs mains. Pour bien voi
 | `agentOffice.boiler(id?)` | La chaudière de la salle des machines fait « pouf » (bouffée de fumée et lueur) ; l'agent reste noirci de suie ≈ 4,5 s, avec la bulle « POUF ! ». La fumée joue même sans agent visé. | Hook `PostToolUseFailure` d'un agent qui se trouve dans la salle des machines |
 | `agentOffice.flask(id?)` | La fiole du labo de la salle des épreuves explose en vert ; l'agent est couvert de suie verte ≈ 4,5 s, avec la bulle « BLOUP ! ». L'explosion joue même sans agent visé. | Hook `PostToolUseFailure` d'une commande `Bash` ou `PowerShell` qui lance des tests (`npm test`, `vitest`, `pytest`, `mvn test`, `cargo test`…) |
 | `agentOffice.autel(palier?, id?)` | Impose un palier de l'attente interminable à l'autel : `'calme'`, `'cent-pas'`, `'assis'`, `'endormi'` (Zzz) ou `'toile'` (toiles d'araignée). Le palier reste jusqu'à `agentOffice.autel(null, id)`, qui le retire. Sans `id`, vise l'agent sélectionné, ou tous les agents à l'autel s'il n'y a pas de sélection. `agentOffice.autel()` sans argument retire tous les paliers imposés. Renvoie `true` seulement si une figure a été forcée ou libérée. | Attente à l'autel (permission, question, erreur) : paliers à 1, 3, 5 et 10 min |
+| `agentOffice.rat(passage?)` | Lance un passage du rat. `'couloir'` (par défaut) : il traverse les couloirs d'un trou à l'autre. `'fromage'` : il vole le fromage de la taverne et s'enfuit avec. Un nouvel appel remplace le passage en cours, et le fromage revient aussitôt. Renvoie `true` si un rat part, `false` sinon (argument inconnu, mouvement réduit). Disponible une fois la scène 3D chargée. | Minuteur aléatoire, toutes les 3 à 6 min ; 1 passage sur 4 est un vol (voir [Le rat et le fromage](lieux.md#le-rat-et-le-fromage)) |
 
 Un nouveau gag qui ajoute une commande la déclare ici, sur une ligne de ce tableau.

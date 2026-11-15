@@ -148,6 +148,19 @@ Elle regroupe :
 
 Les dossiers sont relus au plus une fois par minute.
 
+## Le rat et le fromage
+
+De temps en temps, un rat traverse le donjon. C'est un gag purement visuel : il ne touche ni au travail des agents ni à Claude Code.
+
+Toutes les 3 à 6 minutes environ, un rat sort d'un trou au bout d'un couloir, contre le mur extérieur. Il court le long des couloirs et disparaît dans un autre trou. Une fois sur quatre, il fait un détour par la taverne. Il saute sur la grande table du milieu, attrape le fromage à son extrémité nord, redescend et file vers un trou, le fromage dans la gueule. Le fromage repousse sur la table environ 8 secondes après son départ. Le fromage est un modèle 3D du pack Restaurant (voir [modeles-3d.md](modeles-3d.md)).
+
+- **Un rat à la fois.** Aucun passage n'est lancé quand l'onglet est masqué.
+- **Jamais par la porte du château.** Le rat entre et sort par les trous du mur extérieur.
+- **Pas d'interaction.** Le rat est dessiné dans le code, plus grand que nature pour rester visible. Il ne se clique pas, ne se sélectionne pas et n'affiche aucun texte. Le fromage non plus.
+- **Réduction des animations.** Aucun rat n'apparaît, et le fromage reste sur la table.
+
+Pour déclencher un passage à la demande, voir [Commandes console](commandes-console.md).
+
 ## Voir aussi
 
 - [Fonctionnement](fonctionnement.md) : d'où viennent les informations sur les agents.
