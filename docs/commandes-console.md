@@ -24,6 +24,6 @@ Astuce : les mages portent un grand chapeau qui cache leurs mains. Pour bien voi
 |---|---|---|
 | `agentOffice.potion(id?)` | L'agent boit la potion d'oubli : gorgée, titubation, étoiles et bulle « Où suis-je ? » (≈ 4,6 s). | Hook `PreCompact` (compaction du contexte) |
 | `agentOffice.heraut(type?)` | Un héraut monte sur une tour d'angle libre et sonne de la trompette. `'commit'` : sonnerie courte (≈ 5 s en tout) ; `'push'` (par défaut) : fanfare longue avec fanion (≈ 8,6 s). Rien si les quatre tours sont déjà occupées ; caché tant que sa tour est baissée par la coupe. | `git commit` / `git push` réussi dans une commande Bash ou PowerShell (`PostToolUse`) |
-| `agentOffice.feuArtifice()` | Feu d'artifice de cinq gerbes dans le ciel au-dessus du château (≈ 4,2 s). Relancé s'il est déjà en cours. | Suite de tests réussie (`npm test`, `vitest`, `pytest`, `mvn test`…) sans échec dans la sortie (`PostToolUse`) |
+| `agentOffice.feuArtifice()` | Feu d'artifice de cinq gerbes dans le ciel au-dessus du château (≈ 4,5 s). Relancé s'il est déjà en cours. | Suite de tests réussie (`npm test`, `vitest`, `pytest`, `mvn test`…) sans échec dans la sortie (`PostToolUse`) |
 
 Un nouveau gag qui ajoute une commande la déclare ici, sur une ligne de ce tableau.

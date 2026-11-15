@@ -115,8 +115,6 @@ export class TowerPool {
 
 // --- Fireworks -------------------------------------------------------------------------
 
-/** Whole show length in seconds. A new test success restarts it. */
-export const FIREWORKS_TIME = 4.2;
 /** Under reduced motion: one still bouquet shown this long, nothing moves. */
 export const FIREWORKS_STILL_TIME = 1.5;
 /** A rocket climbs this long before it bursts. */
@@ -127,6 +125,11 @@ export const BURST_TIME = 1.6;
 export const SPARKS = 60;
 /** Bursts per show. */
 export const BURSTS = 5;
+/** Seconds between two rockets, plus up to `DELAY_JITTER` at random. */
+export const BURST_SPACING = 0.5;
+export const DELAY_JITTER = 0.3;
+/** Whole show length in seconds: the last rocket, at its latest, climbs and fades out. A new test success restarts it. */
+export const FIREWORKS_TIME = (BURSTS - 1) * BURST_SPACING + DELAY_JITTER + ROCKET_TIME + BURST_TIME;
 /** Height the rockets leave from (top of the castle walls). */
 export const LAUNCH_Y = 3;
 const GRAVITY = 2.2;
@@ -160,7 +163,7 @@ export function fireworkBursts(cx: number, cz: number, random: () => number = Ma
     x: cx + (i - (BURSTS - 1) / 2) * 7 + (random() - 0.5) * 3,
     y: 11 + random() * 4,
     z: cz - 4 - random() * 5,
-    delay: i * 0.5 + random() * 0.3,
+    delay: i * BURST_SPACING + random() * DELAY_JITTER,
     speed: 4.5 + random() * 2,
     color: COLORS[i % COLORS.length],
   }));
