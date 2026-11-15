@@ -142,9 +142,11 @@ Les personnages viennent du pack KayKit Adventurers 2.0 :
 Tous les agents d'un même type se ressemblent, y compris au repos à la taverne. La liste complète est dans [personnages.md](personnages.md).
 
 - **Déplacement.** Ils marchent ou courent entre les pièces. Ils font une animation de travail quand ils travaillent.
+- **Gestes de travail.** Chaque pièce a son geste : on martèle et on scie à l'Atelier, on actionne les leviers dans la Salle des machines, on lit ou on écrit à la Bibliothèque, au Scriptorium, dans la Salle des cartes et au Cabinet de l'arithméticien, on lance un sort à l'Observatoire, on se tient en garde derrière son bouclier au Poste de garde, on s'entraîne à l'épée ou à l'arc dans la Salle des épreuves (on lit à la table de relecture, on manipule les fioles au laboratoire), on crochète une serrure dans le Réduit du concierge. Au Pigeonnier, l'agent lance un pigeon chaque fois qu'il en part un.
+- **Assis.** À la taverne, les personnages au repos, l'agent principal qui attend ton message et le chevalier d'une session arrêtée s'assoient sur des tabourets autour des grandes tables, ou par terre le long des murs quand les tables sont pleines. Au Coin détente, Butt-Stallion s'assoit sur le canapé ou autour de la table de dés, par terre le long des murs, et l'un d'eux fait des pompes.
 - **Attente.** Ils regardent autour d'eux, le losange ambre restant affiché. Le premier de la file s'agenouille devant l'autel, puis se relève au bout d'une minute.
 - **Couleur.** Chaque personnage a un disque au sol de la couleur de sa session, et le bord de son étiquette porte cette même couleur. L'étiquette du personnage sélectionné a un contour bleu et du texte en gras.
-- **Réduction des animations.** Si la réduction des animations est activée dans le système, les personnages gardent une pose fixe et n'effectuent pas de surgissement. Ils se déplacent toujours d'une pièce à l'autre. Le chevalier d'une session supprimée disparaît sans marche ni combat, et les squelettes ne s'affichent pas.
+- **Réduction des animations.** Si la réduction des animations est activée dans le système, les personnages gardent une pose fixe et n'effectuent pas de surgissement. Les personnages assis le restent, immobiles ; ceux qui travaillent debout se figent dans leur pose calme, sans pompes ni lancer de pigeon. Ils se déplacent toujours d'une pièce à l'autre. Le chevalier d'une session supprimée disparaît sans marche ni combat, et les squelettes ne s'affichent pas.
 
 ## Une baffe sur un personnage
 
@@ -155,6 +157,16 @@ Cet effet est purement esthétique : rien n'agit sur l'agent ni sur sa session.
 - **Glisser.** Un clic droit glissé déplace toujours la caméra, sans baffer.
 - **Clavier.** Le bouton « Baffer » de la fiche de l'agent, ou de la présentation d'un sous-agent au repos, fait la même chose. Il n'apparaît que tant que l'agent a un personnage dans la scène.
 - **Réduction des animations.** Ni main ni coup : seule la bulle s'affiche, immobile.
+- **Esquive.** Un agent baffé plusieurs fois de suite (moins de 2 s entre deux baffes) esquive la troisième : il fait un pas de côté ou en arrière, la main passe dans le vide, sans bruit ni étoiles, et une bulle « Raté ! » apparaît (« Missed! » en anglais, « Daneben! » en allemand). La série repart ensuite à zéro. Avec la réduction des animations, aucune esquive : chaque baffe s'affiche comme d'habitude.
+
+## Fin de tâche, discrétion et pêche
+
+Trois petits gags purement esthétiques, comme la baffe :
+
+- **Acclamation.** Un sous-agent qui termine sa tâche lève les bras une fois, sur place, puis rentre à la taverne. L'agent principal n'acclame jamais, même quand sa session se ferme.
+- **À pas de loup.** Les sous-agents à l'allure de voleur (voleur ou voleur encapuchonné, par exemple dexter, gatsby, plan ou general-purpose) rentrent à la taverne accroupis, plus lentement, comme s'ils filaient en douce.
+- **Partie de pêche.** L'agent principal d'une session en cours qui attend ton prochain message à la taverne depuis 3 minutes sort par le pont-levis et va pêcher au bord des douves, canne en main : il lance, attend, ça mord, il mouline, il attrape, et recommence. Il revient dès qu'il a du travail. Les pêcheurs se répartissent le long de la berge, de part et d'autre du pont-levis (12 places au plus). La commande `agentOffice.peche()` envoie un agent pêcher sans attendre (voir [Commandes console](commandes-console.md)).
+- **Réduction des animations.** Pas d'acclamation ; le voleur rentre toujours lentement mais sans animation ; le pêcheur garde une pose fixe.
 
 ## La potion d'oubli
 
@@ -183,6 +195,7 @@ Il y a trois issues possibles en cas d'erreur :
 Deux règles encadrent le gag :
 
 - **Quatre pigeons au plus.** Quatre pigeons peuvent voler en même temps. Au-delà, l'appel n'envoie aucun pigeon, mais son résultat reste rattaché au bon appel, dans l'ordre.
+- **Le lancer.** L'agent fait le geste de lancer chaque fois qu'un pigeon part, y compris avec la commande de console. Quand aucun pigeon ne part (quatre déjà en vol), il ne lance rien.
 - **Réduction des animations.** Ni vol ni plume. Seule la fiente s'affiche, immobile, sur la tête de l'agent. Les autres issues ne montrent rien.
 
 Cet effet est purement esthétique : il ne change rien à la requête ni à son résultat, et il n'affiche aucun texte. Il ne montre ni le contenu de la réponse, ni son code HTTP. Il utilise les hooks d'outil déjà installés, sans réinstallation. Le détail est dans [Appels HTTP du Pigeonnier](fonctionnement.md#appels-http-du-pigeonnier).

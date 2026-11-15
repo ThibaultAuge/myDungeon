@@ -38,9 +38,15 @@ import { SlapHand } from './SlapHand.tsx';
 import { SWING_IMPACT } from './slapSwing.ts';
 import { playSlapSound, preloadSlapSound } from '../ui/slapSound.ts';
 import { MISHAP_BUBBLE_MS, onMishap, SOOT_MS, type MishapKind } from './mishap.ts';
+import { CHEER_CLIP_TIME, startsCheer } from './cheer.ts';
+import { dodgeClipFor, nextSlapStreak, NO_STREAK, type DodgeClip, type SlapStreak } from './dodge.ts';
+import { FISHING_SPACE, fishingClip, fishingExitLead, fishingReroute, fishingSeed } from './fishing.ts';
+import { FishingRod } from './FishingRod.tsx';
+import { sneaks, SNEAK_SPEED } from './sneak.ts';
 import { MishapEffect } from './MishapEffect.tsx';
 import { Soot } from './Soot.tsx';
 import { advance, approach, nextSpeed, remainingDistance, turnToward } from './walk.ts';
+import { advanceThrow, onThrow, placeClip, seatOf } from './workGestures.ts';
 
 /** Live positions of the figures, read by the camera to follow the selected agent. */
 export const agentPositions = new Map<string, Vector3>();
@@ -72,7 +78,7 @@ export interface Motion {
   /** A clip imposed by a scripted scene (the death outside), or null. */
   scripted: ClipChoice | null;
   /** Hit reaction of the last slap, and that slap's number (a new number restarts the clip). */
-  hit: 'Hit_A' | 'Hit_B' | null;
+  hit: 'Hit_A' | 'Hit_B' | DodgeClip | null;
   hitId: number;
   /** Seconds until the 3D hand reaches the face: the hit clip waits for it. */
   hitWait: number;
@@ -89,6 +95,16 @@ export interface Motion {
   altar?: AltarPose | null;
   /** Seconds the altar pose has been shown (the way down plays first); endless when absent. */
   altarFor?: number;
+  /** Seconds of cheering left (cheer.ts): the walk waits meanwhile. Absent or 0 when none. */
+  cheerLeft?: number;
+  /** A finished Rogue-looking subagent sneaking home (sneak.ts). */
+  sneaking?: boolean;
+  /** The fishing clip of a figure standing at its moat place (fishing.ts), or null. */
+  fishing?: ClipChoice | null;
+  /** Work gesture or seated pose at the figure's place (workGestures.ts); null or absent otherwise. */
+  place?: ClipChoice | null;
+  /** Seconds since the figure threw its pigeon (workGestures.ts); absent or -1 when it is not. */
+  throwAt?: number;
 }
 
 /** Share of the gap to close this frame for an exponential turn; all of it under reduced motion. */
@@ -143,10 +159,13 @@ export function Character({
   state,
   motion,
   extra,
+  rod,
 }: {
   look: Look;
   state: AgentState;
   motion: RefObject<Motion>;
+  /** Fishing at the moat (fishing.ts): a rod in the right hand, shown while a fishing clip plays. */
+  rod?: boolean;
   /**
    * Mounted for a while (the potion): shown in the right hand instead of the look's prop during
    * the gulp only, on the frame clock (not a timer), so it never drifts from the clip. Loads on its own.
@@ -191,6 +210,7 @@ export function Character({
   /** The look's right-hand prop and the potion bottle: one of them shows, set every frame. */
   const rightProp = useRef<Group>(null);
   const bottle = useRef<Group>(null);
+  const rodRef = useRef<Group>(null);
 
   useFrame((_, delta) => {
     const m = motion.current;
@@ -211,7 +231,12 @@ export function Character({
       drinking: potionPhase(m.potionAt ?? -1) === 'drinking',
       altar: m.altar ?? undefined,
       altarFor: m.altarFor,
+      cheering: (m.cheerLeft ?? 0) > 0,
+      sneaking: m.sneaking,
+      fishing: m.fishing ?? undefined,
+      place: m.place,
     });
+    if (rodRef.current) rodRef.current.visible = choice.name.startsWith('Fishing_');
     // The bottle shows only while the gulp clip itself plays (a slap or a spawn takes over the hand).
     const gulp = choice.name === 'Use_Item' && !m.scripted;
     if (bottle.current) bottle.current.visible = gulp;
@@ -301,6 +326,7 @@ export function Character({
         </Suspense>
       )}
       {look.left && hands.left && <Held prop={look.left} bone={hands.left} />}
+      {rod && hands.right && <FishingRod bone={hands.right} holder={rodRef} />}
     </>
   );
 }
@@ -396,9 +422,20 @@ function AgentFigureImpl({ agent, name, color, spot, start, selected, onSelect, 
   const paceStart = useMemo(() => paceSeed(agent.id), [agent.id]);
   /** The altar pose shown, how long, and the getting up from the floor (altarWait.ts). */
   const altarPose = useRef<AltarPoseTrack>(ALTAR_POSE_START);
+  const look = lookFor(agent.kind, agent.agentType);
+  const sneaking = sneaks(agent.kind, agent.state, look.body);
+  const fishes = spot.space === FISHING_SPACE && !exit;
+  /** Seconds since the figure reached its moat place, -1 when it is not fishing. */
+  const fishingAt = useRef(-1);
+  const fishSeed = useMemo(() => fishingSeed(agent.id), [agent.id]);
   /** Number of the slap on screen (a new one remounts the effect), null when none is. */
   const [slap, setSlap] = useState<number | null>(null);
   const slaps = useRef(0);
+  /** The slap streak (dodge.ts) and the number of dodges, for the dodge clip in turn. */
+  const streak = useRef<SlapStreak>(NO_STREAK);
+  const dodges = useRef(0);
+  /** The slap on screen was dodged: no stars, a "missed" bubble. */
+  const [dodged, setDodged] = useState(false);
   /** Number of the potion on screen (a new one remounts the stars), null when none is. */
   const [potion, setPotion] = useState<number | null>(null);
   /** The bottle is mounted for the whole effect; Character shows it during the gulp only. */
@@ -422,13 +459,23 @@ function AgentFigureImpl({ agent, name, color, spot, start, selected, onSelect, 
       if (potionPhase(m.potionAt ?? -1) === 'drinking') m.potionAt = DRINK_S;
       // A figure still rising from the ground (or loading) skips the hit; hand, stars and sound still show.
       const skip = reducedMotion() || m.spawnLeft !== 0;
-      m.hit = skip ? null : hitClipFor(n);
+      // The third slap of a quick streak is dodged (dodge.ts); a slap with no visible reaction
+      // does not count, so "missed" never shows over a figure that did not move.
+      let dodge = false;
+      if (!skip) {
+        const next = nextSlapStreak(streak.current, performance.now());
+        streak.current = { count: next.count, at: next.at };
+        dodge = next.dodge;
+      }
+      m.hit = skip ? null : dodge ? dodgeClipFor(++dodges.current) : hitClipFor(n);
       m.hitId = n;
       m.hitLeft = skip ? 0 : HIT_FALLBACK;
-      // The hand sweeps in first: the cheek reacts, and sounds, when it lands.
+      // The hand sweeps in first: the cheek reacts, and sounds, when it lands. A dodge starts
+      // at once, so the hand passes through empty air, and makes no sound.
       const swing = !reducedMotion();
-      m.hitWait = skip ? 0 : SWING_IMPACT;
-      playSlapSound(swing ? SWING_IMPACT : 0);
+      m.hitWait = skip || dodge ? 0 : SWING_IMPACT;
+      if (!dodge) playSlapSound(swing ? SWING_IMPACT : 0);
+      setDodged(dodge);
       setSlap(n);
       clearTimeout(timer);
       timer = setTimeout(() => setSlap(null), SLAP_EFFECT_MS);
@@ -440,6 +487,19 @@ function AgentFigureImpl({ agent, name, color, spot, start, selected, onSelect, 
       setSlap(null);
     };
   }, [agent.id]);
+
+  // The dovecote throw (workGestures.ts): the agent releases each pigeon that leaves for it.
+  // A throw already under way goes on (accepted: no restart for a second bird).
+  useEffect(
+    () =>
+      onThrow(agent.id, () => {
+        const m = motion.current;
+        if (!reducedMotion() && (m.throwAt ?? -1) < 0) m.throwAt = 0;
+      }),
+    [agent.id],
+  );
+  // Where at its place the figure stands, for its gesture: parsed once per spot.
+  const seat = useMemo(() => seatOf(spot.id, spot.room, spot.station), [spot.id, spot.room, spot.station]);
 
   // A failed command (mishap.ts): soot on the figure and a comic bubble, nothing else.
   const [mishap, setMishap] = useState<{ n: number; kind: MishapKind; bubble: boolean } | null>(null);
@@ -495,6 +555,16 @@ function AgentFigureImpl({ agent, name, color, spot, start, selected, onSelect, 
     };
   }, [agent.id]);
 
+  // A subagent that just finished cheers once where it stands (cheer.ts), then walks home.
+  const prevState = useRef<AgentState>(agent.state);
+  useEffect(() => {
+    const prev = prevState.current;
+    prevState.current = agent.state;
+    const m = motion.current;
+    if (exit || reducedMotion() || m.spawnLeft !== 0 || !startsCheer(agent.kind, prev, agent.state)) return;
+    m.cheerLeft = CHEER_CLIP_TIME;
+  }, [agent.state]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Doomed: out of the castle to the kill point. Under reduced motion, no walk and no fight.
   useEffect(() => {
     if (!exit) return;
@@ -505,13 +575,15 @@ function AgentFigureImpl({ agent, name, color, spot, start, selected, onSelect, 
     }
     exit.add(agent.id);
     const slot = exit.victim(agent.id)?.slot ?? 0;
-    path.current = exitRoute(pos, path.current, last.current, slot);
+    // A fisher first walks back along the bank lane: never through the pennants (fishing.ts).
+    const lead = fishingExitLead(path.current, last.current);
+    path.current = lead.length > 0 ? [...lead, ...exitRoute(lead[lead.length - 1], [], last.current, slot)] : exitRoute(pos, path.current, last.current, slot);
   }, [exit]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (exit || last.current.id === spot.id) return;
     // From where the agent is, not from where it was going: never through a wall.
-    path.current = reroute(path.current, last.current, spot);
+    path.current = fishingReroute(path.current, last.current, spot) ?? reroute(path.current, last.current, spot);
     last.current = spot;
   }, [spot]);
 
@@ -555,6 +627,11 @@ function AgentFigureImpl({ agent, name, color, spot, start, selected, onSelect, 
     if (still || exit) m.potionAt = -1;
     else if (drunk >= 0) m.potionAt = drunk + delta >= POTION_S ? -1 : drunk + delta;
     const gulping = potionPhase(m.potionAt ?? -1) === 'drinking';
+    // The cheer of a finished subagent: the walk home waits for it.
+    if (still || exit) m.cheerLeft = 0;
+    const cheering = (m.cheerLeft ?? 0) > 0;
+    if (cheering) m.cheerLeft = Math.max(0, (m.cheerLeft ?? 0) - delta);
+    m.sneaking = sneaking;
     // The endless wait at the altar; reduced motion keeps a pacing agent in its calm pose.
     const stage: AltarStage = exit || (still && altarStage === 'pacing') ? 'calm' : altarStage;
     // A slap or a gulp freezes the pacing where it is (heading and sideways shift).
@@ -566,8 +643,9 @@ function AgentFigureImpl({ agent, name, color, spot, start, selected, onSelect, 
       altarPose.current,
       atPlace && stage !== 'calm' ? (isAsleep(stage) ? 'sleeping' : stage) : null,
       dt,
-      // Interrupted while the hit or gulp clip shows, not while the hand is still on its way.
-      { still, exit: !!exit, interrupted: (m.hitWait <= 0 && m.hitLeft > 0) || gulping },
+      // Interrupted while the hit, gulp or cheer clip shows (each one ends standing), not while
+      // the hand is still on its way.
+      { still, exit: !!exit, interrupted: (m.hitWait <= 0 && m.hitLeft > 0) || gulping || cheering },
     );
     const rising = altarPose.current.riseLeft > 0;
     // Only while the potion acts, plus one frame to stand straight again: no work when idle.
@@ -584,15 +662,16 @@ function AgentFigureImpl({ agent, name, color, spot, start, selected, onSelect, 
       onGone?.(agent.id);
       return;
     }
-    if ((hitting || gulping || rising) && !exit && path.current.length > 0) {
-      // A slap, a gulp or getting up from the floor pauses an ordinary walk; a figure walking
-      // out to its death never stops.
+    if ((hitting || gulping || rising || cheering) && !exit && path.current.length > 0) {
+      // A slap, a gulp, getting up from the floor or a cheer pauses an ordinary walk; a figure
+      // walking out to its death never stops.
       m.speed = 0;
     } else if (!spawning && path.current.length > 0) {
       // A reroute keeps the current speed: the agent changes course without stopping.
       // Accepted limit: if the new destination is within the braking distance, the speed
       // drops to the braking curve in one frame, and a route that doubles back turns at speed.
       m.speed = nextSpeed(m.speed, remainingDistance(pos, path.current), dt);
+      if (sneaking) m.speed = Math.min(m.speed, SNEAK_SPEED);
       const heading = advance(pos, path.current, m.speed * dt);
       if (heading !== null) g.rotation.y = turnToward(g.rotation.y, heading, turnFraction(WALK_TURN_RATE, dt, still));
       m.moving = path.current.length > 0;
@@ -622,12 +701,32 @@ function AgentFigureImpl({ agent, name, color, spot, start, selected, onSelect, 
     }
     m.altar = altarPose.current.pose;
     m.altarFor = altarPose.current.held;
+    // At its place once this frame's walk is done (atPlace above is from before the walk).
+    const settled = !exit && !spawning && path.current.length === 0;
+    // Fishing at its moat place (fishing.ts): the clock starts on arrival, once the walk there
+    // has been set (`last` catches up with `spot` in an effect, as for `onArrive`).
+    const fishingTime = settled && fishes && last.current.id === spot.id ? (fishingAt.current < 0 ? 0 : fishingAt.current + delta) : -1;
+    fishingAt.current = fishingTime;
+    m.fishing = fishingTime >= 0 ? fishingClip(fishingTime, fishSeed) : null;
     // Zzz and cobwebs follow the pose actually shown, not the stage: only once lying on the
     // floor, never over a figure that gets up, walks (the queue moves up), or stands up for a
     // slap or a gulp.
     const asleep = isLyingDown(altarPose.current) && !hitting && !gulping;
     if (webs.current) webs.current.visible = asleep;
     m.kneeling = !exit && path.current.length === 0 && !!spot.kneel && m.altar === null;
+    // The room's work gesture or the seated pose of the figure at its place (workGestures.ts).
+    m.throwAt = still ? -1 : advanceThrow(m.throwAt ?? -1, delta);
+    m.place =
+      settled && m.altar === null
+        ? placeClip({
+            room: spot.room,
+            station: spot.station,
+            seat,
+            state: agent.state,
+            reducedMotion: still,
+            throwing: m.throwAt >= 0,
+          })
+        : null;
     m.scripted = doomed && path.current.length === 0 ? victimClip(doomed.phase) : null;
     // Touch the DOM only when walking starts or stops: no React render per frame. The tag
     // is a separate React root that renders a little later: until it shows the new
@@ -717,10 +816,11 @@ function AgentFigureImpl({ agent, name, color, spot, start, selected, onSelect, 
         <CharacterBoundary fallback={capsule} onError={() => (motion.current.spawnLeft = 0)}>
           <Suspense fallback={null}>
             <Character
-              look={lookFor(agent.kind, agent.agentType)}
+              look={look}
               state={agent.state}
               motion={motion}
               extra={bottleOn ? POTION_PROP : undefined}
+              rod={fishes}
             />
           </Suspense>
         </CharacterBoundary>
@@ -774,7 +874,7 @@ function AgentFigureImpl({ agent, name, color, spot, start, selected, onSelect, 
       {/* One stable anchor; the effect inside remounts on each slap to restart its animations. */}
       {connected && onSelect && (
         <Html position={[0, SLAP_Y, 0]} center className="slap-anchor" zIndexRange={[30, 20]}>
-          {slap !== null && <SlapEffect key={slap} />}
+          {slap !== null && <SlapEffect key={slap} dodged={dodged} />}
           {mishap?.bubble && <MishapEffect key={mishap.n} kind={mishap.kind} />}
         </Html>
       )}
