@@ -15,7 +15,9 @@ rules: `docs/ai/dungeon-scene.md`.
   `DodgeClip`.
 - Full `clipFor` priority order: scripted > spawn > hit/dodge > drinking > cheering >
   sneaking (only while moving) > moving > altar poses > fishing (reduced motion holds
-  `Fishing_Idle`) > kneeling > done > working > waiting.
+  `Fishing_Idle`) > kneeling > place (work gesture or seated pose, `docs/ai/dungeon-scene.md`)
+  > done > working > waiting. A fishing spot id `moat:<rank>` reads as `other` for
+  `seatOf`, so no place clip applies at the bank.
 - Cheer, subagents only (user decision): `startsCheer(kind, prev, next)` is true for a sub
   going non-done → done while mounted (SubagentStop, silent retirement, ended session);
   never for a main (it turns done at SessionEnd). `AgentFigure` keeps a `prevState` ref; an
