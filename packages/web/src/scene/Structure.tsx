@@ -2,7 +2,8 @@ import { useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { Matrix4, Vector3, type InstancedMesh } from 'three';
 import { reducedMotion } from '../motion.ts';
-import { corridorFloor, cutHeight, foundation, inForeground, KIT_SCALE, OUTER, roomFloor, tallModel, wallLayout, type CutItem, type Placement } from './dungeon.ts';
+import { corridorFloor, cutHeight, foundation, inForeground, KIT_SCALE, OUTER, roomFloor, tallModel, dungeonWalls, type CutItem, type Placement } from './dungeon.ts';
+import { isFps } from './fps.ts';
 import { useKitParts, type Pack } from './kit.ts';
 import { itemMatrix, KitInstances } from './KitInstances.tsx';
 import { ROOMS } from './layout.ts';
@@ -62,7 +63,8 @@ function CutawayKit({ model, items }: { model: string; items: CutItem[] }) {
     for (let i = 0; i < items.length; i++) {
       const it = items[i];
       anchor.set(it.ax, 0, it.az).project(camera);
-      const target = inForeground(pointer.x, pointer.y, anchor.x, anchor.y) ? 0 : 1;
+      // Every wall stands in the first-person view: the visitor walks between them.
+      const target = !isFps() && inForeground(pointer.x, pointer.y, anchor.x, anchor.y) ? 0 : 1;
       const prev = height[i];
       const h = cutHeight(prev, target, dt, still);
       if (h === prev) continue;
@@ -111,7 +113,7 @@ function CutawayKit({ model, items }: { model: string; items: CutItem[] }) {
  * inside it; the pieces behind the curve stand.
  */
 export function Walls() {
-  const layout = useMemo(() => wallLayout(), []);
+  const layout = dungeonWalls();
   return (
     <group>
       <Placed placement={layout.low} />

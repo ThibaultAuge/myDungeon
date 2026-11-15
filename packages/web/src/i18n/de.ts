@@ -37,6 +37,10 @@ export const de: Messages = {
     canvas: '3D-Ansicht des Verlieses. Die Agenten stehen auch unter „Laufende Sitzungen“, die Orte unter „Orte des Verlieses“.',
     side: 'Agenten und Orte',
   },
+  fps: {
+    hint: 'WASD oder Pfeiltasten: bewegen · Maus oder Q/E: drehen · Umschalt: rennen · Esc: verlassen',
+    capture: 'Klicke in die Szene, um die Maus einzufangen.',
+  },
   state: {
     working: 'Arbeitet',
     done: 'Fertig',

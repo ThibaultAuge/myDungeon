@@ -37,6 +37,10 @@ export const en: Messages = {
     canvas: '3D view of the dungeon. Agents are also listed under “Active sessions”, and places under “Dungeon places”.',
     side: 'Agents and places',
   },
+  fps: {
+    hint: 'WASD or arrows: move · Mouse or Q/E: turn · Shift: run · Esc: leave',
+    capture: 'Click the scene to capture the mouse.',
+  },
   state: {
     working: 'Working',
     done: 'Done',

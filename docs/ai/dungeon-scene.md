@@ -1,5 +1,5 @@
 ---
-description: Use when changing the 3D dungeon map — rooms, floors, walls, castle gate, cutaway, props, lighting, KayKit models or their import — workstations (posts, hover glow, post card and list), pointer handling of 3D targets, agent figures (walking, models, role looks, held props, clips, destination badge), the slap, potion and mishap gags, the agentOffice console namespace, room or post icons, or when previewing the web scene.
+description: Use when changing the 3D dungeon map — rooms, floors, walls and their collision boxes, castle gate, cutaway, props, lighting, KayKit models or their import — the first-person view (Shift+F walk mode, fps.ts, FpsControls, FpsHint), workstations (posts, hover glow, post card and list), pointer handling of 3D targets, agent figures (walking, models, role looks, held props, clips, destination badge), the slap, potion and mishap gags, the agentOffice console namespace, room or post icons, or when previewing the web scene.
 ---
 
 # 3D dungeon scene (KayKit assets)
@@ -64,6 +64,38 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cast
 - Lighting: Canvas shadows, drei `SoftShadows`, `NeutralToneMapping`, one shadow-casting
   sun. Floors and small shapes/models (< 0.3 m, or scale < 0.6) cast no shadow.
 - Rooms have no title signs (removed at the user's request).
+- Wall layout: `dungeonWalls()` (`dungeon.ts`, memoised) is the single `WallLayout` shared by
+  `Walls` (`Structure.tsx`) and the first-person collisions. `WallLayout.blockers: Box[]` is
+  filled by `placeRun` (one box per run, `run.thick` deep) and `pillar()` (corner, door, map
+  corner and gate jamb pillars), so collisions follow the drawn walls.
+
+### First-person view (user feature)
+- Entry: Shift+F on an env page (`isShortcut`: physical `KeyF` + Shift, no other modifier,
+  not `repeat`; `isTypingTarget` ignores INPUT / TEXTAREA / SELECT / contentEditable). No
+  button (user decision). The camera teleports to `FPS_START`, a `PATH` point
+  `START_PAST_BRIDGE` 4 m past `BRIDGE.z1`, facing the gate; eye `EYE_HEIGHT` 1.5 m above
+  `groundY` (follows the bridge slope); fov `FPS_FOV` 70 (42 normally).
+- Controls (physical `code`, so ZQSD on AZERTY): `KeyW/A/S/D` or arrows walk at `WALK_SPEED`
+  3 m/s, Shift runs ×`RUN_FACTOR` 2 (read from `e.shiftKey`); `KeyQ` / `KeyE` turn at
+  `TURN_SPEED` 2 rad/s; mouse look through Pointer Lock (`LOOK_SPEED`, pitch ≤ `PITCH_MAX`).
+  No keyboard pitch. State machine in `fps.ts`: `off → requesting → locked | fallback`
+  (`fallback` when the lock is refused: the hint asks to click the canvas);
+  `isFps()` / `onFpsChange` for `useSyncExternalStore`.
+- Exit: Escape (pointer-lock loss, or a capture-phase keydown with
+  `stopImmediatePropagation`, so card Escape handlers do not also fire); Escape quits, it
+  does not pause (user decision). Idempotent; restores camera position, quaternion,
+  rotation order, fov, OrbitControls target (momentum flushed on entry), R3F events and the
+  previously focused element (blurred on entry).
+- Collisions: walls only (`fpsObstacles()`: `dungeonWalls().blockers` boxes plus the corner
+  `TOWERS` as circles of `TOWER_R`); furniture, agents, trees and the moat do not block.
+  `moveWithCollision` sub-steps ≤ r/2, resolves x then z, `RESOLVE_PASSES` 3, throws on
+  r ≤ 0 (`PLAYER_R` 0.3). `clampToWorld` keeps the position within `BOUNDS` ± `PAN_MARGIN`.
+- While active: cutaway off (`CutawayKit` and `TowerMesh` target = standing when `isFps()`),
+  OrbitControls `enabled={!fps}`, `CameraFollow` skipped, Canvas `onPointerMissed` ignored,
+  R3F events disabled (`setEvents`), `.office__scene--fps` hides `.agent-tag-anchor`,
+  `.slap-anchor`, `.potion-anchor`, `.herald-notes` (user decision: tags hidden).
+- `FpsHint` (`role="status"`, always mounted so announcements fire) shows `t.fps.hint` and,
+  in fallback, `t.fps.capture`.
 
 ### Workstations (posts)
 - `layout.ts`: `POST_IDS` (18), `PostId`, optional `Prop.post`, `postGroups(room)` →
@@ -385,8 +417,15 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cast
   `KitItem`, `Placement` (`Map<model, KitItem[]>`), `roomFloor`, `corridorFloor`,
   `foundation`, `OUTER`, `PERIMETER_T`, `BOUND_LINE`, `PERIMETER_LINE`, `PERIMETER_INNER`,
   `PERIMETER_PILLAR_EXTRA`, `perimeterSides`, `WallRun`, `wallRuns`, `edgeRuns`,
-  `sharedSides`, `wallLayout`, `GATE_JAMB`, `GATE_H`, `WALL_T`, `WALL_INSET`, `CUT_CURVE`,
-  `inForeground`, `CUT_SPEED`, `cutHeight` (towers: `docs/ai/celebrations.md`).
+  `sharedSides`, `wallLayout`, `dungeonWalls`, `Box`, `GATE_JAMB`, `GATE_H`, `WALL_T`,
+  `WALL_INSET`, `CUT_CURVE`, `inForeground`, `CUT_SPEED`, `cutHeight` (towers:
+  `docs/ai/celebrations.md`).
+- First-person view: `packages/web/src/scene/fps.ts` (pure: constants, state machine,
+  `FPS_START`, `isShortcut`, `isTypingTarget`, `moveVector`, `turnInput`, `fpsObstacles`,
+  `clampToWorld`, `moveWithCollision`; `packages/web/test/fps.test.ts`),
+  `scene/FpsControls.tsx` (mounted in `Office.tsx`; camera, pointer lock, keys, enter/exit),
+  `ui/FpsHint.tsx` (mounted in `App.tsx`, which sets `.office__scene--fps`); `.fps-hint*`
+  and `.office__scene--fps` in `styles.css`; texts `t.fps.*` in the i18n files.
 - `packages/web/src/scene/Structure.tsx` — `Floors` (instanced), `Walls`, `CutawayKit`.
 - `packages/web/src/scene/gagCommands.ts` — shared `agentOffice` console namespace
   (`packages/web/test/gagCommands.test.ts`).
@@ -530,6 +569,18 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cast
 - New decor must not cover seats or a door entry (tested in `dungeon.test.ts`).
 - Anything placed against or through the outer wall uses `perimeterSides` and the
   `PERIMETER_*` constants (never `WALL_INSET` there); new runs carry `thick`.
+- Wall geometry is read through `dungeonWalls()`, never by calling `wallLayout` again: a new
+  wall piece or pillar pushes its `Box` to `blockers` (in `placeRun` / `pillar()`) so the
+  first-person view collides with it. A new solid obstacle for the walk (another tower-like
+  shape) goes in `fpsObstacles()`.
+- First-person movement and collision logic stays in `fps.ts` (tested); `FpsControls`'s
+  `useFrame` only calls it. A new scene-wide behaviour that must pause in first person
+  (cutaway, auto camera, pointer selection, an `<Html>` overlay) checks `isFps()` /
+  subscribes with `onFpsChange`, or hides its anchor under `.office__scene--fps`.
+- First-person verification: Vite on a free port from the worktree
+  (`npm run dev -w @agent-office/web -- --port 5186 --strictPort --host 127.0.0.1`),
+  Playwright at `/env/demo`, Shift+F, hold `KeyW`, Escape. Headless Playwright reaches the
+  `fallback` state only; real pointer-lock mouse look needs a headed browser.
 - New `RoomId` or new seat post (`StationId`, not the clickable `PostId`): add an `ICONS` entry (the `Record` type fails
   typecheck otherwise) and keep its name distinct from every room id (tested). Reuse
   `DestinationIcon` for any other place icon; never add a translated label for it.
@@ -600,6 +651,11 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cast
   outer walls may stand up to 0.175 m off the inner face, which moved outward from 0.275 m
   to 0.1 m inside the room edge.
 - Orientation-based cutaway was tried and rejected; keep the cursor parabola.
+- First-person accepted limits (not done): the hint's key letters follow the UI language
+  (FR ZQSD / A-E, DE / EN WASD / Q-E), not the keyboard layout; real pointer-lock mouse look
+  not verified (headless tested the fallback only); wall mesh vs blocker box fit checked
+  visually only along the x=5 corridor end and the gate; no keyboard pitch. Open: Shift+F
+  against WCAG 2.1.4 (character key shortcuts).
 - Attacking skeletons stay bare `Skeleton_Minion` bodies (user decision): do not use
   Skeleton_Warrior / Rogue / Mage, whose helmet or hood hides the skull from the top-down
   camera so they did not read as skeletons. Only Minion is in the manifest's `skeletons` pack.
@@ -607,8 +663,7 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cast
   `dungeon.ts`, `layout.ts`, `walk.ts`, `characters.ts`, `slap.ts`, `slapSwing.ts`,
   `destinations.ts`, `forest.ts`, `outside.ts`, `stage.ts`, `ambush.ts`, `tavern.ts`,
   `decor.ts`, `merge.ts`, `potion.ts`, `mishap.ts`, `altarWait.ts`, `pigeon.ts`, `celebrate.ts`,
-  `workGestures.ts`,
-  `gagCommands.ts` and the manifest JSON.
+  `workGestures.ts`, `gagCommands.ts`, `fps.ts` and the manifest JSON.
 - Walk speed was set so figures reach the room before short tasks finish (user request).
   The chibi legs walk naturally at 0.57 (`Walking_A`) and 1.4 u/s (`Running_A`) at
   `KIT_SCALE`, so feet slide at cruise speed by design. Accepted limits: a reroute to a

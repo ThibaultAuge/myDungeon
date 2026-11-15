@@ -29,6 +29,8 @@ import { GhostFigure } from './GhostFigure.tsx';
 import { NIGHT_SKY, scatterTrees } from './forest.ts';
 import { assignSpots, BOUNDS, SPAWN, type SeatMemory, type SeatRequest, type Spot } from './layout.ts';
 import { ENTRY_SPOT, PAN_MARGIN } from './outside.ts';
+import { FpsControls } from './FpsControls.tsx';
+import { isFps, onFpsChange } from './fps.ts';
 import { Heralds } from './Herald.tsx';
 import { PigeonFlights } from './Pigeons.tsx';
 import { OfficeRooms } from './Room.tsx';
@@ -136,7 +138,8 @@ function useStarts(
 function CameraFollow({ selected }: { selected: string | null }) {
   const controls = useThree((s) => s.controls) as OrbitControlsImpl | null;
   useFrame(() => {
-    if (!controls) return;
+    // The first-person view drives the camera itself.
+    if (!controls || isFps()) return;
     const pos = selected ? agentPositions.get(selected) : undefined;
     // OrbitControls already updates itself every frame.
     if (pos) controls.target.lerp(pos, 0.06);
@@ -187,6 +190,7 @@ export function OfficeScene({ dungeon }: { dungeon?: Dungeon }) {
   const selectPost = useOffice((s) => s.selectPost);
   const now = useNow();
   const { t } = useT();
+  const fps = useSyncExternalStore(onFpsChange, isFps);
   // The endless wait at the altar: a forced stage (test command) re-renders at once.
   useSyncExternalStore(onAltarForce, altarForceVersion);
   // Test command `agentOffice.autel(stage?, id?)`, for the console.
@@ -295,6 +299,8 @@ export function OfficeScene({ dungeon }: { dungeon?: Dungeon }) {
       dpr={[1, 2]}
       gl={{ toneMapping: NeutralToneMapping }}
       onPointerMissed={() => {
+        // Scene events are off in the first-person view: a click there only captures the mouse.
+        if (isFps()) return;
         select(null);
         selectPost(null);
       }}
@@ -376,8 +382,9 @@ export function OfficeScene({ dungeon }: { dungeon?: Dungeon }) {
       <AmbushScene ambush={ambush} />
       <PigeonFlights />
 
-      <OrbitControls makeDefault target={CENTER} enableDamping maxPolarAngle={1.35} minDistance={8} maxDistance={80} />
+      <OrbitControls makeDefault enabled={!fps} target={CENTER} enableDamping maxPolarAngle={1.35} minDistance={8} maxDistance={80} />
       <CameraFollow selected={selected} />
+      <FpsControls />
     </Canvas>
   );
 }

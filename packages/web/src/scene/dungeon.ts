@@ -341,6 +341,16 @@ export interface WallLayout {
   tall: Map<string, CutItem[]>;
   /** Low walls and posts, always shown; hidden inside the tall walls while those stand. */
   low: Placement;
+  /** Ground footprint of every wall stretch and pillar: what the first-person view bumps into. */
+  blockers: Box[];
+}
+
+/** An axis-aligned rectangle on the ground. */
+export interface Box {
+  x0: number;
+  x1: number;
+  z0: number;
+  z1: number;
 }
 
 function addTall(layout: WallLayout, name: string, item: CutItem): void {
@@ -394,6 +404,7 @@ function pillar(layout: WallLayout, x: number, z: number, wx = PILLAR_W, wz = PI
   // A 1.5 m pillar thinned to 0.3 m, and a short column for the lowered state.
   addTall(layout, 'pillar', { x, y: 0, z, rotY: 0, scale: [wx / 1.5, KIT_SCALE, wz / 1.5], ax: anchor[0], az: anchor[1] });
   add(layout.low, 'column', { x, y: 0, z, rotY: 0, scale: [(wx / PILLAR_W) * 0.4, KIT_SCALE, (wz / PILLAR_W) * 0.4] });
+  layout.blockers.push({ x0: x - wx / 2, x1: x + wx / 2, z0: z - wz / 2, z1: z + wz / 2 });
 }
 
 const OPPOSITE: Record<Side, Side> = { n: 's', s: 'n', e: 'w', w: 'e' };
@@ -447,6 +458,15 @@ function placeRun(layout: WallLayout, run: WallRun, rand: () => number): void {
   const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
   const n = Math.max(1, Math.round(len / WALL_CHUNK));
   const chunk = len / n;
+  // The whole run, as thick as its wall, from end to end.
+  const horizontal = side === 'n' || side === 's';
+  const [hx, hz] = horizontal ? [0, thick / 2] : [thick / 2, 0];
+  layout.blockers.push({
+    x0: Math.min(a[0], b[0]) - hx,
+    x1: Math.max(a[0], b[0]) + hx,
+    z0: Math.min(a[1], b[1]) - hz,
+    z1: Math.max(a[1], b[1]) + hz,
+  });
   for (let i = 0; i < n; i++) {
     const t = (i + 0.5) / n;
     const x = a[0] + (b[0] - a[0]) * t;
@@ -500,8 +520,19 @@ function gate(layout: WallLayout): void {
   }
 }
 
+let defaultLayout: WallLayout | undefined;
+
+/**
+ * The dungeon's walls, built once and shared, read-only: the rendered walls and the
+ * first-person collisions must come from the same layout.
+ */
+export function dungeonWalls(): WallLayout {
+  defaultLayout ??= wallLayout();
+  return defaultLayout;
+}
+
 export function wallLayout(rooms: RoomDef[] = walledRooms()): WallLayout {
-  const layout: WallLayout = { tall: new Map(), low: new Map() };
+  const layout: WallLayout = { tall: new Map(), low: new Map(), blockers: [] };
   const edgeRand = seeded('walls:edge');
   for (const run of edgeRuns(rooms)) placeRun(layout, run, edgeRand);
   // A thick square pillar at each corner of the map, where two outer walls meet.
