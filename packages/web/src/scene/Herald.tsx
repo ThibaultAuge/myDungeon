@@ -4,7 +4,7 @@ import { Html } from '@react-three/drei';
 import { CylinderGeometry, DoubleSide, Group, Mesh, MeshStandardMaterial, PlaneGeometry, type Object3D } from 'three';
 import { reducedMotion } from '../motion.ts';
 import { Character, type Motion } from './AgentFigure.tsx';
-import { heraldClip, heraldDepth, heraldPhase, onCelebrate, TowerPool, type HeraldKind } from './celebrate.ts';
+import { heraldCheerAt, heraldClip, heraldDepth, heraldPhase, onCelebrate, TowerPool, TRUMPET_CLIP, type HeraldKind } from './celebrate.ts';
 import type { Look } from './characters.ts';
 import { TOWER_H, TOWERS } from './dungeon.ts';
 import { towerHeights } from './Towers.tsx';
@@ -40,10 +40,12 @@ function makeTrumpet(withPennant: boolean): Group {
 }
 
 /**
- * Grip of the trumpet in the right hand slot. The slot's local X points down the forearm (see
- * the tools' grips in characters.ts): the trumpet turns so it leaves the fist toward the mouth.
+ * Grip of the trumpet in the right hand slot, calibrated on the last frame of TRUMPET_CLIP (fist
+ * at the chin, where the clip is held): the bell points skyward, about 83° up and slightly toward
+ * the courtyard. Aimed lower, toward the courtyard, it points at the default camera and shrinks
+ * to a stub behind the fist.
  */
-const TRUMPET_GRIP = { position: [0, 0, 0] as const, rotation: [0, 0, Math.PI / 2] as const, scale: 2 };
+const TRUMPET_GRIP = { position: [0, 0, 0] as const, rotation: [0, 0, Math.PI / 12] as const, scale: 2 };
 
 export interface HeraldOuting {
   id: number;
@@ -58,6 +60,8 @@ function HeraldFigure({ outing, onDone }: { outing: HeraldOuting; onDone: (o: He
   const attached = useRef<Object3D | null>(null);
   const [notes, setNotes] = useState(false);
   const notesShown = useRef(false);
+  /** Where a firework show caught this herald (see heraldCheerAt): he cheers once for it. */
+  const cheerAt = useRef<number | null>(null);
   const tower = TOWERS[outing.tower];
   const motion = useRef<Motion>({
     moving: false,
@@ -93,13 +97,14 @@ function HeraldFigure({ outing, onDone }: { outing: HeraldOuting; onDone: (o: He
       return;
     }
     const still = reducedMotion();
-    motion.current.scripted = heraldClip(phase, t);
+    const clip = heraldClip(phase, t, outing.kind, cheerAt.current);
+    motion.current.scripted = clip;
     const h = towerHeights[outing.tower];
     // Under reduced motion the herald does not go down: he just disappears at the end.
     g.position.y = TOWER_H * h - (still ? 0 : heraldDepth(phase, t));
     g.visible = h >= SHOWN_FROM;
     // The notes are a DOM overlay: they do not follow the group's visibility, so hide them too.
-    const trumpeting = phase === 'trumpeting' && g.visible;
+    const trumpeting = clip.name === TRUMPET_CLIP && phase === 'trumpeting' && g.visible;
     if (trumpeting !== notesShown.current) {
       notesShown.current = trumpeting;
       setNotes(trumpeting);
@@ -118,8 +123,27 @@ function HeraldFigure({ outing, onDone }: { outing: HeraldOuting; onDone: (o: He
     }
   });
 
-  // The trumpet is a plain group (shared geometry and materials): only detach it.
-  useEffect(() => () => void attached.current?.removeFromParent(), []);
+  // A firework show while he is on stage: he cheers once (the first show of his outing only).
+  useEffect(
+    () =>
+      onCelebrate((kind) => {
+        if (kind !== 'tests' || cheerAt.current !== null) return;
+        const { phase, t } = heraldPhase(elapsed.current, outing.kind);
+        cheerAt.current = heraldCheerAt(phase, t);
+      }),
+    [outing.kind],
+  );
+
+  // The trumpet is a plain group (shared geometry and materials): only detach it. The ref is
+  // cleared too, so a remount (StrictMode runs this cleanup once right after mounting, possibly
+  // after the first frame attached it) puts it back in the hand on the next frame.
+  useEffect(
+    () => () => {
+      attached.current?.removeFromParent();
+      attached.current = null;
+    },
+    [],
+  );
 
   return (
     <group ref={setGroup}>

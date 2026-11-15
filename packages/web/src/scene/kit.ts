@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { useGLTF } from '@react-three/drei';
 import { Matrix4, type BufferGeometry, type Material, type Mesh } from 'three';
+import { ANIM_FILES_USED } from './characters.ts';
 import manifest from './kit-manifest.json';
 
 // KayKit models (CC0, Kay Lousberg), copied to public/kaykit by `npm run kaykit:import`.
@@ -24,9 +25,26 @@ export function useKitGLTF(pack: Pack, name: string) {
   return useGLTF(kitUrl(pack, name), false);
 }
 
-/** Every model of the manifest, for preloading. */
+/**
+ * The animation files the figures play a clip from (ANIM_FILES_USED), as one list of URLs.
+ * The load and the preload share this exact list: the loader caches an array under the whole
+ * array, so a preload of the same files one by one would not serve the load.
+ */
+const ANIM_URLS: string[] = ANIM_FILES_USED.map((name) => kitUrl('animations', name));
+
+/** Loads the used animation files (suspends while loading), in ANIM_FILES_USED order. */
+export function useAnimFiles() {
+  return useGLTF(ANIM_URLS, false);
+}
+
+/**
+ * Every model of the manifest, for preloading, except the animation files: most hold no clip
+ * the figures play (about 1 MB each), and the used ones are preloaded as one list.
+ */
 function allKitModels(): { pack: Pack; name: string }[] {
-  return (Object.keys(manifest) as Pack[]).flatMap((pack) => manifest[pack].models.map((name) => ({ pack, name })));
+  return (Object.keys(manifest) as Pack[])
+    .filter((pack) => pack !== 'animations')
+    .flatMap((pack) => manifest[pack].models.map((name) => ({ pack, name })));
 }
 
 /** One mesh of a model: its geometry, the pack's shared material, and its place in the model. */
@@ -68,4 +86,5 @@ export function useKitParts(pack: Pack, name: string): KitPart[] {
 
 export function preloadKit(): void {
   for (const { pack, name } of allKitModels()) useGLTF.preload(kitUrl(pack, name), false);
+  useGLTF.preload(ANIM_URLS, false);
 }

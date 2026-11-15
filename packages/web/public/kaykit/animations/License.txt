@@ -1,9 +1,9 @@
 	
 
-	KayKit : Adventurers Character Pack (2.0)
+	KayKit : Character Animations (1.1)
 
 	Created/distributed by Kay Lousberg (www.kaylousberg.com)
-	Creation date: 22/10/2025 09:00
+	Creation date: 10/12/2025 09:00
 
 			------------------------------
 

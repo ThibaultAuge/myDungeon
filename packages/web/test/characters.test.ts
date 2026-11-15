@@ -1,7 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import type { AgentState } from '@agent-office/shared';
+import { ANIM_FILES, CLIP_FILE, animFilesFor } from '../src/scene/clipCatalog.ts';
 import {
+  ALTAR_CLIPS,
+  AMBUSH_CLIPS,
+  ANIM_FILES_USED,
+  BASE_CLIPS,
+  BONUS_CLIPS,
   CLIPS,
+  HERALD_CLIPS,
+  WORK_CLIPS,
+  type ClipName,
   DEATH_CLIP_TIME,
   HIT_CLIP_TIME,
   SKELETON_LOOKS,
@@ -91,9 +100,82 @@ describe('character constants', () => {
     }
   });
 
-  /** Verifies that the clip list has no duplicate name */
+  /** Verifies that the clip list has no duplicate name, even when two themes list the same clip */
   it('lists each clip once', () => {
     expect(new Set(CLIPS).size).toBe(CLIPS.length);
+  });
+
+  /** Verifies that CLIPS gathers every theme array, and each theme lists a clip only once */
+  it.each([
+    ['BASE_CLIPS', BASE_CLIPS],
+    ['ALTAR_CLIPS', ALTAR_CLIPS],
+    ['AMBUSH_CLIPS', AMBUSH_CLIPS],
+    ['HERALD_CLIPS', HERALD_CLIPS],
+    ['WORK_CLIPS', WORK_CLIPS],
+    ['BONUS_CLIPS', BONUS_CLIPS],
+  ] as [string, readonly ClipName[]][])('gathers %s into CLIPS without repeats', (_label, theme) => {
+    expect(new Set(theme).size).toBe(theme.length);
+    expect(theme.filter((c) => !CLIPS.includes(c))).toEqual([]);
+  });
+
+  /** Verifies that CLIPS holds nothing outside the theme arrays */
+  it('holds only clips of the theme arrays', () => {
+    const themes = new Set<string>([...BASE_CLIPS, ...ALTAR_CLIPS, ...AMBUSH_CLIPS, ...HERALD_CLIPS, ...WORK_CLIPS, ...BONUS_CLIPS]);
+    expect(CLIPS.filter((c) => !themes.has(c))).toEqual([]);
+  });
+
+  /** Verifies that only the animation files holding a played clip are loaded, in catalog order */
+  it('loads only the animation files that hold a clip of CLIPS', () => {
+    // A lower bound on purpose: a theme branch that plays a clip from another file adds that
+    // file without editing this test.
+    expect(ANIM_FILES_USED).toEqual(expect.arrayContaining(['Rig_Medium_General', 'Rig_Medium_MovementBasic']));
+    for (const f of ANIM_FILES_USED) expect(CLIPS.some((c) => CLIP_FILE[c] === f), f).toBe(true);
+    for (const c of CLIPS) expect(ANIM_FILES_USED).toContain(CLIP_FILE[c]);
+    expect(ANIM_FILES_USED).toEqual(ANIM_FILES.filter((f) => ANIM_FILES_USED.includes(f)));
+  });
+
+  /** Verifies that animFilesFor drops repeats and keeps the catalog order */
+  it('lists each animation file once, in catalog order', () => {
+    expect(animFilesFor([])).toEqual([]);
+    expect(animFilesFor(['Fishing_Cast', 'Walking_A', 'Idle_A', 'Cheering', 'Fishing_Idle'])).toEqual([
+      'Rig_Medium_General',
+      'Rig_Medium_MovementBasic',
+      'Rig_Medium_Simulation',
+      'Rig_Medium_Tools',
+    ]);
+  });
+
+  /** Verifies that animFilesFor of the whole catalog returns every file, in order */
+  it('needs every animation file for the whole clip catalog', () => {
+    const all = Object.keys(CLIP_FILE) as (keyof typeof CLIP_FILE)[];
+    expect(animFilesFor(all)).toEqual([...ANIM_FILES]);
+    expect(animFilesFor(['Sawing'])).toEqual(['Rig_Medium_Tools']);
+  });
+
+  /** Verifies that the clip catalog, CLIPS and ANIM_FILES_USED cannot be mutated at runtime */
+  it('freezes the clip catalog, CLIPS and ANIM_FILES_USED', () => {
+    expect(Object.isFrozen(CLIP_FILE)).toBe(true);
+    expect(Object.isFrozen(CLIPS)).toBe(true);
+    expect(Object.isFrozen(ANIM_FILES_USED)).toBe(true);
+  });
+
+  /** Verifies that the catalog leaves out T-Pose, which is in every file but never played */
+  it('leaves T-Pose out of the clip catalog', () => {
+    expect(Object.hasOwn(CLIP_FILE, 'T-Pose')).toBe(false);
+    expect(CLIPS as readonly string[]).not.toContain('T-Pose');
+  });
+
+  /** Verifies that the animation files are unique and each holds at least one catalog clip */
+  it('lists unique animation files, each holding a catalog clip', () => {
+    expect(new Set(ANIM_FILES).size).toBe(ANIM_FILES.length);
+    const files = new Set<string>(Object.values(CLIP_FILE));
+    expect(ANIM_FILES.filter((f) => !files.has(f))).toEqual([]);
+    expect([...files].filter((f) => !(ANIM_FILES as readonly string[]).includes(f))).toEqual([]);
+  });
+
+  /** Verifies that every clip the figures play is a catalog clip, so it has a file to load */
+  it('only plays clips of the catalog', () => {
+    expect(CLIPS.filter((c) => !Object.hasOwn(CLIP_FILE, c))).toEqual([]);
   });
 
   /** Verifies that every slap hit clip is listed in CLIPS, so it is loaded and GLB-checked */

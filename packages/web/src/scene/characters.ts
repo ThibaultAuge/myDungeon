@@ -1,7 +1,9 @@
 // Which KayKit Adventurers character stands for an agent, and which animation it plays.
 // Pure logic, no three.js, so it is testable in node. The clips come from the shared
-// `Rig_Medium` animation files and fit every character of the pack.
+// `Rig_Medium` animation files (KayKit Character Animations 1.1, clipCatalog.ts) and fit every
+// character of the Adventurers and Skeletons packs.
 import type { AgentState, AgentView } from '@agent-office/shared';
+import { animFilesFor, type AnimFile, type KitClip } from './clipCatalog.ts';
 
 /** Character models of the `adventurers` pack in kit-manifest.json. */
 export type CharacterModel = 'Knight' | 'Barbarian' | 'Mage' | 'Ranger' | 'Rogue' | 'Rogue_Hooded';
@@ -142,8 +144,15 @@ export function gripFor(ref: PropRef): Grip {
   return Object.hasOwn(PROP_GRIP, ref.model) ? PROP_GRIP[ref.model] : NEUTRAL_GRIP;
 }
 
-/** Clips used by the figures, from Rig_Medium_General and Rig_Medium_MovementBasic. */
-export const CLIPS = [
+// ---- Clips played by the figures, one array per theme
+// Each theme lists its clips in its OWN array below, so branches working on different themes
+// never edit the same lines: add a clip on a new line inside your theme's brackets, and leave
+// the other arrays and these comments alone. Any name of `CLIP_FILE` (clipCatalog.ts) is
+// accepted; its file is then loaded with the figures (only files holding a listed clip are).
+// A clip listed by two themes is loaded once.
+
+/** Walking, working, waiting, spawn, slap hits, the potion gulp and the death outside. */
+export const BASE_CLIPS = [
   'Walking_A',
   'Running_A',
   'Interact',
@@ -155,11 +164,50 @@ export const CLIPS = [
   'Hit_B',
   'Death_A',
   'Use_Item',
-  // The endless wait at the altar (altarWait.ts): sitting down, then lying asleep.
+] as const satisfies readonly KitClip[];
+
+/** The endless wait at the altar (altarWait.ts): sitting down, then lying asleep. */
+export const ALTAR_CLIPS = [
   'Death_B',
   'Death_A_Pose',
-] as const;
-export type ClipName = (typeof CLIPS)[number];
+] as const satisfies readonly KitClip[];
+
+/** The skeleton ambush outside the castle (ambush.ts, Ambush.tsx). */
+export const AMBUSH_CLIPS = [
+] as const satisfies readonly KitClip[];
+
+/** The heralds on the corner towers (celebrate.ts, Herald.tsx). */
+export const HERALD_CLIPS = [
+  'Ranged_Magic_Raise',
+  'Waving',
+  'Cheering',
+] as const satisfies readonly KitClip[];
+
+/** Work gestures, per room or post. */
+export const WORK_CLIPS = [
+] as const satisfies readonly KitClip[];
+
+/** Small gags: cheering when done, dodging a slap, sneaking, fishing… */
+export const BONUS_CLIPS = [
+] as const satisfies readonly KitClip[];
+
+// ---- End of the theme arrays
+
+export type ClipName =
+  | (typeof BASE_CLIPS)[number]
+  | (typeof ALTAR_CLIPS)[number]
+  | (typeof AMBUSH_CLIPS)[number]
+  | (typeof HERALD_CLIPS)[number]
+  | (typeof WORK_CLIPS)[number]
+  | (typeof BONUS_CLIPS)[number];
+
+/** Every clip the figures play, each once (a clip may sit in two theme arrays). */
+export const CLIPS: readonly ClipName[] = Object.freeze([
+  ...new Set<ClipName>([...BASE_CLIPS, ...ALTAR_CLIPS, ...AMBUSH_CLIPS, ...HERALD_CLIPS, ...WORK_CLIPS, ...BONUS_CLIPS]),
+]);
+
+/** The `animations` files that hold a clip of CLIPS: the only ones loaded. */
+export const ANIM_FILES_USED: readonly AnimFile[] = Object.freeze(animFilesFor(CLIPS));
 
 /**
  * Speeds (units per second, at KIT_SCALE) at which Walking_A and Running_A, played at
