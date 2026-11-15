@@ -161,6 +161,19 @@ Cet effet est purement esthétique, comme la baffe : rien n'agit sur le travail 
 
 - **Réduction des animations.** Ni fiole, ni gorgée, ni titubation : les étoiles et la bulle restent immobiles.
 
+## La chaudière et la fiole
+
+Deux accidents visuels, déclenchés par un outil qui échoue. Ils ne jouent jamais sur une réussite.
+
+- **La chaudière.** Quand un outil échoue alors que l'agent se trouve dans la salle des machines, la chaudière fait « pouf » : une bouffée de fumée claire et une brève lueur. L'agent reste noirci de suie environ 4,5 s : 3 s pleines, puis la suie disparaît peu à peu. Une bulle « POUF ! » apparaît (« POOF! » en anglais, « PUFF! » en allemand).
+- **La fiole.** Quand une commande `Bash` ou `PowerShell` qui lance des tests échoue, la fiole du labo de la salle des épreuves explose en vert. L'agent, en général dans la salle des machines, est couvert de suie verte environ 4,5 s, avec une bulle « BLOUP ! » (« BLOOP! » en anglais, « BLUBB! » en allemand). La commande peut enchaîner plusieurs instructions : le gag la reconnaît tant que la commande de test figure dans ses 200 premiers caractères.
+
+Le déclencheur, les commandes de test reconnues et les commandes pour tester ces gags sont décrits dans [Commandes console](commandes-console.md).
+
+Ces effets sont purement esthétiques, comme la baffe et la potion : rien n'est envoyé au serveur, et rien n'agit sur le travail de l'agent. Ils lisent seulement les événements de hooks déjà diffusés, et supposent les hooks installés.
+
+- **Réduction des animations.** Ni fumée, ni lueur : la bulle reste fixe, et la suie disparaît d'un coup au lieu de s'estomper.
+
 ## La fiche d'agent
 
 Un clic sur un personnage, ou sur sa ligne dans la liste, ouvre sa **fiche** en haut à droite de la scène. Un sous-agent au repos fait exception : son clic ouvre sa [présentation](#la-présentation-dun-sous-agent). Elle est dans le même style que la [boîte de dialogue](#dialogue-avec-un-agent) en bas.

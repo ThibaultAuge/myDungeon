@@ -22,7 +22,7 @@ flowchart LR
 ```
 *Figure : Les trois chemins de données, du relevé à la page.*
 
-- **Les hooks** donnent le temps réel : prompt envoyé, outil utilisé, permission demandée, sous-agent lancé ou terminé, fin de tour, fin de session, compactage du contexte.
+- **Les hooks** donnent le temps réel : prompt envoyé, outil utilisé, outil en échec, permission demandée, sous-agent lancé ou terminé, fin de tour, fin de session, compactage du contexte.
 - **L'inventaire** relit les fichiers de l'app desktop (au fil de leurs modifications, et toutes les 10 s). Il fournit les donjons (un par environnement de l'app Claude), les sessions, leur titre et leur session parente, et indique si une session tourne. Au démarrage du serveur, il reconstruit l'état même sans hooks.
 - **Le navigateur** reçoit un instantané complet du donjon affiché, au plus toutes les 100 ms. Une reconnexion suffit donc à tout resynchroniser.
 
@@ -36,6 +36,8 @@ flowchart LR
 - **ne touche à aucun autre réglage**, ni à aucun autre hook.
 
 L'événement `PreCompact` (compactage du contexte, manuel avec `/compact` ou automatique) est l'un des 13. Le serveur n'utilise que son nom et l'agent visé. Les champs `trigger` et `custom_instructions` (le texte tapé après `/compact`) arrivent au serveur local, mais sont ignorés : ils ne sont ni lus, ni stockés, ni diffusés. Les installations existantes doivent relancer `npm run hooks:install` pour recevoir cet événement.
+
+Les gags de la chaudière et de la fiole se déclenchent dans le navigateur, à partir de `PostToolUseFailure`, déjà installé avec les autres. Le navigateur n'envoie rien en retour : le gag ne fait que lire l'événement diffusé. Le détail est dans [La chaudière et la fiole](utilisation.md#la-chaudière-et-la-fiole).
 
 Les hooks sont des commandes **asynchrones** : ils ne ralentissent jamais Claude. Le relais transmet l'événement au serveur, **ignore sa réponse**, n'affiche rien et se termine toujours sans erreur. Le serveur ne peut donc jamais influencer Claude : il observe seulement. Si le serveur est arrêté, rien ne change pour Claude.
 

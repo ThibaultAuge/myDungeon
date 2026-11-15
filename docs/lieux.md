@@ -61,6 +61,8 @@ Hors du château, juste après le pont-levis et au bord du chemin, un panneau de
 | **Réduit du concierge** | Balais, seaux, chariot | Base de Hancock, qui fait des tournées dans l'Atelier | Hancock |
 | **Taverne** | Grandes tables, cheminée, tonneaux, casiers | Agents disponibles, sans tâche | Un exemplaire de chaque type d'agent, l'agent principal en attente de ton prochain prompt, et le chevalier endormi d'une session arrêtée |
 
+Deux postes réagissent aux échecs d'outil : la chaudière de la Salle des machines et la fiole du laboratoire de la Salle des épreuves. Le détail est dans [La chaudière et la fiole](utilisation.md#la-chaudière-et-la-fiole).
+
 ## Décor propre à chaque pièce
 
 Chaque pièce a ses variantes de murs, des objets accrochés, une lumière d'ambiance à sa

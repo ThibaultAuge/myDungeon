@@ -1,5 +1,5 @@
 ---
-description: Use when changing the 3D dungeon map — rooms, floors, walls, castle gate, cutaway, props, lighting, KayKit models or their import — clickable workstations (posts, hover glow, post card and list), pointer/cursor handling of 3D targets, agent figures (walking motion, character models, role looks and held props, animations, destination badge, agent slap gag, potion of oblivion gag on PreCompact), room or post icons, or when previewing the web scene.
+description: Use when changing the 3D dungeon map — rooms, floors, walls, castle gate, cutaway, props, lighting, KayKit models or their import — clickable workstations (posts, hover glow, post card and list), pointer/cursor handling of 3D targets, agent figures (walking motion, character models, role looks and held props, animations, destination badge, agent slap gag, potion of oblivion gag on PreCompact, boiler/flask mishap gag on tool failures), room or post icons, or when previewing the web scene.
 ---
 
 # 3D dungeon scene (KayKit assets)
@@ -274,6 +274,45 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cast
     `window.agentOffice` namespace (`GagCommands`) is shared with the other gags' test
     commands: each installs its own key; a non-object value is replaced. Rest figure ids
     are lower case (`rest:hermione`).
+- Mishap gag, boiler and flask (user request: purely visual, client-only, no server or
+  shared change): a failed tool call blows up a room prop and covers the agent in soot.
+  - Trigger: the store's `events` list (`HookEventSummary`, already broadcast), only
+    `PostToolUseFailure`. `mishapFor(event, agentRoom)`: flask = Bash/PowerShell command
+    that `isTestCommand` recognises as a test runner (tokenised parser, no
+    nested-repetition regex, reads at most `MAX_COMMAND` 1000 chars) → green blast at the
+    `epreuves` alchemyBench + green soot on the agent wherever it stands; boiler = any other
+    failure of an agent whose room is `machines` → light-grey puff at the `machines` boiler
+    + black soot. `mishapTarget` = `agentId`, or `<sessionId>#main`; agents not in the
+    route's sessions are ignored.
+  - Watcher (`MishapWatcher.tsx`): queues failures and decides after the next `sessions`
+    change (snapshots are throttled 100 ms server-side, the event is sent at once, so the
+    agent's room is only known after it) or after `MISHAP_SETTLE_MS` 400. Dedupe by a
+    `WeakSet` of event objects (`seq` restarts with the server); events present at mount
+    never replay.
+  - Bus (`mishap.ts`, pure): `triggerMishap(id | null, kind)`, per-figure `onMishap(id, cb)`,
+    room-level `onRoomMishap(cb)`, `hasMishapTarget(id)`. Constants `SOOT_HOLD_MS` 3000,
+    `SOOT_FADE_MS` 1500, `SOOT_MS`, `MISHAP_BUBBLE_MS` 1500, `PUFF_MS` 1400, `PUFF_GAP_MS`
+    400, `SOOT_COLORS`, `PUFF_COLORS`; `sootAmount(elapsed, reduced)`,
+    `puffParticles(progress)`.
+  - Soot (`Soot.tsx`): one `<Soot root={group} mishap>` per non-doomed figure in
+    `AgentFigure`, re-armed by `mishap.n` (counter kept in a ref). Swaps the figure's
+    `SkinnedMesh` materials for tinted clones flagged `userData.sootClone`, restores the
+    originals and disposes the clones in the frame loop or on unmount; never mutates shared
+    KayKit materials; retries the swap until the model has loaded. Reduced motion: full soot
+    for `SOOT_MS`, then off at once.
+  - Room effects (`MishapProps.tsx`, mounted in `Office.tsx`): one PERMANENT dark
+    `pointLight` per source, only animated during a puff (constant light count: a transient
+    light made three.js recompile every lit material); module-scope shared sphere geometry
+    and one material per kind (`dispose={null}`); puffs throttled by `PUFF_GAP_MS`
+    (WCAG 2.3.1); none under reduced motion.
+  - Bubble: `MishapEffect.tsx` inside the existing slap `<Html>` anchor (`.mishap`,
+    `.mishap--flask`), `aria-hidden`, text `t.mishap.boiler` / `t.mishap.flask`; `.mishap*`
+    in `styles.css`.
+  - Test commands: `installMishapCommands(selected, window)` in `store.ts` adds
+    `agentOffice.boiler(id?)` / `agentOffice.flask(id?)` (always available, production
+    included, user decision); no id = selected agent; the room effect plays even with no
+    figure; returns true when a figure reacted. Human console doc:
+    [docs/commandes-console.md](../commandes-console.md).
 - Spots (`layout.ts`): `Spot` carries `room: RoomId` and optional `station?: StationId`
   (key absent, not `undefined`). `RoomDef.stations` is `Partial<Record<StationId, Seat[]>>`,
   `STATIONS` maps agent type → `StationId`, `candidateSeats` returns
@@ -321,6 +360,10 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cast
   `ClipInput.drinking` in `characters.ts`; potion handling in `AgentFigure.tsx`; wiring in
   `store.ts`; `.potion*` in `styles.css`; `PreCompact` in `scripts/hooks-lib.mjs`
   (`packages/server/test/hooks-lib.test.ts`).
+- `packages/web/src/scene/mishap.ts` (pure: classification, target, soot/puff curves, bus,
+  `installMishapCommands`), `scene/MishapWatcher.tsx`, `scene/MishapProps.tsx`,
+  `scene/Soot.tsx`, `scene/MishapEffect.tsx`; wiring in `AgentFigure.tsx`, `Office.tsx`,
+  `store.ts`; `.mishap*` in `styles.css`; `packages/web/test/mishap.test.ts`.
 - `packages/web/src/scene/destinations.ts` — pure: `Destination = RoomId | StationId`,
   `destinationOf(spot)` (station ?? room), `postDestination(post: PostId)` (identity; it
   compiles only because every `PostId` is a `RoomId` or a `StationId`).
@@ -335,7 +378,7 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cast
 - `packages/web/src/ui/PostCard.tsx`, `PostList.tsx`; `packages/web/src/store.ts`
   (`selectedPost`, `selectPost`); Canvas `onPointerMissed` is in `Office.tsx`.
 - `packages/web/test/dungeon.test.ts`, `walk.test.ts`, `characters.test.ts`, `slap.test.ts`,
-  `slapSwing.test.ts`, `potion.test.ts`, `layout.test.ts` (`layout.ts`: `ROOMS`, seats and `assignSpots`, altar `queueSpot`,
+  `slapSwing.test.ts`, `potion.test.ts`, `mishap.test.ts`, `layout.test.ts` (`layout.ts`: `ROOMS`, seats and `assignSpots`, altar `queueSpot`,
   `SPAWN`, `corridorPath`, `routeBetween`, `reroute`, post tagging, `postGroups`,
   `POST_ROOM`, spot `room`/`station`), `highlight.test.ts`, `cursor.test.ts`,
   `destinations.test.ts` (`destinationOf`; room ids and post names never overlap;
@@ -368,7 +411,15 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cast
 - Any other per-agent visual reaction: reuse the `slap.ts` bus pattern (per-id listeners,
   target watch for a keyboard button) and the keyed `<Html>` remount to replay CSS effects.
   A hook-driven reaction follows `potion.ts`: a pure `xxxTarget(event, sessions)` in the
-  `store.ts` event branch, then the bus.
+  `store.ts` event branch, then the bus. A reaction that depends on the agent's room or on
+  other snapshot state (e.g. tool failures) reuses `MishapWatcher`'s approach instead:
+  queue the event, decide after the next `sessions` change or a settle timeout, dedupe by
+  event object identity, skip events present at mount.
+- Per-figure material effects (tints, soot, flashes) follow `Soot.tsx`: swap the figure's
+  meshes to flagged clones, restore and dispose in the frame loop or on unmount, retry until
+  the model has loaded. A room-level light effect keeps a permanent light and animates its
+  intensity, never mounts a transient light. Reuse the existing slap `<Html>` anchor for a
+  new per-figure bubble rather than adding another drei `<Html>`.
 - New gag fields on `Motion` must be optional (absent = inactive), like `potionAt` /
   `potionId`: several sibling gags edit the same interface, and the skeletons' `Motion`
   literal must stay untouched. A gag's console test command adds its own key under
@@ -378,6 +429,12 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cast
   `{"hook_event_name":"PreCompact",...}`, or call `agentOffice.potion('rest:<type>')` in
   Playwright. Resting figures are good close-up targets: hatless bodies (e.g. Hancock's)
   show the bottle; mage hats hide the hands.
+- Hook-driven gag verification (potion, mishap): the test server needs an
+  `AGENT_OFFICE_TOKEN` of at least 32 chars, otherwise hooks get 401. Post hooks with a
+  small node `fetch` script, not curl from Git Bash (it mangled the JSON). Mishap: post a
+  `PostToolUseFailure` or call `agentOffice.boiler()` / `agentOffice.flask()`. Capturing
+  the puff headless needs the frozen, hand-stepped `performance.now` described for the slap
+  hand under Preview below.
 - Agent motion logic goes in `walk.ts`, clip choice in `clipFor` (both tested), never
   inline in `AgentFigure`'s `useFrame`, which only calls them.
 - New decor must not cover seats or a door entry (tested in `dungeon.test.ts`).
@@ -459,7 +516,7 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cast
 - Tests must not import `kit.ts` or any `.tsx` file (drei / `import.meta.env`); test
   `dungeon.ts`, `layout.ts`, `walk.ts`, `characters.ts`, `slap.ts`, `slapSwing.ts`,
   `destinations.ts`, `forest.ts`, `outside.ts`, `stage.ts`, `ambush.ts`, `tavern.ts`,
-  `decor.ts`, `merge.ts`, `potion.ts` and the manifest JSON.
+  `decor.ts`, `merge.ts`, `potion.ts`, `mishap.ts` and the manifest JSON.
 - Walk speed was set so figures reach the room before short tasks finish (user request).
   The chibi legs walk naturally at 0.57 (`Walking_A`) and 1.4 u/s (`Running_A`) at
   `KIT_SCALE`, so feet slide at cruise speed by design. Accepted limits: a reroute to a
@@ -502,6 +559,10 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cast
   the client as the main agent's (`summarize` collapses null); a repeated PreCompact within
   4.6 s restarts the effect; with the tab hidden the HTML timer and the frame clock can
   drift (stars without stagger briefly).
+- Mishap accepted limits (not done): the server collapses newlines and cuts commands at 200
+  chars, so a test run past the cut counts as a boiler; the server places an agent by its
+  current tool, so a parallel tool call before the snapshot can hide a boiler; soot misses a
+  character model swapped mid-effect.
 - Sound files rule: before shipping a new sound under `public/sounds/`, record its source
   and licence in `public/sounds/LICENSE.txt`. Never commit a sound ripped from a commercial
   game.
