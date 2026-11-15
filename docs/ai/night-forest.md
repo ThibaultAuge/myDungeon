@@ -75,6 +75,8 @@ description: Use when changing the night environment around the castle — fores
   last step clamped to `min`, non-positive step treated as 1; if nothing fits at `min`, the
   text is cut by code points with `…`. Only the first 120 code points are considered, which
   bounds the measuring cost.
+- Fireworks in the night sky behind the castle (celebration gag, not nightified):
+  `docs/ai/celebrations.md`.
 - Camera: `Office.tsx` clamps the OrbitControls target to `BOUNDS` ± `PAN_MARGIN` 20
   (`outside.ts`) so panning cannot leave the finite world.
 - Figures outside the castle (main agents walking in from the path end, the skeleton ambush
