@@ -174,6 +174,12 @@ export const ALTAR_CLIPS = [
 
 /** The skeleton ambush outside the castle (ambush.ts, Ambush.tsx). */
 export const AMBUSH_CLIPS = [
+  'Skeletons_Spawn_Ground',
+  'Skeletons_Taunt',
+  'Melee_1H_Attack_Chop',
+  'Melee_2H_Attack_Chop',
+  'Skeletons_Walking',
+  'Skeletons_Death',
 ] as const satisfies readonly KitClip[];
 
 /** The heralds on the corner towers (celebrate.ts, Herald.tsx). */
