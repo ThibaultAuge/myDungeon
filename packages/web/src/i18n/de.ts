@@ -70,6 +70,9 @@ export const de: Messages = {
   slap: {
     sound: 'KLATSCH!',
   },
+  potion: {
+    bubble: 'Wo bin ich?',
+  },
   info: {
     label: (name: string) => `Informationen zu ${name}`,
     slap: 'Ohrfeige',

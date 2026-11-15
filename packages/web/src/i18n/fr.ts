@@ -78,6 +78,10 @@ export const fr = {
     /** Comic sound word of the slap, shown in a bubble over the slapped agent. */
     sound: 'PAF !',
   },
+  potion: {
+    /** Dazed words of an agent that just drank the potion of oblivion (context compaction), in a bubble over its head. */
+    bubble: 'Où suis-je ?',
+  },
   info: {
     label: (name: string) => `Informations sur ${name}`,
     slap: 'Baffer',

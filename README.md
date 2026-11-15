@@ -7,6 +7,7 @@ Agents’ l**AI**r est un petit repaire en 3D. Le nom reste en anglais dans tout
 - **Un donjon en 3D** de 14 lieux, entouré d'une forêt de nuit.
 - **Un personnage par agent**, de la couleur de sa session. Les sous-agents apparaissent, puis retournent à la taverne.
 - **Une baffe façon Dungeon Keeper** : clic droit sur un personnage, purement pour rire.
+- **Une potion d'oubli** : quand une session compacte son contexte, son agent boit une fiole et titube, purement pour rire.
 - **Entrées et sorties** : le chevalier d'une session entre au château par le pont-levis. Quand la session disparaît, il sort par la porte et meurt sous les coups de squelettes.
 - **Trois états lisibles** : il travaille, il attend ton prochain message, il a terminé.
 - **L'autel des requêtes** : les agents qui ont besoin de toi (permission, question, erreur) font la queue.
@@ -56,6 +57,7 @@ npm run typecheck
 ## Documentation
 
 - [Utilisation](docs/utilisation.md) : ce que tu vois et ce que tu peux faire dans la scène.
+- [Commandes console](docs/commandes-console.md) : commandes du navigateur pour déclencher les gags et les tester.
 - [Fonctionnement](docs/fonctionnement.md) : flux de données, hooks, données lues, variables d'environnement.
 - [Sécurité](docs/securite.md) : accès local, conversations, poste partagé.
 - [Modèles 3D](docs/modeles-3d.md) : packs KayKit, licence, ajout d'un modèle.

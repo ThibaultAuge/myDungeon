@@ -9,7 +9,7 @@ import { reducedMotion } from '../motion.ts';
 import { altarHeading, isAsleep, paceAxis, paceOffset, paceSeed, type AltarStage } from './altarWait.ts';
 import { AltarCobwebs } from './AltarCobwebs.tsx';
 import { victimClip, victimSink, type Ambush } from './ambush.ts';
-import { clipFor, CLIPS, gripFor, lookFor, SPAWN_TIME_SCALE, type AltarPose, type ClipChoice, type ClipName, type Look, type PropRef } from './characters.ts';
+import { clipFor, CLIPS, gripFor, lookFor, POTION_PROP, SPAWN_TIME_SCALE, type AltarPose, type ClipChoice, type ClipName, type Look, type PropRef } from './characters.ts';
 import { CLICK_MAX_DRAG_PX, nearestTarget, setPointerHover, TARGET_USER_DATA } from './cursor.ts';
 import { DestinationBadge } from './DestinationIcon.tsx';
 import { destinationOf } from './destinations.ts';
@@ -17,6 +17,8 @@ import { KIT_SCALE } from './dungeon.ts';
 import { useKitGLTF } from './kit.ts';
 import { reroute, SPAWN, type Point, type Spot } from './layout.ts';
 import { exitRoute, groundY, routeFrom } from './outside.ts';
+import { DRINK_S, onPotion, POTION_EFFECT_MS, POTION_S, potionPhase, staggerSway } from './potion.ts';
+import { PotionEffect } from './PotionEffect.tsx';
 import { RequestBubble } from './RequestBubble.tsx';
 import { SnoreBubble } from './SnoreBubble.tsx';
 import { hitClipFor, onSlap, slapAgent, SLAP_EFFECT_MS } from './slap.ts';
@@ -39,6 +41,8 @@ const TAG_Y = 2.45;
 const BUBBLE_Y = 2.1;
 /** Height of the slap effect (hand, stars, bubble): around the head. */
 const SLAP_Y = 1.5;
+/** Height of the potion's stars: a ring around the top of the head. */
+const POTION_Y = 1.75;
 /** Pause of the walk after a slap until the character reports its hit clip's real length. */
 const HIT_FALLBACK = 0.6;
 /** Fastest sideways easing (m/s) of a pacing figure, above the pace's own peak speed. */
@@ -60,6 +64,13 @@ export interface Motion {
   hitWait: number;
   /** Seconds of hit reaction left: the walk pauses meanwhile (and during the wait). */
   hitLeft: number;
+  /**
+   * Seconds since the agent started drinking the potion of oblivion; absent or -1 when it is not.
+   * Optional, like every gag field, so figures that never drink (skeletons) need not set it.
+   */
+  potionAt?: number;
+  /** Number of the last potion (a new number restarts the gulp). */
+  potionId?: number;
   /** The endless wait at the altar (altarWait.ts), for a figure at its place; null or absent otherwise. */
   altar?: AltarPose | null;
 }
@@ -87,7 +98,7 @@ function useClips(): AnimationClip[] {
 }
 
 /** A model held in a hand: a plain clone (shared geometry and materials) inside the hand bone. */
-function Held({ prop, bone }: { prop: PropRef; bone: Object3D }) {
+function Held({ prop, bone, holder }: { prop: PropRef; bone: Object3D; holder?: RefObject<Group | null> }) {
   const { scene } = useKitGLTF(prop.pack, prop.model);
   const object = useMemo(() => {
     const o = scene.clone();
@@ -98,7 +109,7 @@ function Held({ prop, bone }: { prop: PropRef; bone: Object3D }) {
   }, [scene]);
   const grip = gripFor(prop);
   return createPortal(
-    <group position={grip.position} rotation={grip.rotation} scale={grip.scale}>
+    <group ref={holder} position={grip.position} rotation={grip.rotation} scale={grip.scale}>
       <primitive object={object} />
     </group>,
     bone,
@@ -109,7 +120,21 @@ function Held({ prop, bone }: { prop: PropRef; bone: Object3D }) {
  * The animated KayKit character. It suspends while its files load, so it sits in its own
  * Suspense and error boundary: the tag, ring and disc next to it never wait for it.
  */
-export function Character({ look, state, motion }: { look: Look; state: AgentState; motion: RefObject<Motion> }) {
+export function Character({
+  look,
+  state,
+  motion,
+  extra,
+}: {
+  look: Look;
+  state: AgentState;
+  motion: RefObject<Motion>;
+  /**
+   * Mounted for a while (the potion): shown in the right hand instead of the look's prop during
+   * the gulp only, on the frame clock (not a timer), so it never drifts from the clip. Loads on its own.
+   */
+  extra?: PropRef;
+}) {
   // One skinned clone per figure: the skeleton is its own, geometry and materials are shared.
   const { scene } = useKitGLTF(look.pack ?? 'adventurers', look.body);
   const model = useMemo(() => {
@@ -143,6 +168,11 @@ export function Character({ look, state, motion }: { look: Look; state: AgentSta
   const current = useRef<ClipName | null>(null);
   /** Number of the last slap whose hit clip was started. */
   const lastHit = useRef(0);
+  /** Number of the last potion whose gulp was started. */
+  const lastPotion = useRef(0);
+  /** The look's right-hand prop and the potion bottle: one of them shows, set every frame. */
+  const rightProp = useRef<Group>(null);
+  const bottle = useRef<Group>(null);
 
   useFrame((_, delta) => {
     const m = motion.current;
@@ -160,8 +190,14 @@ export function Character({ look, state, motion }: { look: Look; state: AgentSta
       reducedMotion: still,
       scripted: m.scripted,
       hit: m.hitWait <= 0 && m.hitLeft > 0 && m.hit ? m.hit : undefined,
+      drinking: potionPhase(m.potionAt ?? -1) === 'drinking',
       altar: m.altar ?? undefined,
     });
+    // The bottle shows only while the gulp clip itself plays (a slap or a spawn takes over the hand).
+    const gulp = choice.name === 'Use_Item' && !m.scripted;
+    if (bottle.current) bottle.current.visible = gulp;
+    // The look's prop hides only once the bottle has loaded: never an empty hand meanwhile.
+    if (rightProp.current) rightProp.current.visible = !(gulp && bottle.current);
     // When Suspense hides and shows the scene again (while the kit loads), React runs the
     // effect cleanups: drei's useAnimations then stops every action, but these refs survive.
     // A current clip that is no longer active means: start over.
@@ -180,6 +216,12 @@ export function Character({ look, state, motion }: { look: Look; state: AgentSta
     if (choice.name === m.hit && m.hitId !== lastHit.current) {
       lastHit.current = m.hitId;
       m.hitLeft = next.getClip().duration;
+      if (current.current === choice.name) next.reset().play();
+      else weights.current.delete(choice.name);
+    }
+    // Same for a new potion: the gulp starts over.
+    if (gulp && m.potionId !== lastPotion.current) {
+      lastPotion.current = m.potionId ?? 0;
       if (current.current === choice.name) next.reset().play();
       else weights.current.delete(choice.name);
     }
@@ -232,7 +274,13 @@ export function Character({ look, state, motion }: { look: Look; state: AgentSta
   return (
     <>
       <primitive object={model} scale={KIT_SCALE} />
-      {look.right && hands.right && <Held prop={look.right} bone={hands.right} />}
+      {look.right && hands.right && <Held prop={look.right} bone={hands.right} holder={rightProp} />}
+      {extra && hands.right && (
+        // Its own Suspense: loading the bottle never hides the character.
+        <Suspense fallback={null}>
+          <Held prop={extra} bone={hands.right} holder={bottle} />
+        </Suspense>
+      )}
       {look.left && hands.left && <Held prop={look.left} bone={hands.left} />}
     </>
   );
@@ -290,6 +338,8 @@ export const AgentFigure = memo(AgentFigureImpl);
 
 function AgentFigureImpl({ agent, name, color, spot, start, selected, onSelect, onArrive, exit, onGone, altarStage = 'calm' }: Props) {
   const group = useRef<Group>(null);
+  /** Leans the character (not its disc, ring or tag) while it staggers after the potion. */
+  const sway = useRef<Group>(null);
   const ring = useRef<Mesh>(null);
   const bubble = useRef<Mesh>(null);
   /** The tag's HTML anchor: `data-travelling` shows the destination badge while walking. */
@@ -316,6 +366,8 @@ function AgentFigureImpl({ agent, name, color, spot, start, selected, onSelect, 
     hitId: 0,
     hitWait: 0,
     hitLeft: 0,
+    potionAt: -1,
+    potionId: 0,
     altar: null,
   });
   /** Sideways shift of a pacing agent from its place, eased so it never jumps. */
@@ -324,6 +376,14 @@ function AgentFigureImpl({ agent, name, color, spot, start, selected, onSelect, 
   /** Number of the slap on screen (a new one remounts the effect), null when none is. */
   const [slap, setSlap] = useState<number | null>(null);
   const slaps = useRef(0);
+  /** Number of the potion on screen (a new one remounts the stars), null when none is. */
+  const [potion, setPotion] = useState<number | null>(null);
+  /** The bottle is mounted for the whole effect; Character shows it during the gulp only. */
+  const [bottleOn, setBottleOn] = useState(false);
+  const potions = useRef(0);
+  /** Read by the potion listener, which outlives renders: a doomed figure drinks nothing. */
+  const doomed = useRef(!!exit);
+  doomed.current = !!exit;
   /** Where the right button went down on this figure, to tell a click from a camera drag. */
   const rightDown = useRef<{ x: number; y: number } | null>(null);
 
@@ -335,6 +395,8 @@ function AgentFigureImpl({ agent, name, color, spot, start, selected, onSelect, 
     const off = onSlap(agent.id, () => {
       const n = ++slaps.current;
       const m = motion.current;
+      // A slap ends a gulp at once: the agent goes straight on to staggering (never a second gulp).
+      if (potionPhase(m.potionAt ?? -1) === 'drinking') m.potionAt = DRINK_S;
       // A figure still rising from the ground (or loading) skips the hit; hand, stars and sound still show.
       const skip = reducedMotion() || m.spawnLeft !== 0;
       m.hit = skip ? null : hitClipFor(n);
@@ -353,6 +415,38 @@ function AgentFigureImpl({ agent, name, color, spot, start, selected, onSelect, 
       clearTimeout(timer);
       // Suspense can run this cleanup and the effect again: never leave an effect stuck on screen.
       setSlap(null);
+    };
+  }, [agent.id]);
+
+  // The potion of oblivion (PreCompact) is purely visual too: gulp, stagger, stars and bubble.
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const off = onPotion(agent.id, () => {
+      if (doomed.current) return;
+      const n = ++potions.current;
+      const m = motion.current;
+      // A figure still rising from the ground (or loading) does not drink at all: stars with no
+      // gulp would look like a glitch. Under reduced motion: no gulp, no stagger, still stars and bubble.
+      if (m.spawnLeft !== 0 && !reducedMotion()) return;
+      const skip = reducedMotion();
+      m.potionAt = skip ? -1 : 0;
+      m.potionId = n;
+      setPotion(n);
+      setBottleOn(!skip);
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        setPotion(null);
+        setBottleOn(false);
+      }, POTION_EFFECT_MS);
+    });
+    return () => {
+      off();
+      clearTimeout(timer);
+      // Suspense can run this cleanup and the effect again: never leave an effect stuck on screen,
+      // and reset the 3D half with the HTML half.
+      motion.current.potionAt = -1;
+      setPotion(null);
+      setBottleOn(false);
     };
   }, [agent.id]);
 
@@ -411,6 +505,16 @@ function AgentFigureImpl({ agent, name, color, spot, start, selected, onSelect, 
     const hitting = m.hitWait > 0 || m.hitLeft > 0;
     if (m.hitWait > 0) m.hitWait = Math.max(0, m.hitWait - delta);
     else if (m.hitLeft > 0) m.hitLeft = Math.max(0, m.hitLeft - delta);
+    // The potion: the walk pauses for the gulp, then the figure staggers (walking or not).
+    const drunk = m.potionAt ?? -1;
+    if (still || exit) m.potionAt = -1;
+    else if (drunk >= 0) m.potionAt = drunk + delta >= POTION_S ? -1 : drunk + delta;
+    const gulping = potionPhase(m.potionAt ?? -1) === 'drinking';
+    // Only while the potion acts, plus one frame to stand straight again: no work when idle.
+    if (sway.current && drunk >= 0) {
+      const lean = staggerSway(m.potionAt ?? -1);
+      sway.current.rotation.set(lean.pitch, 0, lean.roll);
+    }
 
     m.moving = false;
     const doomed = exit?.victim(agent.id);
@@ -420,8 +524,8 @@ function AgentFigureImpl({ agent, name, color, spot, start, selected, onSelect, 
       onGone?.(agent.id);
       return;
     }
-    if (hitting && !exit && path.current.length > 0) {
-      // A slap pauses an ordinary walk; a figure walking out to its death never stops.
+    if ((hitting || gulping) && !exit && path.current.length > 0) {
+      // A slap or a gulp pauses an ordinary walk; a figure walking out to its death never stops.
       m.speed = 0;
     } else if (!spawning && path.current.length > 0) {
       // A reroute keeps the current speed: the agent changes course without stopping.
@@ -540,11 +644,18 @@ function AgentFigureImpl({ agent, name, color, spot, start, selected, onSelect, 
       }
       onContextMenu={onSelect && ((e) => e.nativeEvent.preventDefault())}
     >
-      <CharacterBoundary fallback={capsule} onError={() => (motion.current.spawnLeft = 0)}>
-        <Suspense fallback={null}>
-          <Character look={lookFor(agent.kind, agent.agentType)} state={agent.state} motion={motion} />
-        </Suspense>
-      </CharacterBoundary>
+      <group ref={sway}>
+        <CharacterBoundary fallback={capsule} onError={() => (motion.current.spawnLeft = 0)}>
+          <Suspense fallback={null}>
+            <Character
+              look={lookFor(agent.kind, agent.agentType)}
+              state={agent.state}
+              motion={motion}
+              extra={bottleOn ? POTION_PROP : undefined}
+            />
+          </Suspense>
+        </CharacterBoundary>
+      </group>
       {/* Session colour on the floor, inside the state ring: links the figure to its card.
           A doomed figure no longer belongs to a session: no disc, ring, gem nor tag. */}
       {!exit && (
@@ -591,6 +702,12 @@ function AgentFigureImpl({ agent, name, color, spot, start, selected, onSelect, 
       {connected && onSelect && (
         <Html position={[0, SLAP_Y, 0]} center className="slap-anchor" zIndexRange={[30, 20]}>
           {slap !== null && <SlapEffect key={slap} />}
+        </Html>
+      )}
+      {/* Mounted only while the potion acts; the effect remounts on each potion. */}
+      {connected && potion !== null && !exit && (
+        <Html position={[0, POTION_Y, 0]} center className="potion-anchor" zIndexRange={[30, 20]}>
+          <PotionEffect key={potion} />
         </Html>
       )}
       {/* The 3D hand sweeps the other way on every other slap; none under reduced motion. */}

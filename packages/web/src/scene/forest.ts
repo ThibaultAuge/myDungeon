@@ -116,10 +116,44 @@ export const PATH_CLEARANCE = 2.4;
 /** Free space kept around the moat. */
 export const MOAT_CLEARANCE = 1.5;
 
-/** True when a tree may stand at (x, z): out of the clearing, the moat and the path. */
+/** Width of the board of the dungeon's name sign. */
+export const SIGN_WIDTH = 5.6;
+
+/**
+ * The wooden sign bearing the dungeon's name, beside the path just past the drawbridge, east
+ * of it so it never stands in the way of the figures walking in. It faces roughly +z, the
+ * default camera, turned towards the path by SIGN_YAW.
+ */
+export const SIGN: Point = { x: (GATE.lo + GATE.hi) / 2 + PATH_HALF_WIDTH + 0.4 + SIGN_WIDTH / 2, z: BRIDGE.z1 + 2.4 };
+
+/**
+ * Turn of the sign around the vertical axis: its face looks south-west, presented to the
+ * path rather than parallel to the castle wall.
+ */
+export const SIGN_YAW = -0.25;
+
+/** A point along the board's foot, from its west end (t = -1) to its east end (t = 1). */
+export function alongSign(t: number): Point {
+  const h = (t * SIGN_WIDTH) / 2;
+  return { x: SIGN.x + h * Math.cos(SIGN_YAW), z: SIGN.z - h * Math.sin(SIGN_YAW) };
+}
+
+/** The two dungeon-coloured pennants framing the landing of the drawbridge, on firm ground. */
+export const PENNANTS: Point[] = [
+  { x: BRIDGE.x0 - 0.4, z: BRIDGE.z1 - 0.25 },
+  { x: BRIDGE.x1 + 0.4, z: BRIDGE.z1 - 0.25 },
+];
+
+/** Free ground kept around the sign and the pennants, so no tree or bush goes through them. */
+export const SIGN_CLEARANCE = SIGN_WIDTH / 2 + 0.8;
+export const PENNANT_CLEARANCE = 1.4;
+
+/** True when a tree may stand at (x, z): out of the clearing, the moat, the path and the sign. */
 export function treeAllowed(x: number, z: number, path: Point[]): boolean {
   if (distanceToRect(x, z, OUTER) < CLEARING) return false;
   if (distanceToRect(x, z, MOAT) < MOAT_CLEARANCE) return false;
+  if (Math.hypot(x - SIGN.x, z - SIGN.z) < SIGN_CLEARANCE) return false;
+  if (PENNANTS.some((p) => Math.hypot(x - p.x, z - p.z) < PENNANT_CLEARANCE)) return false;
   return distanceToPath(x, z, path) >= PATH_CLEARANCE;
 }
 
