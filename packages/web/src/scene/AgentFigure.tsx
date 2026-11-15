@@ -708,7 +708,7 @@ function AgentFigureImpl({ agent, name, color, spot, start, selected, onSelect, 
           {/* While walking, the destination badge takes the request bubble's place (CSS). */}
           <DestinationBadge ref={badge} kind={destination} />
           {urgent && <RequestBubble reason={agent.waitReason} />}
-          {!exit && isAsleep(altarStage) && <SnoreBubble />}
+          {isAsleep(altarStage) && <SnoreBubble />}
           {/* Same name as in the side list, which is the accessible one: not announced twice. */}
           <span className={`agent-tag${selected ? ' agent-tag--selected' : ''}`} aria-hidden="true">
             {name}
