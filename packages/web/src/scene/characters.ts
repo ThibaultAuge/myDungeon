@@ -4,6 +4,8 @@
 // character of the Adventurers and Skeletons packs.
 import type { AgentState, AgentView } from '@agent-office/shared';
 import { animFilesFor, type AnimFile, type KitClip } from './clipCatalog.ts';
+import type { DodgeClip } from './dodge.ts';
+import { SNEAK_CLIP_SPEED } from './sneak.ts';
 
 /** Character models of the `adventurers` pack in kit-manifest.json. */
 export type CharacterModel = 'Knight' | 'Barbarian' | 'Mage' | 'Ranger' | 'Rogue' | 'Rogue_Hooded';
@@ -210,6 +212,16 @@ export const WORK_CLIPS = [
 
 /** Small gags: cheering when done, dodging a slap, sneaking, fishing… */
 export const BONUS_CLIPS = [
+  'Cheering',
+  'Dodge_Backward',
+  'Dodge_Left',
+  'Dodge_Right',
+  'Sneaking',
+  'Fishing_Cast',
+  'Fishing_Idle',
+  'Fishing_Bite',
+  'Fishing_Reeling',
+  'Fishing_Catch',
 ] as const satisfies readonly KitClip[];
 
 // ---- End of the theme arrays
@@ -284,12 +296,18 @@ export interface ClipInput {
   reducedMotion: boolean;
   /** A clip imposed by a scripted scene (the death outside the castle), over everything else. */
   scripted?: ClipChoice | null;
-  /** The figure was just slapped: the hit reaction to play (once). Absent otherwise. */
-  hit?: 'Hit_A' | 'Hit_B';
+  /** The figure was just slapped: the hit reaction, or the dodge (dodge.ts), to play (once). Absent otherwise. */
+  hit?: 'Hit_A' | 'Hit_B' | DodgeClip;
   /** The figure is drinking the potion of oblivion (potion.ts): the gulp, played once. */
   drinking?: boolean;
   /** The endless wait at the altar, for a figure at its place. Absent otherwise. */
   altar?: AltarPose;
+  /** A subagent that just finished cheers once where it stands (cheer.ts). */
+  cheering?: boolean;
+  /** A finished Rogue-looking subagent sneaks back to the tavern (sneak.ts). */
+  sneaking?: boolean;
+  /** The fishing clip of a figure at its place on the moat bank (fishing.ts). Absent otherwise. */
+  fishing?: ClipChoice;
   /** The gesture or seated pose of a figure at its place (workGestures.ts). Absent: the defaults. */
   place?: ClipChoice | null;
 }
@@ -312,6 +330,7 @@ export const hold = (name: ClipName, at = 0): ClipChoice => ({ name, loop: false
  */
 export function clipFor(input: ClipInput): ClipChoice {
   const { moving, speed, state, spawning, kneeling, reducedMotion, scripted, hit, drinking, altar } = input;
+  const { cheering, sneaking, fishing } = input;
   // Reduced motion wins even over a scripted scene: limbs stay still.
   if (scripted && !reducedMotion) return scripted;
   if (spawning && !reducedMotion) return play('Spawn_Ground', SPAWN_TIME_SCALE, false);
@@ -319,6 +338,8 @@ export function clipFor(input: ClipInput): ClipChoice {
   if (hit && !reducedMotion) return play(hit, 1, false);
   // The potion's gulp (purely visual too) comes right after the slap.
   if (drinking && !reducedMotion) return play('Use_Item', 1, false);
+  if (cheering && !reducedMotion) return play('Cheering', 1, false);
+  if (sneaking && moving && !reducedMotion) return play('Sneaking', Math.min(Math.max(speed / SNEAK_CLIP_SPEED, 0.5), MAX_CLIP_RATE));
   if (moving) {
     if (reducedMotion) return hold('Idle_A');
     return speed >= RUN_THRESHOLD
@@ -330,6 +351,7 @@ export function clipFor(input: ClipInput): ClipChoice {
   if (altar === 'sleeping') return hold(SLEEP_CLIP);
   if (altar === 'sitting') return hold(SIT_CLIP, SIT_POSE_TIME);
   if (altar === 'pacing' && !reducedMotion) return play('Walking_A', PACE_CLIP_RATE);
+  if (fishing) return reducedMotion ? hold('Fishing_Idle') : fishing;
   if (kneeling) return hold('PickUp', KNEEL_POSE_TIME);
   // A work gesture or a seated pose at the figure's place (workGestures.ts minds reduced motion).
   if (input.place) return input.place;

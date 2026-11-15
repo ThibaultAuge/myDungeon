@@ -157,6 +157,16 @@ Cet effet est purement esthétique : rien n'agit sur l'agent ni sur sa session.
 - **Glisser.** Un clic droit glissé déplace toujours la caméra, sans baffer.
 - **Clavier.** Le bouton « Baffer » de la fiche de l'agent, ou de la présentation d'un sous-agent au repos, fait la même chose. Il n'apparaît que tant que l'agent a un personnage dans la scène.
 - **Réduction des animations.** Ni main ni coup : seule la bulle s'affiche, immobile.
+- **Esquive.** Un agent baffé plusieurs fois de suite (moins de 2 s entre deux baffes) esquive la troisième : il fait un pas de côté ou en arrière, la main passe dans le vide, sans bruit ni étoiles, et une bulle « Raté ! » apparaît (« Missed! » en anglais, « Daneben! » en allemand). La série repart ensuite à zéro. Avec la réduction des animations, aucune esquive : chaque baffe s'affiche comme d'habitude.
+
+## Fin de tâche, discrétion et pêche
+
+Trois petits gags purement esthétiques, comme la baffe :
+
+- **Acclamation.** Un sous-agent qui termine sa tâche lève les bras une fois, sur place, puis rentre à la taverne. L'agent principal n'acclame jamais, même quand sa session se ferme.
+- **À pas de loup.** Les sous-agents à l'allure de voleur (voleur ou voleur encapuchonné, par exemple dexter, gatsby, plan ou general-purpose) rentrent à la taverne accroupis, plus lentement, comme s'ils filaient en douce.
+- **Partie de pêche.** L'agent principal d'une session en cours qui attend ton prochain message à la taverne depuis 3 minutes sort par le pont-levis et va pêcher au bord des douves, canne en main : il lance, attend, ça mord, il mouline, il attrape, et recommence. Il revient dès qu'il a du travail. Les pêcheurs se répartissent le long de la berge, de part et d'autre du pont-levis (12 places au plus). La commande `agentOffice.peche()` envoie un agent pêcher sans attendre (voir [Commandes console](commandes-console.md)).
+- **Réduction des animations.** Pas d'acclamation ; le voleur rentre toujours lentement mais sans animation ; le pêcheur garde une pose fixe.
 
 ## La potion d'oubli
 
