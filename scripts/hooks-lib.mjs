@@ -47,6 +47,8 @@ export const EVENTS = [
   'SubagentStop',
   'Stop',
   'StopFailure',
+  // Context compaction: the agent drinks the potion of oblivion (packages/web/src/scene/potion.ts).
+  'PreCompact',
 ];
 
 /** Shell command Claude Code runs (Git Bash or PowerShell on Windows): forward slashes, quoted path. */

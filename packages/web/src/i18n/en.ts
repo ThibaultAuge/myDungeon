@@ -67,6 +67,9 @@ export const en: Messages = {
   slap: {
     sound: 'SLAP!',
   },
+  potion: {
+    bubble: 'Where am I?',
+  },
   info: {
     label: (name: string) => `About ${name}`,
     slap: 'Slap',

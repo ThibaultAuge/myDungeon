@@ -46,6 +46,12 @@ describe('addOurs', () => {
     expect(relayCommand('C:\\a b\\hook-relay.mjs')).toBe('node "C:/a b/hook-relay.mjs"');
   });
 
+  /** Verifies that PreCompact (context compaction, the potion gag) is relayed like every other event. */
+  it('relays PreCompact', () => {
+    expect(EVENTS).toContain('PreCompact');
+    expect(ours(addOurs({}, OPTS), 'PreCompact')).toEqual([RELAY]);
+  });
+
   /** A path a shell would expand inside double quotes is refused instead of being installed. */
   it.each(['C:/a$b/hook-relay.mjs', 'C:/a`b`/hook-relay.mjs', 'C:/a"b/hook-relay.mjs', 'C:/a!b/hook-relay.mjs'])(
     'refuses the unsafe relay path %s',
