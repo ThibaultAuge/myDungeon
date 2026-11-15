@@ -1,0 +1,160 @@
+<!--
+  Source of packages/web/public/images/agents-lair-logo.png. Never serve this SVG as-is:
+  it loads the Cinzel fonts from Google Fonts, which an <img> cannot do anyway.
+  Re-render: open it inline in a browser page, remove #bg-plate, wait for document.fonts.ready,
+  then take a transparent screenshot (omitBackground) clipped to x 190, y 60, 820 x 520.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 600" width="1200" height="600" role="img" aria-label="Agents’ lAIr">
+  <title>Agents’ lAIr</title>
+  <defs>
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700;900&amp;family=Cinzel:wght@700&amp;display=block');
+      .title { font-family: 'Cinzel Decorative', 'Cinzel', 'Trajan Pro', Georgia, serif; font-weight: 900; }
+      .sub   { font-family: 'Cinzel', 'Trajan Pro', Georgia, serif; font-weight: 700; }
+    </style>
+
+    <!-- Background -->
+    <radialGradient id="bg" cx="50%" cy="48%" r="70%">
+      <stop offset="0" stop-color="#2a1f45"/>
+      <stop offset="0.55" stop-color="#140f22"/>
+      <stop offset="1" stop-color="#07050c"/>
+    </radialGradient>
+
+    <!-- Gold lettering -->
+    <linearGradient id="gold" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fff6d2"/>
+      <stop offset="0.35" stop-color="#f3c867"/>
+      <stop offset="0.52" stop-color="#9c6418"/>
+      <stop offset="0.62" stop-color="#d9a441"/>
+      <stop offset="1" stop-color="#fbe39a"/>
+    </linearGradient>
+    <linearGradient id="goldEdge" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#5a3608"/>
+      <stop offset="1" stop-color="#1e1003"/>
+    </linearGradient>
+
+    <!-- Steel blade -->
+    <linearGradient id="steel" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#7d8aa6"/>
+      <stop offset="0.48" stop-color="#f4f8ff"/>
+      <stop offset="0.52" stop-color="#b9c5dc"/>
+      <stop offset="1" stop-color="#55607a"/>
+    </linearGradient>
+
+    <!-- Arcane crystal -->
+    <linearGradient id="crystal" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#c9b8ff"/>
+      <stop offset="0.45" stop-color="#6d4bd8"/>
+      <stop offset="1" stop-color="#1d1060"/>
+    </linearGradient>
+    <radialGradient id="crystalGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0" stop-color="#8f6cff" stop-opacity="0.55"/>
+      <stop offset="0.6" stop-color="#5b3cc4" stop-opacity="0.18"/>
+      <stop offset="1" stop-color="#5b3cc4" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="gem" cx="40%" cy="35%" r="65%">
+      <stop offset="0" stop-color="#ffd6f0"/>
+      <stop offset="0.4" stop-color="#d0257a"/>
+      <stop offset="1" stop-color="#4a0628"/>
+    </radialGradient>
+
+    <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="6" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="160%">
+      <feDropShadow dx="0" dy="8" stdDeviation="6" flood-color="#000" flood-opacity="0.75"/>
+    </filter>
+  </defs>
+
+  <rect id="bg-plate" width="1200" height="600" fill="url(#bg)"/>
+
+  <!-- ===== Emblem behind the title: rune ring + crystal ===== -->
+  <g transform="translate(600 318)">
+    <circle r="270" fill="url(#crystalGlow)"/>
+    <circle r="232" fill="none" stroke="#c9a14a" stroke-opacity="0.45" stroke-width="2"/>
+    <circle r="214" fill="none" stroke="#c9a14a" stroke-opacity="0.3" stroke-width="1"/>
+    <!-- rune ticks -->
+    <g stroke="#e3c06a" stroke-opacity="0.55" stroke-width="3" stroke-linecap="round">
+      <path d="M0 -229 v12"/><path d="M0 217 v12"/><path d="M-229 0 h12"/><path d="M217 0 h12"/>
+      <g transform="rotate(30)"><path d="M0 -229 v8"/><path d="M0 221 v8"/></g>
+      <g transform="rotate(60)"><path d="M0 -229 v8"/><path d="M0 221 v8"/></g>
+      <g transform="rotate(120)"><path d="M0 -229 v8"/><path d="M0 221 v8"/></g>
+      <g transform="rotate(150)"><path d="M0 -229 v8"/><path d="M0 221 v8"/></g>
+    </g>
+    <!-- small diamonds on the diagonals -->
+    <g fill="#e3c06a" fill-opacity="0.7">
+      <path transform="rotate(45) translate(0 -223)" d="M0 -7 L5 0 L0 7 L-5 0 Z"/>
+      <path transform="rotate(135) translate(0 -223)" d="M0 -7 L5 0 L0 7 L-5 0 Z"/>
+      <path transform="rotate(225) translate(0 -223)" d="M0 -7 L5 0 L0 7 L-5 0 Z"/>
+      <path transform="rotate(315) translate(0 -223)" d="M0 -7 L5 0 L0 7 L-5 0 Z"/>
+    </g>
+    <!-- elongated crystal -->
+    <g opacity="0.55">
+      <path d="M0 -205 L70 -40 L0 205 L-70 -40 Z" fill="url(#crystal)"/>
+      <path d="M0 -205 L70 -40 L0 -10 Z" fill="#ffffff" fill-opacity="0.18"/>
+      <path d="M-70 -40 L0 -10 L0 205 Z" fill="#000" fill-opacity="0.25"/>
+      <path d="M0 -205 L70 -40 L0 205 L-70 -40 Z" fill="none" stroke="#d9ccff" stroke-opacity="0.6" stroke-width="2"/>
+    </g>
+  </g>
+
+  <!-- ===== Upper line: AGENTS’ with ornaments ===== -->
+  <g filter="url(#shadow)">
+    <text class="sub" x="600" y="168" text-anchor="middle" font-size="64" letter-spacing="16"
+          fill="url(#gold)" stroke="url(#goldEdge)" stroke-width="1.5">AGENTS’</text>
+  </g>
+  <g fill="none" stroke="#d9ac4f" stroke-width="2" stroke-linecap="round">
+    <path d="M240 147 H356"/><path d="M844 147 H960"/>
+    <path d="M210 147 l14 -8 l14 8 l-14 8 Z" fill="#d9ac4f"/>
+    <path d="M962 147 l14 -8 l14 8 l-14 8 Z" fill="#d9ac4f"/>
+    <path d="M356 147 q12 -12 24 0 q-12 12 -24 0" />
+    <path d="M820 147 q12 -12 24 0 q-12 12 -24 0" />
+  </g>
+
+  <!-- ===== Main word: l A [sword] r ===== -->
+  <g filter="url(#shadow)">
+    <!-- "lA": right-aligned against the sword -->
+    <text class="title" x="608" y="420" text-anchor="end" font-size="236"
+          fill="url(#gold)" stroke="url(#goldEdge)" stroke-width="4" paint-order="stroke"><tspan font-size="170">l</tspan><tspan dx="4">A</tspan></text>
+    <!-- "r": left-aligned after the sword -->
+    <text class="title" x="676" y="420" text-anchor="start" font-size="236"
+          fill="url(#gold)" stroke="url(#goldEdge)" stroke-width="4" paint-order="stroke"><tspan font-size="170">r</tspan></text>
+  </g>
+
+  <!-- The sword is the "I" of lAIr -->
+  <g transform="translate(642 0)" filter="url(#shadow)">
+    <!-- blade -->
+    <path d="M-15 262 L15 262 L15 470 L0 512 L-15 470 Z" fill="url(#steel)" stroke="#2a3040" stroke-width="2.5"/>
+    <path d="M0 266 V500" stroke="#ffffff" stroke-opacity="0.55" stroke-width="2"/>
+    <!-- arcane runes on the blade -->
+    <g fill="#9f86ff" filter="url(#glow)">
+      <path d="M0 300 l5 8 l-5 8 l-5 -8 Z"/>
+      <path d="M0 345 l5 8 l-5 8 l-5 -8 Z"/>
+      <path d="M0 390 l5 8 l-5 8 l-5 -8 Z"/>
+    </g>
+    <!-- crossguard with curled tips -->
+    <path d="M-62 246 Q-40 236 0 240 Q40 236 62 246 Q72 252 66 264 Q58 256 44 258 L-44 258 Q-58 256 -66 264 Q-72 252 -62 246 Z"
+          fill="url(#gold)" stroke="#3a2208" stroke-width="2.5"/>
+    <!-- gem in the guard -->
+    <circle cx="0" cy="250" r="11" fill="url(#gem)" stroke="#3a2208" stroke-width="2"/>
+    <!-- grip -->
+    <rect x="-9" y="196" width="18" height="44" rx="3" fill="#3b1d0e" stroke="#1a0c04" stroke-width="2"/>
+    <g stroke="#c58a35" stroke-width="2.5">
+      <path d="M-9 204 L9 210"/><path d="M-9 214 L9 220"/><path d="M-9 224 L9 230"/>
+    </g>
+    <!-- pommel -->
+    <path d="M0 168 L15 184 L0 200 L-15 184 Z" fill="url(#gold)" stroke="#3a2208" stroke-width="2.5"/>
+    <circle cx="0" cy="184" r="6" fill="url(#gem)"/>
+  </g>
+
+  <!-- sparkle on the crystal tip and the blade -->
+  <g fill="#ffffff" filter="url(#glow)">
+    <path d="M656 286 l2 6 l6 2 l-6 2 l-2 6 l-2 -6 l-6 -2 l6 -2 Z" fill-opacity="0.9"/>
+  </g>
+
+  <!-- ===== Bottom divider ===== -->
+  <g stroke="#d9ac4f" stroke-width="2" fill="none" stroke-linecap="round" opacity="0.85">
+    <path d="M330 548 H560"/><path d="M640 548 H870"/>
+    <path d="M600 534 l14 14 l-14 14 l-14 -14 Z" fill="#6d4bd8" stroke="#d9ac4f"/>
+  </g>
+</svg>
