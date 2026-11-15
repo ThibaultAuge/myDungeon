@@ -43,6 +43,10 @@ export const fr = {
     canvas: 'Vue 3D du donjon. Les agents sont aussi listés dans « Sessions en cours », et les lieux dans « Lieux du donjon ».',
     side: 'Agents et lieux',
   },
+  fps: {
+    hint: 'ZQSD ou flèches : se déplacer · Souris ou A/E : pivoter · Maj : courir · Échap : quitter',
+    capture: 'Clique dans la scène pour capturer la souris.',
+  },
   state: {
     working: 'Travaille',
     done: 'Terminé',
