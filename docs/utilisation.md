@@ -161,6 +161,29 @@ Cet effet est purement esthétique, comme la baffe : rien n'agit sur le travail 
 
 - **Réduction des animations.** Ni fiole, ni gorgée, ni titubation : les étoiles et la bulle restent immobiles.
 
+## Le pigeon de Samuel-Morse
+
+Samuel-Morse teste les API externes depuis le Pigeonnier. Chaque fois qu'il lance une requête HTTP avec `curl`, `wget`, `Invoke-WebRequest` ou `Invoke-RestMethod`, depuis `Bash` ou `PowerShell`, un pigeon quitte la volière et s'envole vers le ciel. C'est une peluche de poulet, comme celles de la volière. Quand la commande se termine, le pigeon revient, ou non, selon le résultat :
+
+| Résultat de la commande | Ce qu'on voit |
+|---|---|
+| Succès (code HTTP inférieur à 400) | Le pigeon revient et se pose dans la volière. |
+| Erreur (code 400 ou plus, `000` quand aucune réponse n'arrive, ou commande en échec) | Une issue tirée au hasard, décrite ci-dessous. |
+| Aucun résultat après 60 s | Le pigeon est perdu : une plume retombe, il ne revient pas. |
+
+Il y a trois issues possibles en cas d'erreur :
+
+- **Plumé.** Le pigeon revient maigre, et des plumes tombent pendant son retour.
+- **Perdu.** Une plume retombe, et le pigeon ne revient pas.
+- **Fiente.** Le pigeon survole la tête de l'agent et lâche une fiente blanche. Elle reste environ 6 s sur sa tête, puis le pigeon rentre à la volière.
+
+Deux règles encadrent le gag :
+
+- **Quatre pigeons au plus.** Quatre pigeons peuvent voler en même temps. Au-delà, l'appel n'envoie aucun pigeon, mais son résultat reste rattaché au bon appel, dans l'ordre.
+- **Réduction des animations.** Ni vol ni plume. Seule la fiente s'affiche, immobile, sur la tête de l'agent. Les autres issues ne montrent rien.
+
+Cet effet est purement esthétique : il ne change rien à la requête ni à son résultat, et il n'affiche aucun texte. Il ne montre ni le contenu de la réponse, ni son code HTTP. Il utilise les hooks d'outil déjà installés, sans réinstallation. Le détail est dans [Appels HTTP du Pigeonnier](fonctionnement.md#appels-http-du-pigeonnier).
+
 ## La fiche d'agent
 
 Un clic sur un personnage, ou sur sa ligne dans la liste, ouvre sa **fiche** en haut à droite de la scène. Un sous-agent au repos fait exception : son clic ouvre sa [présentation](#la-présentation-dun-sous-agent). Elle est dans le même style que la [boîte de dialogue](#dialogue-avec-un-agent) en bas.
@@ -223,4 +246,4 @@ L'historique liste les sessions terminées.
 
 `/debug` montre le flux brut des événements reçus.
 
-Dans la console du navigateur, `agentOffice.potion()` fait boire l'agent sélectionné. `agentOffice.potion('rest:hermione')` vise une figure précise de la taverne : l'identifiant est en minuscules. La commande renvoie `true` si une figure a réagi. Elle reste disponible en production et n'appelle pas le serveur. Toutes les commandes de ce type sont listées dans [Commandes console](commandes-console.md).
+Dans la console du navigateur, `agentOffice.potion()` fait boire l'agent sélectionné. `agentOffice.potion('rest:hermione')` vise une figure précise de la taverne : l'identifiant est en minuscules. La commande renvoie `true` si une figure a réagi. Elle reste disponible en production et n'appelle pas le serveur. `agentOffice.pigeon('dropping')` lâche une fiente sur l'agent sélectionné. Toutes les commandes de ce type sont listées dans [Commandes console](commandes-console.md).

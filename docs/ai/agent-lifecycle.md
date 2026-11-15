@@ -232,7 +232,8 @@ do this; subagents keep the tavern cycle above.
   (`AGENT_OFFICE_PORT` and `AGENT_OFFICE_TOKEN` env), then POST fake hook events to
   `/hooks` with header `x-agent-office-token`. Without `AGENT_OFFICE_TOKEN`, the server reads
   the token from `relay.env` (`config.ts`). Fake sessions with no live process are ended by
-  the inventory after about 30 s, so screenshot quickly. A hidden Browser pane renders no
+  the inventory after about 30 s unless a hook is posted about every 8 s, so screenshot
+  quickly or keep posting. A hidden Browser pane renders no
   frames, so figures do not move there: keep it shown. Ghosts: a fake session with only
   `SessionStart` becomes a ghost once the inventory ends it; add `UserPromptSubmit` and it
   stays a knight. Fake-hook sessions may land in the "hors-environnement" group. A real

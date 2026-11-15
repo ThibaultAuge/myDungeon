@@ -25,7 +25,7 @@ description: Use when changing a room's visual identity — per-room wall varian
 - `weeds` and `cobwebs` have `[0, 0]` footprints (walk-through / overhead). Post piece kind
   `keg` exists (taverne).
 - Per-room choices: observatoire chart chest + arched windows; pigeonnier sacks, grass,
-  chicken-plushie birds in the aviary; cartes chart chest, frame/shield hangs; biblio
+  chicken-plushie birds in the aviary (also the pigeon gag's nest, `docs/ai/pigeon-gag.md`); cartes chart chest, frame/shield hangs; biblio
   `wall_shelves` + book pile with `book_mimic`; atelier lumber, forge (anvil, grindstone),
   scaffold walls; autel Halloween `shrine_candles` on the candle posts + triple banners;
   machines woodstove boiler, fuel barrels, hanging chains; arithmetique treasury of bars;
