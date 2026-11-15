@@ -95,19 +95,23 @@ function Show({ bursts, onDone }: { bursts: Burst[]; onDone: () => void }) {
   return <points geometry={geometry} material={material} frustumCulled={false} />;
 }
 
+let nextShow = 1;
+
 /**
- * Fireworks in the night sky over the castle when a test suite passes. A new success restarts
- * the show. Celebrations come from server events and from `agentOffice.feuArtifice()`.
+ * Fireworks in the night sky over the castle when a test suite passes. A success during a show
+ * is ignored. Celebrations come from server events and from `agentOffice.feuArtifice()`.
  */
 export function Fireworks() {
   const [show, setShow] = useState<{ id: number; bursts: Burst[] } | null>(null);
   useEffect(
     () =>
       onCelebrate((kind) => {
-        if (kind === 'tests') setShow((prev) => ({ id: (prev?.id ?? 0) + 1, bursts: fireworkBursts(CX, CZ) }));
+        // A show runs to its end: stacking or restarting shows would multiply the bursts per second.
+        if (kind === 'tests') setShow((prev) => prev ?? { id: nextShow++, bursts: fireworkBursts(CX, CZ) });
       }),
     [],
   );
   if (!show) return null;
-  return <Show key={show.id} bursts={show.bursts} onDone={() => setShow(null)} />;
+  const id = show.id;
+  return <Show key={id} bursts={show.bursts} onDone={() => setShow((prev) => (prev?.id === id ? null : prev))} />;
 }

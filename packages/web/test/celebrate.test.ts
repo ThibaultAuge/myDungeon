@@ -3,15 +3,23 @@ import type { Celebration } from '@agent-office/shared';
 import { CLIPS, SPAWN_CLIP_TIME } from '../src/scene/characters.ts';
 import {
   BURSTS,
+  BURST_SPACING,
   BURST_TIME,
+  DELAY_JITTER,
   FIREWORKS_STILL_TIME,
   FIREWORKS_TIME,
   HERALD_SINK,
   LAUNCH_Y,
+  ROCKET_ALPHA,
+  ROCKET_FADE,
   ROCKET_TIME,
   SPARKS,
   SPARK_DIRECTIONS,
+  SPARK_RAMP,
+  STILL_FADE,
+  STILL_PEAK,
   TRUMPET_TIME,
+  stillAlpha,
   TowerPool,
   celebrate,
   fireworkBursts,
@@ -613,6 +621,31 @@ describe('fireworks constants', () => {
     expect(Number.isInteger(SPARKS) && SPARKS > 0).toBe(true);
     expect(Number.isInteger(BURSTS) && BURSTS > 0).toBe(true);
   });
+
+  /** Verifies that the show length covers the latest last rocket and its whole burst */
+  it('derives FIREWORKS_TIME from the spacing, jitter, rocket and burst times', () => {
+    expect(FIREWORKS_TIME).toBeCloseTo((BURSTS - 1) * BURST_SPACING + DELAY_JITTER + ROCKET_TIME + BURST_TIME, 12);
+  });
+
+  /** Verifies that two burst openings are always at least 0.4 s apart (WCAG 2.3.1) */
+  it('keeps the minimum gap between bursts at 0.4 s or more', () => {
+    expect(DELAY_JITTER).toBeGreaterThanOrEqual(0);
+    expect(BURST_SPACING - DELAY_JITTER).toBeGreaterThanOrEqual(0.4 - TOL);
+  });
+
+  /** Verifies that every fade fits inside the phase it belongs to and brightness stays in 0-1 */
+  it('fits each fade inside its phase and keeps peak brightness within 0-1', () => {
+    expect(ROCKET_FADE).toBeGreaterThan(0);
+    expect(2 * ROCKET_FADE).toBeLessThanOrEqual(ROCKET_TIME);
+    expect(ROCKET_ALPHA).toBeGreaterThan(0);
+    expect(ROCKET_ALPHA).toBeLessThanOrEqual(1);
+    expect(SPARK_RAMP).toBeGreaterThan(0);
+    expect(SPARK_RAMP).toBeLessThan(BURST_TIME);
+    expect(STILL_FADE).toBeGreaterThan(0);
+    expect(2 * STILL_FADE).toBeLessThanOrEqual(FIREWORKS_STILL_TIME);
+    expect(STILL_PEAK).toBeGreaterThan(0);
+    expect(STILL_PEAK).toBeLessThanOrEqual(1);
+  });
 });
 
 describe('fireworkBursts', () => {
@@ -624,7 +657,7 @@ describe('fireworkBursts', () => {
       expect(b.x).toBeCloseTo(10 + (i - (BURSTS - 1) / 2) * 7, 9);
       expect(b.y).toBeCloseTo(13, 9);
       expect(b.z).toBeCloseTo(20 - 6.5, 9);
-      expect(b.delay).toBeCloseTo(i * 0.5 + 0.15, 9);
+      expect(b.delay).toBeCloseTo(i * BURST_SPACING + 0.5 * DELAY_JITTER, 9);
       expect(b.speed).toBeCloseTo(5.5, 9);
     });
   });
@@ -634,7 +667,9 @@ describe('fireworkBursts', () => {
     const cx = 3;
     const cz = -7;
     const half = ((BURSTS - 1) / 2) * 7 + 1.5;
-    for (const b of fireworkBursts(cx, cz, () => r)) {
+    fireworkBursts(cx, cz, () => r).forEach((b, i) => {
+      expect(b.delay).toBeGreaterThanOrEqual(i * BURST_SPACING - TOL);
+      expect(b.delay).toBeLessThanOrEqual(i * BURST_SPACING + DELAY_JITTER + TOL);
       expect(b.x).toBeGreaterThanOrEqual(cx - half - TOL);
       expect(b.x).toBeLessThanOrEqual(cx + half + TOL);
       expect(b.y).toBeGreaterThanOrEqual(11);
@@ -646,7 +681,7 @@ describe('fireworkBursts', () => {
       expect(b.speed).toBeLessThanOrEqual(6.5);
       expect(b.delay).toBeGreaterThanOrEqual(0);
       expect(b.y).toBeGreaterThan(LAUNCH_Y);
-    }
+    });
   });
 
   /** Verifies that bursts go off one after another and spread left to right */
@@ -700,11 +735,37 @@ describe('fireworkBursts', () => {
    * Verifies that every burst has faded out before the show ends, whatever the random values
    */
   it.each([0, 0.5, 0.999999])('fits every burst inside FIREWORKS_TIME for random %d', (r) => {
-    // SPEC CONFLICT: FIREWORKS_TIME is documented as the whole show length and Fireworks.tsx
-    // unmounts the show at that time, but the last burst starts up to (BURSTS-1)*0.5+0.3 s in
-    // and then lives ROCKET_TIME + BURST_TIME more, so any random > 0 cuts it while still lit.
     for (const b of fireworkBursts(0, 0, () => r)) {
       expect(b.delay + ROCKET_TIME + BURST_TIME).toBeLessThanOrEqual(FIREWORKS_TIME + TOL);
+    }
+  });
+
+  // Worst case for the gap: one burst with maximal jitter followed by one with none. Each burst
+  // draws five random values (x, y, z, delay, speed), so the pattern alternates per five draws.
+  const high = Array<number>(5).fill(0.999999);
+  const low = Array<number>(5).fill(0);
+  // Factories, so every test gets a fresh, unshared random sequence.
+  const RANDOMS: [string, () => () => number][] = [
+    ['random 0', () => () => 0],
+    ['random ~1', () => () => 0.999999],
+    ['max jitter then none', () => sequence(...high, ...low)],
+    ['no jitter then max', () => sequence(...low, ...high)],
+  ];
+
+  /** Verifies that burst openings are at least 0.4 s apart, whatever the random values */
+  it.each(RANDOMS)('opens bursts at least 0.4 s apart for %s', (_label, makeRandom) => {
+    const openings = fireworkBursts(0, 0, makeRandom()).map((b) => b.delay + ROCKET_TIME);
+    for (let i = 1; i < openings.length; i++) {
+      expect(openings[i] - openings[i - 1]).toBeGreaterThanOrEqual(0.4 - TOL);
+    }
+  });
+
+  /** Verifies that no more than three bursts open within any one-second window (WCAG 2.3.1) */
+  it.each(RANDOMS)('opens at most 3 bursts in any 1 s window for %s', (_label, makeRandom) => {
+    const openings = fireworkBursts(0, 0, makeRandom()).map((b) => b.delay + ROCKET_TIME);
+    for (const start of openings) {
+      const inWindow = openings.filter((o) => o >= start && o < start + 1);
+      expect(inWindow.length).toBeLessThanOrEqual(3);
     }
   });
 });
@@ -741,10 +802,37 @@ describe('rocketAt', () => {
     expect(rocketAt(BURST, time).alpha).toBe(0);
   });
 
-  /** Verifies that the rocket leaves from the wall top, visible, at its delay */
-  it('starts visible at the launch height at its delay', () => {
+  /** Verifies that the rocket leaves from the wall top, still invisible, at its delay */
+  it('starts at the launch height with alpha 0 at its delay', () => {
     const r = rocketAt(BURST, BURST.delay);
-    expect(r).toEqual({ x: BURST.x, y: LAUNCH_Y, z: BURST.z, alpha: 1 });
+    expect(r).toEqual({ x: BURST.x, y: LAUNCH_Y, z: BURST.z, alpha: 0 });
+  });
+
+  /** Verifies that the rocket fades in, holds at ROCKET_ALPHA, then fades out before bursting */
+  it.each([
+    ['half the fade-in', ROCKET_FADE / 2, ROCKET_ALPHA / 2],
+    ['the end of the fade-in', ROCKET_FADE, ROCKET_ALPHA],
+    ['mid flight', ROCKET_TIME / 2, ROCKET_ALPHA],
+    ['the start of the fade-out', ROCKET_TIME - ROCKET_FADE, ROCKET_ALPHA],
+    ['half the fade-out', ROCKET_TIME - ROCKET_FADE / 2, ROCKET_ALPHA / 2],
+  ] as const)('has the expected brightness at %s', (_label, t, expected) => {
+    expect(rocketAt(BURST, BURST.delay + t).alpha).toBeCloseTo(expected, 6);
+  });
+
+  /** Verifies that the rocket brightness never jumps between two frames (WCAG 2.3.1) */
+  it('changes brightness smoothly, with no sudden step on or off', () => {
+    const step = 0.001;
+    const maxStep = (ROCKET_ALPHA * step) / ROCKET_FADE;
+    let prev = rocketAt(BURST, BURST.delay - 0.05).alpha;
+    let peak = 0;
+    for (let k = 0; k <= Math.round((ROCKET_TIME + 0.1) / step); k++) {
+      const a = rocketAt(BURST, BURST.delay - 0.05 + k * step).alpha;
+      expect(Math.abs(a - prev)).toBeLessThanOrEqual(maxStep * 1.01 + 1e-9);
+      expect(a).toBeGreaterThanOrEqual(0);
+      peak = Math.max(peak, a);
+      prev = a;
+    }
+    expect(peak).toBeCloseTo(ROCKET_ALPHA, 9);
   });
 
   /** Verifies that the rocket disappears once it reaches the burst point */
@@ -757,7 +845,9 @@ describe('rocketAt', () => {
     let prev = -Infinity;
     for (let k = 0; k < 30; k++) {
       const r = rocketAt(BURST, BURST.delay + (k * ROCKET_TIME) / 30);
-      expect(r.alpha).toBe(1);
+      expect(r.alpha).toBeGreaterThanOrEqual(0);
+      expect(r.alpha).toBeLessThanOrEqual(ROCKET_ALPHA);
+      if (k > 0) expect(r.alpha).toBeGreaterThan(0);
       expect(r.x).toBe(BURST.x);
       expect(r.z).toBe(BURST.z);
       expect(r.y).toBeGreaterThan(prev);
@@ -783,11 +873,11 @@ describe('sparkAt', () => {
     expect(sparkAt(BURST, 0, time).alpha).toBe(0);
   });
 
-  /** Verifies that every spark starts at the burst point, fully bright */
-  it('starts every spark at the burst point at full brightness', () => {
+  /** Verifies that every spark starts at the burst point, still dark (no flash on) */
+  it('starts every spark at the burst point with alpha 0', () => {
     for (let i = 0; i < SPARKS; i++) {
       const s = sparkAt(BURST, i, open);
-      expect(s.alpha).toBe(1);
+      expect(s.alpha).toBeCloseTo(0, 9);
       expect(s.x).toBeCloseTo(BURST.x, 12);
       expect(s.y).toBeCloseTo(BURST.y, 12);
       expect(s.z).toBeCloseTo(BURST.z, 12);
@@ -799,22 +889,54 @@ describe('sparkAt', () => {
     expect(sparkAt(BURST, 7, time).alpha).toBe(0);
   });
 
-  /** Verifies that a spark fades steadily and flies further out over its life */
-  it('fades and moves outward over the life of the burst', () => {
+  /** Verifies the spark brightness: a ramp over SPARK_RAMP times the quadratic fade-out */
+  it.each([SPARK_RAMP / 4, SPARK_RAMP / 2, SPARK_RAMP, 0.5, 1, 1.5])('has the specified brightness at t=%d', (t) => {
+    const expected = Math.min(1, t / SPARK_RAMP) * (1 - (t / BURST_TIME) ** 2);
+    expect(sparkAt(BURST, 9, open + t).alpha).toBeCloseTo(expected, 6);
+  });
+
+  /** Verifies that a spark brightens during the ramp, then only fades, and never exceeds 1 */
+  it('brightens over SPARK_RAMP and then fades steadily', () => {
+    let prev = 0;
+    let peakAt = -1;
+    for (let k = 1; k < 160; k++) {
+      const t = (k * BURST_TIME) / 160;
+      const a = sparkAt(BURST, 4, open + t).alpha;
+      expect(a).toBeGreaterThan(0);
+      expect(a).toBeLessThanOrEqual(1);
+      if (t <= SPARK_RAMP - 0.011) expect(a).toBeGreaterThan(prev);
+      if (t >= SPARK_RAMP + 0.011) expect(a).toBeLessThan(prev);
+      if (peakAt < 0 && t >= SPARK_RAMP + 0.011) peakAt = t;
+      prev = a;
+    }
+    expect(peakAt).toBeGreaterThan(0);
+  });
+
+  /** Verifies that the spark brightness never jumps between two frames (WCAG 2.3.1) */
+  it('changes spark brightness smoothly from opening to fade-out', () => {
+    const step = 0.001;
+    const maxStep = step / SPARK_RAMP;
+    let prev = sparkAt(BURST, 11, open - 0.05).alpha;
+    for (let k = 0; k <= Math.round((BURST_TIME + 0.1) / step); k++) {
+      const a = sparkAt(BURST, 11, open - 0.05 + k * step).alpha;
+      expect(Math.abs(a - prev)).toBeLessThanOrEqual(maxStep * 1.01 + 1e-9);
+      prev = a;
+    }
+  });
+
+  /** Verifies that a spark flies further out over its life, visible all along */
+  it('moves outward over the life of the burst', () => {
     const i = 15;
     const [dx, , dz] = SPARK_DIRECTIONS[i];
     const horizontal = Math.hypot(dx, dz);
-    let prevAlpha = 1 + TOL;
     let prevOut = -1;
     for (let k = 0; k < 40; k++) {
       const s = sparkAt(BURST, i, open + (k * BURST_TIME) / 40);
-      expect(s.alpha).toBeLessThanOrEqual(prevAlpha);
-      expect(s.alpha).toBeGreaterThan(0);
+      if (k > 0) expect(s.alpha).toBeGreaterThan(0);
       const out = Math.hypot(s.x - BURST.x, s.z - BURST.z);
       expect(out).toBeGreaterThanOrEqual(prevOut);
       // Drag: never further than the burst speed allows.
       expect(out).toBeLessThan(BURST.speed * horizontal + TOL);
-      prevAlpha = s.alpha;
       prevOut = out;
     }
   });
@@ -836,21 +958,44 @@ describe('sparkAt', () => {
     expect(sparkAt(BURST, 3 + 2 * SPARKS, time)).toEqual(sparkAt(BURST, 3, time));
   });
 
+  /** Verifies that negative spark indexes wrap onto valid directions instead of throwing */
+  it.each([
+    [-1, SPARKS - 1],
+    [-SPARKS, 0],
+    [-SPARKS - 3, SPARKS - 3],
+    [-2 * SPARKS + 5, 5],
+  ] as const)('maps the negative index %d onto spark %d', (negative, positive) => {
+    const time = open + 0.4;
+    expect(() => sparkAt(BURST, negative, time)).not.toThrow();
+    expect(sparkAt(BURST, negative, time)).toEqual(sparkAt(BURST, positive, time));
+    expect(sparkAt(BURST, negative, 1, true)).toEqual(sparkAt(BURST, positive, 1, true));
+  });
+
   /** Verifies that different sparks of a burst fly in different directions */
   it('sends different sparks to different places', () => {
     const time = open + 0.5;
     expect(sparkAt(BURST, 0, time)).not.toEqual(sparkAt(BURST, 1, time));
   });
 
-  /** Verifies that reduced motion shows the burst frozen open at full brightness at any time */
-  it.each([-10, 0, BURST.delay, open, open + BURST_TIME * 0.9, open + BURST_TIME + 10, 1e9])(
-    'freezes the burst open and bright under reduced motion (time %d)',
+  /** Verifies that reduced motion freezes the burst open, its brightness set by stillAlpha */
+  it.each([-10, 0, STILL_FADE / 2, 1, FIREWORKS_STILL_TIME - 0.1, FIREWORKS_STILL_TIME, open + BURST_TIME + 10, 1e9])(
+    'freezes the burst open under reduced motion with alpha stillAlpha(time) (time %d)',
     (time) => {
       const s = sparkAt(BURST, 5, time, true);
-      expect(s.alpha).toBe(1);
-      expect(s).toEqual(sparkAt(BURST, 5, 0, true));
+      const ref = sparkAt(BURST, 5, 1, true);
+      expect({ x: s.x, y: s.y, z: s.z }).toEqual({ x: ref.x, y: ref.y, z: ref.z });
+      expect(s.alpha).toBe(stillAlpha(time));
     },
   );
+
+  /** Verifies that the still bouquet is the same brightness for every spark and burst */
+  it('lights every still spark of every burst equally at a given time', () => {
+    const other: Burst = { ...BURST, x: -4, delay: 2.3, speed: 6 };
+    for (const i of [0, 20, SPARKS - 1]) {
+      expect(sparkAt(BURST, i, 1, true).alpha).toBe(STILL_PEAK);
+      expect(sparkAt(other, i, 1, true).alpha).toBe(STILL_PEAK);
+    }
+  });
 
   /** Verifies that the still bouquet is a sphere: every spark at the same distance, no fall */
   it('draws the still bouquet as an open sphere around the burst point', () => {
@@ -875,5 +1020,51 @@ describe('sparkAt', () => {
       expect(v[1] / len).toBeCloseTo(dy, 9);
       expect(v[2] / len).toBeCloseTo(dz, 9);
     }
+  });
+});
+
+describe('stillAlpha', () => {
+  /** Verifies that the still bouquet is invisible before it starts and once it is over */
+  it.each([0, -0.001, -10, -Infinity, FIREWORKS_STILL_TIME, FIREWORKS_STILL_TIME + 0.001, 100, Infinity])(
+    'is 0 at time %d',
+    (time) => {
+      expect(stillAlpha(time)).toBe(0);
+    },
+  );
+
+  /** Verifies that the bouquet fades in over STILL_FADE, holds at STILL_PEAK, then fades out */
+  it.each([
+    ['half the fade-in', STILL_FADE / 2, STILL_PEAK / 2],
+    ['the end of the fade-in', STILL_FADE, STILL_PEAK],
+    ['the middle', FIREWORKS_STILL_TIME / 2, STILL_PEAK],
+    ['the start of the fade-out', FIREWORKS_STILL_TIME - STILL_FADE, STILL_PEAK],
+    ['half the fade-out', FIREWORKS_STILL_TIME - STILL_FADE / 2, STILL_PEAK / 2],
+  ] as const)('has the expected brightness at %s', (_label, time, expected) => {
+    expect(stillAlpha(time)).toBeCloseTo(expected, 9);
+  });
+
+  /** Verifies that the fade-out mirrors the fade-in */
+  it('fades out symmetrically to the fade-in', () => {
+    for (const time of [0.05, 0.2, 0.4, 0.7]) {
+      expect(stillAlpha(FIREWORKS_STILL_TIME - time)).toBeCloseTo(stillAlpha(time), 9);
+    }
+  });
+
+  /** Verifies that the brightness stays within 0 and STILL_PEAK and never jumps (WCAG 2.3.1) */
+  it('stays within 0..STILL_PEAK and changes smoothly over the whole bouquet', () => {
+    const step = 0.001;
+    const maxStep = (STILL_PEAK * step) / STILL_FADE;
+    let prev = stillAlpha(-0.05);
+    let peak = 0;
+    for (let k = 0; k <= Math.round((FIREWORKS_STILL_TIME + 0.1) / step); k++) {
+      const a = stillAlpha(-0.05 + k * step);
+      expect(a).toBeGreaterThanOrEqual(0);
+      expect(a).toBeLessThanOrEqual(STILL_PEAK);
+      expect(Math.abs(a - prev)).toBeLessThanOrEqual(maxStep * 1.01 + 1e-9);
+      peak = Math.max(peak, a);
+      prev = a;
+    }
+    expect(peak).toBe(STILL_PEAK);
+    expect(prev).toBe(0);
   });
 });

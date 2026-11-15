@@ -98,7 +98,8 @@ function HeraldFigure({ outing, onDone }: { outing: HeraldOuting; onDone: (o: He
     // Under reduced motion the herald does not go down: he just disappears at the end.
     g.position.y = TOWER_H * h - (still ? 0 : heraldDepth(phase, t));
     g.visible = h >= SHOWN_FROM;
-    const trumpeting = phase === 'trumpeting';
+    // The notes are a DOM overlay: they do not follow the group's visibility, so hide them too.
+    const trumpeting = phase === 'trumpeting' && g.visible;
     if (trumpeting !== notesShown.current) {
       notesShown.current = trumpeting;
       setNotes(trumpeting);

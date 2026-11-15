@@ -3,6 +3,7 @@
 // suite. The server only sends the kind (never the command). Pure module, no three.js.
 import type { Celebration } from '@agent-office/shared';
 import { hold, play, SPAWN_CLIP_TIME, type ClipChoice } from './characters.ts';
+import { gagCommands } from './gagCommands.ts';
 
 export type HeraldKind = 'commit' | 'push';
 
@@ -33,10 +34,7 @@ export function onCelebrate(listener: Listener): () => void {
  * other gags' commands. Kept in production builds on purpose: purely visual, client only.
  */
 export function installCelebrationCommands(host: object): void {
-  const holder = host as { agentOffice?: unknown };
-  // Something else already sits under that name (set by hand in the console): replace it.
-  if (typeof holder.agentOffice !== 'object' || holder.agentOffice === null) holder.agentOffice = {};
-  const commands = holder.agentOffice as Record<string, unknown>;
+  const commands = gagCommands(host);
   commands.heraut = (kind?: unknown) => celebrate(kind === 'commit' ? 'commit' : 'push');
   commands.feuArtifice = () => celebrate('tests');
 }
@@ -115,20 +113,31 @@ export class TowerPool {
 
 // --- Fireworks -------------------------------------------------------------------------
 
-/** Under reduced motion: one still bouquet shown this long, nothing moves. */
-export const FIREWORKS_STILL_TIME = 1.5;
+/** Under reduced motion: one still bouquet, faded in and out (`STILL_FADE` each way), nothing moves. */
+export const FIREWORKS_STILL_TIME = 2;
+export const STILL_FADE = 0.5;
+/** Peak brightness of the still bouquet: dimmer than a live burst, all five bursts show at once. */
+export const STILL_PEAK = 0.6;
 /** A rocket climbs this long before it bursts. */
 export const ROCKET_TIME = 0.6;
+/** A rocket is a dim trail, faded in and out over this long. */
+export const ROCKET_ALPHA = 0.5;
+export const ROCKET_FADE = 0.12;
 /** A burst lives this long after it opens. */
 export const BURST_TIME = 1.6;
+/** A burst brightens over this long instead of flashing on (WCAG 2.3.1: no sudden step). */
+export const SPARK_RAMP = 0.25;
 /** Sparks of one burst. */
 export const SPARKS = 60;
 /** Bursts per show. */
 export const BURSTS = 5;
-/** Seconds between two rockets, plus up to `DELAY_JITTER` at random. */
+/**
+ * Seconds between two rockets, plus up to `DELAY_JITTER` at random: two bursts always open at
+ * least `BURST_SPACING - DELAY_JITTER` (0.4 s) apart, so at most 3 open in any second.
+ */
 export const BURST_SPACING = 0.5;
-export const DELAY_JITTER = 0.3;
-/** Whole show length in seconds: the last rocket, at its latest, climbs and fades out. A new test success restarts it. */
+export const DELAY_JITTER = 0.1;
+/** Whole show length in seconds: the last rocket, at its latest, climbs and fades out. A show runs to its end: a new test success meanwhile is ignored. */
 export const FIREWORKS_TIME = (BURSTS - 1) * BURST_SPACING + DELAY_JITTER + ROCKET_TIME + BURST_TIME;
 /** Height the rockets leave from (top of the castle walls). */
 export const LAUNCH_Y = 3;
@@ -192,15 +201,23 @@ export function rocketAt(b: Burst, time: number): Spark {
   const k = t / ROCKET_TIME;
   // Fast at first, slowing as it nears the top.
   const up = 1 - (1 - k) ** 2;
-  return { x: b.x, y: LAUNCH_Y + (b.y - LAUNCH_Y) * up, z: b.z, alpha: 1 };
+  const fade = Math.min(1, t / ROCKET_FADE, (ROCKET_TIME - t) / ROCKET_FADE);
+  return { x: b.x, y: LAUNCH_Y + (b.y - LAUNCH_Y) * up, z: b.z, alpha: ROCKET_ALPHA * fade };
+}
+
+/** Brightness of the still bouquet at show time `time`: fades in, holds, fades out (no sudden step). */
+export function stillAlpha(time: number): number {
+  if (!(time > 0 && time < FIREWORKS_STILL_TIME)) return 0; // NaN included
+  return STILL_PEAK * Math.min(1, time / STILL_FADE, (FIREWORKS_STILL_TIME - time) / STILL_FADE);
 }
 
 /**
- * Spark `i` of a burst at show time `time`: it flies out from the burst point, falls a little
- * and fades. `still` (reduced motion) freezes every burst open, at full brightness.
+ * Spark `i` of a burst at show time `time`: it brightens over `SPARK_RAMP`, flies out from the
+ * burst point, falls a little and fades. `still` (reduced motion) freezes every burst open, at the
+ * brightness `stillAlpha(time)`.
  */
 export function sparkAt(b: Burst, i: number, time: number, still = false): Spark {
-  const [dx, dy, dz] = SPARK_DIRECTIONS[i % SPARKS];
+  const [dx, dy, dz] = SPARK_DIRECTIONS[((i % SPARKS) + SPARKS) % SPARKS];
   const t = still ? BURST_TIME * 0.35 : time - b.delay - ROCKET_TIME;
   if (t < 0 || t >= BURST_TIME) return { x: b.x, y: b.y, z: b.z, alpha: 0 };
   // The sparks slow down (drag) and fall.
@@ -209,6 +226,6 @@ export function sparkAt(b: Burst, i: number, time: number, still = false): Spark
     x: b.x + dx * out,
     y: b.y + dy * out - (still ? 0 : 0.5 * GRAVITY * t * t),
     z: b.z + dz * out,
-    alpha: still ? 1 : 1 - (t / BURST_TIME) ** 2,
+    alpha: still ? stillAlpha(time) : Math.min(1, t / SPARK_RAMP) * (1 - (t / BURST_TIME) ** 2),
   };
 }

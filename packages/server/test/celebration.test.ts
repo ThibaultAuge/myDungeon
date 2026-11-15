@@ -119,3 +119,46 @@ describe('summarize', () => {
     expect('celebrations' in summarize(plain, applyHook(state, plain, 2), 2)).toBe(false);
   });
 });
+
+describe('quoted text and heredocs are not commands', () => {
+  it('ignores a heredoc commit message whose lines look like commands', () => {
+    const cmd = [
+      'git commit -m "$(cat <<\'EOF\'',
+      'feat: x',
+      '',
+      'npm test now passes; git push follows',
+      'cargo test',
+      'EOF',
+      ')"',
+    ].join('\n');
+    expect(celebrationsFor(post(cmd))).toEqual(['commit']);
+  });
+  it('still sees a command after the heredoc ends', () => {
+    expect(celebrationsFor(post("cat > notes.txt <<EOF\nnpm test\nEOF\ngit push"))).toEqual(['push']);
+    expect(celebrationsFor(post('git commit -F - <<EOF\nnpm test'))).toEqual(['commit']);
+  });
+  it('ignores separators and words inside quotes', () => {
+    expect(celebrationsFor(post('git commit -m "wip; git push later"'))).toEqual(['commit']);
+    expect(celebrationsFor(post("git commit -m 'run npm test && git push'"))).toEqual(['commit']);
+    expect(celebrationsFor(post('git commit -m "say \\"hi\\"; npm test"'))).toEqual(['commit']);
+  });
+  it('splits subshells and command substitutions', () => {
+    expect(celebrationsFor(post('(cd repo && git push)'))).toEqual(['push']);
+    expect(celebrationsFor(post('echo $(npm test)'))).toEqual(['tests']);
+  });
+  it('stays fast on a long run of quotes', () => {
+    const start = performance.now();
+    celebrationsFor(post(`${"'".repeat(4095)}x`));
+    expect(performance.now() - start).toBeLessThan(100);
+  });
+});
+
+describe('more masked failures', () => {
+  it.each(['test result: FAILED. 3 passed; 1 failed', '[ERROR] BUILD FAILURE', 'FAILED tests/test_a.py::test_x'])(
+    'no fireworks for %s',
+    (stdout) => expect(celebrationsFor(post('cargo test | tee log', { tool_response: { stdout } }))).toEqual([]),
+  );
+  it('does not celebrate an interrupted command', () => {
+    expect(celebrationsFor(post('git push', { tool_response: { stdout: '', interrupted: true } }))).toEqual([]);
+  });
+});
