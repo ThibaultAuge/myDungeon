@@ -43,7 +43,7 @@ function makeTrumpet(withPennant: boolean): Group {
  * Grip of the trumpet in the right hand slot. The slot's local X points down the forearm (see
  * the tools' grips in characters.ts): the trumpet turns so it leaves the fist toward the mouth.
  */
-const TRUMPET_GRIP = { position: [0, 0, 0] as const, rotation: [0, 0, Math.PI / 2] as const, scale: 1.3 };
+const TRUMPET_GRIP = { position: [0, 0, 0] as const, rotation: [0, 0, Math.PI / 2] as const, scale: 2 };
 
 export interface HeraldOuting {
   id: number;
@@ -151,7 +151,8 @@ export function Heralds() {
     () =>
       onCelebrate((kind) => {
         if (kind !== 'commit' && kind !== 'push') return;
-        const tower = pool.claim();
+        // A standing tower first: the ones lowered by the cutaway would hide the herald.
+        const tower = pool.claim(Math.random, (i) => towerHeights[i] >= SHOWN_FROM);
         if (tower === null) return;
         setOutings((list) => [...list, { id: nextId++, tower, kind }]);
       }),

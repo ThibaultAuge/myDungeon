@@ -622,7 +622,7 @@ export interface Tower {
   /** Cutaway anchor: the map corner pillar's, so tower and pillar go down together. */
   ax: number;
   az: number;
-  /** Heading (rotation around Y) of a figure on the tower looking away from the castle. */
+  /** Heading (rotation around Y) of a figure on the tower looking into the castle courtyard. */
   facing: number;
 }
 
@@ -636,8 +636,8 @@ export const TOWERS: readonly Tower[] = (['n', 's'] as Side[]).flatMap((zs) =>
       z: (zs === 'n' ? OUTER.z0 : OUTER.z1) + dz * TOWER_OFFSET,
       ax: PERIMETER_LINE[xs],
       az: PERIMETER_LINE[zs],
-      // KayKit characters face +Z at rotation 0.
-      facing: Math.atan2(dx, dz),
+      // KayKit characters face +Z at rotation 0. Facing inward, the north heralds face the default view.
+      facing: Math.atan2(-dx, -dz),
     });
   }),
 );

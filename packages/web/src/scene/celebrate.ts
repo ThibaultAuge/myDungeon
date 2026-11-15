@@ -94,9 +94,14 @@ export class TowerPool {
     this.busy = new Array<boolean>(count).fill(false);
   }
 
-  /** A random free tower, now taken, or null when every tower already has its herald. */
-  claim(random: () => number = Math.random): number | null {
-    const free = this.busy.flatMap((b, i) => (b ? [] : [i]));
+  /**
+   * A random free tower, now taken, or null when every tower already has its herald. Towers for
+   * which `preferred` is true (standing, not lowered by the cutaway) are picked first.
+   */
+  claim(random: () => number = Math.random, preferred: (index: number) => boolean = () => true): number | null {
+    const open = this.busy.flatMap((b, i) => (b ? [] : [i]));
+    const shown = open.filter(preferred);
+    const free = shown.length > 0 ? shown : open;
     if (free.length === 0) return null;
     const pick = free[Math.min(free.length - 1, Math.floor(random() * free.length))];
     this.busy[pick] = true;
