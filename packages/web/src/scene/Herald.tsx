@@ -142,7 +142,7 @@ let nextId = 1;
 
 /**
  * Heralds on the corner towers: each git commit or push sends one to a free tower (none when all
- * four are taken). Celebrations come from server events and from `window.iaia.heraut()`.
+ * four are taken). Celebrations come from server events and from `agentOffice.heraut()`.
  */
 export function Heralds() {
   const [pool] = useState(() => new TowerPool(TOWERS.length));

@@ -97,7 +97,7 @@ function Show({ bursts, onDone }: { bursts: Burst[]; onDone: () => void }) {
 
 /**
  * Fireworks in the night sky over the castle when a test suite passes. A new success restarts
- * the show. Celebrations come from server events and from `window.iaia.feuArtifice()`.
+ * the show. Celebrations come from server events and from `agentOffice.feuArtifice()`.
  */
 export function Fireworks() {
   const [show, setShow] = useState<{ id: number; bursts: Burst[] } | null>(null);

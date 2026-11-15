@@ -9,10 +9,14 @@ export type HeraldKind = 'commit' | 'push';
 type Listener = (kind: Celebration) => void;
 const listeners = new Set<Listener>();
 
-/** Plays a celebration in the scene, if one is mounted. Shared by server events and the console. */
-export function celebrate(kind: Celebration): void {
+/**
+ * Plays a celebration in the scene. Shared by server events and the console. Returns true when
+ * a scene is mounted to show it (a herald still needs a free tower).
+ */
+export function celebrate(kind: Celebration): boolean {
   // A copy: a listener that unsubscribes while being called does not skip the next one.
   for (const listener of [...listeners]) listener(kind);
+  return listeners.size > 0;
 }
 
 /** Called on every celebration. Returns the unsubscribe function. */
@@ -23,29 +27,18 @@ export function onCelebrate(listener: Listener): () => void {
   };
 }
 
-/** Console commands, also in production builds (purely visual, client only). */
-export interface ConsoleCommands {
-  /** The herald on a free tower: `'commit'` (short) or `'push'` (long fanfare, default). */
-  heraut(kind?: HeraldKind): void;
-  feuArtifice(): void;
-}
-
-declare global {
-  interface Window {
-    iaia?: ConsoleCommands;
-  }
-}
-
-export function consoleCommands(): ConsoleCommands {
-  return {
-    heraut: (kind) => celebrate(kind === 'commit' ? 'commit' : 'push'),
-    feuArtifice: () => celebrate('tests'),
-  };
-}
-
-/** Defines `window.iaia` for testing the animations by hand. */
-export function installConsoleCommands(target: { iaia?: ConsoleCommands } = window): void {
-  target.iaia = consoleCommands();
+/**
+ * Installs the test commands `agentOffice.heraut(kind?)` (`'commit'`: short call, `'push'`:
+ * long fanfare, the default) and `agentOffice.feuArtifice()` on `host` (the window), next to the
+ * other gags' commands. Kept in production builds on purpose: purely visual, client only.
+ */
+export function installCelebrationCommands(host: object): void {
+  const holder = host as { agentOffice?: unknown };
+  // Something else already sits under that name (set by hand in the console): replace it.
+  if (typeof holder.agentOffice !== 'object' || holder.agentOffice === null) holder.agentOffice = {};
+  const commands = holder.agentOffice as Record<string, unknown>;
+  commands.heraut = (kind?: unknown) => celebrate(kind === 'commit' ? 'commit' : 'push');
+  commands.feuArtifice = () => celebrate('tests');
 }
 
 // --- Herald ---------------------------------------------------------------------------
