@@ -15,7 +15,7 @@ La carte utilise des packs gratuits de Kay Lousberg (www.kaylousberg.com). Ce do
 | Restaurant Bits 1.0 | `gh-restaurant/repo/` | Plats, bocaux, caisses de légumes |
 | Resource Bits 1.0 | `resourcebits/` | Lingots, bois, barils, pièces mécaniques, tissus |
 | Mixed Bag 1 et 2 | `mixed_bag/` | Poêle à bois, chaînes, peluches, guitare, toiles d'araignée, piège, coin gamer |
-| Skeletons 1.1 | `skeletons/` | Squelette animé `Skeleton_Minion`, partagé entre l'embuscade et le mannequin d'entraînement de la Salle des épreuves ; armes et bouclier dans le dossier `skeleton_props/`, dont le bouclier sert de décor |
+| Skeletons 1.1 | `skeletons/` | Squelette animé `Skeleton_Minion`, utilisé par l'embuscade ; armes et bouclier dans le dossier `skeleton_props/`, dont le bouclier sert de décor |
 | Adventurers 2.0 | `adventurers/` | Personnages animés et leurs accessoires |
 
 Les modèles utilisés sont déjà dans le dépôt.

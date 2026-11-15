@@ -76,19 +76,12 @@ describe('DECOR_RECIPES', () => {
   });
 
   /**
-   * Verifies that the animated skeleton has no recipe: it has its own renderer
-   */
-  it('leaves the skeleton to its own renderer', () => {
-    expect(DECOR_RECIPES.skeleton).toBeUndefined();
-  });
-
-  /**
-   * Verifies that every decor kind placed in ROOMS is drawn by a recipe or is the skeleton
+   * Verifies that every decor kind placed in ROOMS is drawn by a recipe
    */
   it('covers every decoration kind used in the rooms', () => {
     const undrawn = ROOMS.flatMap((r) =>
       r.props
-        .filter((p) => DECOR_KINDS.includes(p.kind) && p.kind !== 'skeleton' && !DECOR_RECIPES[p.kind])
+        .filter((p) => DECOR_KINDS.includes(p.kind) && !DECOR_RECIPES[p.kind])
         .map((p) => `${r.id}:${p.kind}`),
     );
     expect(undrawn).toEqual([]);
@@ -112,7 +105,7 @@ describe('decorPlacement', () => {
   it('returns no batch for no rooms or rooms without recipe props', () => {
     expect(decorPlacement([])).toEqual([]);
     expect(decorPlacement([makeRoom([])])).toEqual([]);
-    expect(decorPlacement([makeRoom([{ kind: 'bench', x: 0, z: 0 }, { kind: 'skeleton', x: 1, z: 1 }])])).toEqual([]);
+    expect(decorPlacement([makeRoom([{ kind: 'bench', x: 0, z: 0 }])])).toEqual([]);
   });
 
   /**
