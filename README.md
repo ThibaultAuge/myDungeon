@@ -57,6 +57,7 @@ npm run typecheck
 ## Documentation
 
 - [Utilisation](docs/utilisation.md) : ce que tu vois et ce que tu peux faire dans la scène.
+- [Commandes console](docs/commandes-console.md) : commandes du navigateur pour déclencher les gags et les tester.
 - [Fonctionnement](docs/fonctionnement.md) : flux de données, hooks, données lues, variables d'environnement.
 - [Sécurité](docs/securite.md) : accès local, conversations, poste partagé.
 - [Modèles 3D](docs/modeles-3d.md) : packs KayKit, licence, ajout d'un modèle.

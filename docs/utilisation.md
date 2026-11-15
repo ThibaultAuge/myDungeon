@@ -221,4 +221,4 @@ L'historique liste les sessions terminées.
 
 `/debug` montre le flux brut des événements reçus.
 
-Dans la console du navigateur, `agentOffice.potion()` fait boire l'agent sélectionné. `agentOffice.potion('rest:hermione')` vise une figure précise de la taverne : l'identifiant est en minuscules. La commande renvoie `true` si une figure a réagi. Elle reste disponible en production et n'appelle pas le serveur.
+Dans la console du navigateur, `agentOffice.potion()` fait boire l'agent sélectionné. `agentOffice.potion('rest:hermione')` vise une figure précise de la taverne : l'identifiant est en minuscules. La commande renvoie `true` si une figure a réagi. Elle reste disponible en production et n'appelle pas le serveur. Toutes les commandes de ce type sont listées dans [Commandes console](commandes-console.md).
