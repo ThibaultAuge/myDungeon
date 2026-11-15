@@ -17,6 +17,7 @@ import { GhostFigure } from './GhostFigure.tsx';
 import { NIGHT_SKY, scatterTrees } from './forest.ts';
 import { assignSpots, BOUNDS, SPAWN, type SeatMemory, type SeatRequest, type Spot } from './layout.ts';
 import { ENTRY_SPOT, PAN_MARGIN } from './outside.ts';
+import { PigeonFlights } from './Pigeons.tsx';
 import { OfficeRooms } from './Room.tsx';
 import { Stage } from './stage.ts';
 import { inheritSeats, NEUTRAL_COLOR, restId, restingAgent, restingTypes, startOrigins } from './tavern.ts';
@@ -295,6 +296,7 @@ export function OfficeScene() {
         />
       ))}
       <AmbushScene ambush={ambush} />
+      <PigeonFlights />
 
       <OrbitControls makeDefault target={CENTER} enableDamping maxPolarAngle={1.35} minDistance={8} maxDistance={80} />
       <CameraFollow selected={selected} />
