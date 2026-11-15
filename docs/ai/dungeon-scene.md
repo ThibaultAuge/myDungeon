@@ -115,7 +115,7 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cast
   is only `'Skeleton_Minion'`. Main agents use `MAIN_BODY`
   (`Knight`). Every subagent figure, whatever its look, is scaled 0.85 by kind in
   `AgentFigure` (whole group: model, tag, ring, disc). Subagents get a role look from `LOOKS`, keyed by the
-  lower-case agent TYPE (18 entries: the user's agents plus `Explore`, `Plan`,
+  lower-case agent TYPE (20 entries: the user's agents plus `Explore`, `Plan`,
   `general-purpose`, `claude-code-guide`, `statusline-setup`). `lookFor(kind, agentType)`
   looks up case-insensitively with `Object.hasOwn`; an unknown type gets
   `SUB_BODIES[FNV-1a(type) % 5]` with empty hands, `''` gets `SUB_BODIES[0]`. Keying by

@@ -50,6 +50,8 @@ export const LOOKS: Readonly<Record<string, Look>> = {
   'samuel-morse': { body: 'Ranger', right: tool('map') },
   barbapapa: { body: 'Rogue', right: tool('hammer') },
   'butt-stallion': { body: 'Barbarian', right: prop('mug_full') },
+  grumpy: { body: 'Barbarian', right: tool('map') },
+  'phoenix-wright': { body: 'Rogue', right: tool('journal_open') },
   explore: { body: 'Ranger', right: tool('lantern') },
   plan: { body: 'Rogue_Hooded', right: tool('map') },
   'general-purpose': { body: 'Rogue_Hooded', right: prop('dagger') },
