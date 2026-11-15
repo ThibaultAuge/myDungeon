@@ -22,7 +22,7 @@ flowchart LR
 ```
 *Figure : Les trois chemins de données, du relevé à la page.*
 
-- **Les hooks** donnent le temps réel : prompt envoyé, outil utilisé, permission demandée, sous-agent lancé ou terminé, fin de tour, fin de session.
+- **Les hooks** donnent le temps réel : prompt envoyé, outil utilisé, permission demandée, sous-agent lancé ou terminé, fin de tour, fin de session, compactage du contexte.
 - **L'inventaire** relit les fichiers de l'app desktop (au fil de leurs modifications, et toutes les 10 s). Il fournit les donjons (un par environnement de l'app Claude), les sessions, leur titre et leur session parente, et indique si une session tourne. Au démarrage du serveur, il reconstruit l'état même sans hooks.
 - **Le navigateur** reçoit un instantané complet du donjon affiché, au plus toutes les 100 ms. Une reconnexion suffit donc à tout resynchroniser.
 
@@ -30,10 +30,12 @@ flowchart LR
 
 `npm run hooks:install` :
 
-- **ajoute un hook pour 12 événements** dans le `settings.json` **global** de Claude Code (`~/.claude/settings.json`, ou `CLAUDE_CONFIG_DIR`). Tous les événements concernent donc toutes tes sessions ;
+- **ajoute un hook pour 13 événements** dans le `settings.json` **global** de Claude Code (`~/.claude/settings.json`, ou `CLAUDE_CONFIG_DIR`). Tous les événements concernent donc toutes tes sessions ;
 - **sauvegarde d'abord** ce fichier dans `settings.json.agent-office-<date>.bak` ;
 - **copie le relais** dans `~/.claude/agent-office/hook-relay.mjs`, avec `relay.env` (jeton et port). Le relais ne s'exécute jamais depuis le dépôt ;
 - **ne touche à aucun autre réglage**, ni à aucun autre hook.
+
+L'événement `PreCompact` (compactage du contexte, manuel avec `/compact` ou automatique) est l'un des 13. Le serveur n'utilise que son nom et l'agent visé. Les champs `trigger` et `custom_instructions` (le texte tapé après `/compact`) arrivent au serveur local, mais sont ignorés : ils ne sont ni lus, ni stockés, ni diffusés. Les installations existantes doivent relancer `npm run hooks:install` pour recevoir cet événement.
 
 Les hooks sont des commandes **asynchrones** : ils ne ralentissent jamais Claude. Le relais transmet l'événement au serveur, **ignore sa réponse**, n'affiche rien et se termine toujours sans erreur. Le serveur ne peut donc jamais influencer Claude : il observe seulement. Si le serveur est arrêté, rien ne change pour Claude.
 
@@ -46,7 +48,7 @@ Les hooks sont des commandes **asynchrones** : ils ne ralentissent jamais Claude
 
 Le serveur sait si une session a déjà travaillé. Il la considère comme **active** dès qu'il reçoit l'un de ces signaux :
 
-- un hook de travail : `UserPromptSubmit`, `PreToolUse`, `PostToolUse`, `PostToolUseFailure`, `PermissionRequest`, `SubagentStart`, `SubagentStop`, `Stop` ou `StopFailure`. Les hooks `SessionStart`, `SessionEnd` et `Notification` ne comptent pas ;
+- un hook de travail : `UserPromptSubmit`, `PreToolUse`, `PostToolUse`, `PostToolUseFailure`, `PermissionRequest`, `SubagentStart`, `SubagentStop`, `Stop` ou `StopFailure`. Les hooks `SessionStart`, `SessionEnd`, `Notification` et `PreCompact` ne comptent pas ;
 - le processus Claude signale qu'il est occupé ;
 - à la découverte du processus, un transcript `~/.claude/projects/<dossier>/<session>.jsonl` non vide existe déjà.
 

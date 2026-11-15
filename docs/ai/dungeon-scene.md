@@ -1,5 +1,5 @@
 ---
-description: Use when changing the 3D dungeon map — rooms, floors, walls, castle gate, cutaway, props, lighting, KayKit models or their import — clickable workstations (posts, hover glow, post card and list), pointer/cursor handling of 3D targets, agent figures (walking motion, character models, role looks and held props, animations, destination badge, agent slap gag), room or post icons, or when previewing the web scene.
+description: Use when changing the 3D dungeon map — rooms, floors, walls, castle gate, cutaway, props, lighting, KayKit models or their import — clickable workstations (posts, hover glow, post card and list), pointer/cursor handling of 3D targets, agent figures (walking motion, character models, role looks and held props, animations, destination badge, agent slap gag, potion of oblivion gag on PreCompact), room or post icons, or when previewing the web scene.
 ---
 
 # 3D dungeon scene (KayKit assets)
@@ -105,7 +105,8 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cast
   figures: `docs/ai/agent-lifecycle.md`.
 - Looks (`characters.ts`): a `Look` is a body (`pack`: `'adventurers'` by default, or
   `'skeletons'`) plus optional `right` / `left` held props
-  (`PropRef { pack: 'adventurers_props' | 'tools' | 'skeleton_props'; model }`).
+  (`PropRef { pack: 'adventurers_props' | 'tools' | 'skeleton_props' | 'dungeon'; model }`;
+  `'dungeon'` serves the potion bottle `POTION_PROP`).
   `SKELETON_LOOKS`: three bare `Skeleton_Minion` bodies (Blade, Axe, Blade); `SkeletonModel`
   is only `'Skeleton_Minion'`. Main agents use `MAIN_BODY`
   (`Knight`). Every subagent figure, whatever its look, is scaled 0.85 by kind in
@@ -120,7 +121,8 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cast
   materials shared, `castShadow` on the clone's meshes) and mounts it via R3F `createPortal`
   into bone `handslotr` / `handslotl` (GLTFLoader strips the dots of `handslot.r`), inside a
   group carrying the grip. A dev warning fires when a hand slot is missing. Grips:
-  `PROP_GRIP` / `gripFor` hold rotation/scale for `tools` models only; Adventurers props fit
+  `PROP_GRIP` / `gripFor` hold position/rotation/scale for `tools` models and the `dungeon`
+  potion bottle; Adventurers props fit
   the slot as they are. The slot's local X points down, so upright tools turn a quarter turn
   on Z; the lantern turns on −Z (hangs).
 - Walking: cruise `CRUISE_SPEED` 9 u/s, `ACCELERATION` 18 u/s², `MIN_SPEED` 0.3, with
@@ -132,13 +134,14 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cast
   (a clip imposed by a scripted scene such as the ambush; ignored under reduced motion) > spawn
   (`Spawn_Ground`, once, ×1.5, only for a figure whose `start` is the lockers `SPAWN` and not
   done; one coming from a resting seat just walks) > hit (`Hit_A` / `Hit_B`, once, not
-  looped; ignored under reduced motion) > moving (`Walking_A`, or `Running_A` above
+  looped; ignored under reduced motion) > drinking (`ClipInput.drinking`: `Use_Item` once,
+  potion gag; ignored under reduced motion) > moving (`Walking_A`, or `Running_A` above
   `RUN_THRESHOLD`; rate = speed / measured clip speed, capped at `MAX_CLIP_RATE`, with a
   0.5 floor for `Walking_A` only) >
   kneeling at the altar (`PickUp` frozen at `KNEEL_POSE_TIME`) > done (`Idle_A` frozen, no
   transparency) > working (`Interact`) > waiting (`Idle_B`). Reduced motion: still poses,
   turns snap, no spawn; position still moves. `CLIPS` also lists `Hit_A`, `Death_A` and
-  `Use_Item` (scripted only); their measured lengths (`SPAWN_CLIP_TIME`, `HIT_CLIP_TIME`,
+  `Use_Item` (scripted, or the potion gulp); their measured lengths (`SPAWN_CLIP_TIME`, `HIT_CLIP_TIME`,
   `DEATH_CLIP_TIME`, `USE_ITEM_CLIP_TIME`) are checked against the GLB by a test.
 - `AgentFigure` structure: the parent runs the walk and writes a `Motion` ref (exported,
   with `scripted`); the exported
@@ -227,6 +230,50 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cast
     only while `hasSlapTarget` (`useSyncExternalStore`); if it disappears while focused,
     focus moves to `#agent-info-title`. For a resting tavern figure, the `RestCard` slap
     button plays that role (`docs/ai/agent-lifecycle.md`).
+- Potion gag, "potion of oblivion" (user request: one of five humorous gags, like the slap;
+  purely visual, nothing sent to the server, work untouched): when Claude Code compacts a
+  session's context, its agent drinks a bottle, staggers, and stars orbit its head.
+  - Hook: `'PreCompact'` is in `EVENTS` of `scripts/hooks-lib.mjs`; existing installs must
+    rerun `npm run hooks:install`. Server code unchanged: `applyHook` hits `default:` (only
+    the generic `live` / `lastActivityAt`; not in `ACTIVITY_EVENTS`), `hookEventSchema`
+    unchanged, `summarize` broadcasts it as a live `{type:'event'}`. Payload `trigger` /
+    `custom_instructions` are never read, stored or broadcast. Live events are not replayed
+    on reconnect.
+  - Bus (`potion.ts`, pure): `store.ts` `onMessage` event branch calls
+    `potionTarget(event, sessions)` (only `POTION_EVENT`; a subagent id only if that subagent
+    is in the snapshot, else null; main → `session.main.id`, never rebuilt from the session
+    id) then `drinkPotion(id)`. `onPotion(id, cb)` per-id listeners, like `slap.ts`;
+    `hasPotionTarget` is used only by tests for now.
+  - Timing (`potion.ts`): `DRINK_S` = `USE_ITEM_CLIP_TIME` (1.6 s), `STAGGER_S` 3,
+    `POTION_S`, `POTION_EFFECT_MS` 4600; `potionPhase(elapsed)` → `'drinking' |
+    'staggering' | null`; `staggerSway(elapsed)` → `{roll, pitch}` (≤ `SWAY_ROLL`,
+    `SWAY_PITCH`), zero while drinking, squared decay to zero.
+  - Figure: `Motion.potionAt` (seconds since drinking started; absent or -1 = inactive) and
+    `potionId` are OPTIONAL so the skeletons' `Motion` literal in `Ambush.tsx` stays
+    untouched. Gulp = `ClipInput.drinking` in `clipFor`, walk paused; `Character` restarts
+    the gulp on a new `potionId`. Stagger: inner `<group ref={sway}>` around
+    `CharacterBoundary` gets `staggerSway(potionAt)`, only while active. A slap during the
+    gulp jumps `potionAt` to `DRINK_S` (straight to staggering). A figure still
+    spawning/loading ignores the potion (unless reduced motion); doomed (`exit`) figures
+    ignore it. Suspense cleanup resets `potionAt` and the HTML state.
+  - Bottle: `POTION_PROP` (`dungeon` pack `bottle_C_green`, `PROP_GRIP` entry
+    rotation `[0, 0, 0]`, scale 0.8, position `[0, -0.62, 0]` so the neck sits in the fist
+    and the body hangs below the hand) is mounted through `Character`'s `extra` prop in its own Suspense for the
+    whole effect. Its visibility, and hiding the look's right prop (only once the bottle has
+    loaded), is set per frame from the chosen clip (`choice.name === 'Use_Item' &&
+    !scripted`), never from a timer.
+  - HTML: separate drei `<Html className="potion-anchor">` at `POTION_Y` 1.75, mounted only
+    while active, holding `<PotionEffect key={potion}>` (`PotionEffect.tsx`): 4 ★ orbiting
+    the head (CSS `potion-orbit`) and bubble `t.potion.bubble`, both delayed by CSS var
+    `--potion-drink` and faded over `--potion-stagger` (set from the `potion.ts` constants).
+    Reduced motion: no clip, sway or bottle; static stars and bubble. Forced-colors rules in
+    `styles.css`. `aria-hidden`, decorative (accessibility audit accepted, like the slap).
+  - Test command: `installPotionCommand(selected, window)`, called in `store.ts`, installs
+    `window.agentOffice.potion(id?)` (selected agent when no id; returns true if a figure
+    reacted). Kept in production builds on purpose (visual only, no network). The
+    `window.agentOffice` namespace (`GagCommands`) is shared with the other gags' test
+    commands: each installs its own key; a non-object value is replaced. Rest figure ids
+    are lower case (`rest:hermione`).
 - Spots (`layout.ts`): `Spot` carries `room: RoomId` and optional `station?: StationId`
   (key absent, not `undefined`). `RoomDef.stations` is `Partial<Record<StationId, Seat[]>>`,
   `STATIONS` maps agent type → `StationId`, `candidateSeats` returns
@@ -269,6 +316,11 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cast
   swing pose), `scene/SlapHand.tsx` (3D hand), `scene/SlapEffect.tsx` (stars, bubble),
   `ui/slapSound.ts`, slap button in `ui/AgentInfo.tsx`; `.slap*` in `styles.css`;
   `packages/web/public/sounds/` (`slap.wav`, `LICENSE.txt`).
+- `packages/web/src/scene/potion.ts` (pure: timing, sway, `potionTarget`, bus,
+  `installPotionCommand`), `scene/PotionEffect.tsx` (stars, bubble); `POTION_PROP` and
+  `ClipInput.drinking` in `characters.ts`; potion handling in `AgentFigure.tsx`; wiring in
+  `store.ts`; `.potion*` in `styles.css`; `PreCompact` in `scripts/hooks-lib.mjs`
+  (`packages/server/test/hooks-lib.test.ts`).
 - `packages/web/src/scene/destinations.ts` — pure: `Destination = RoomId | StationId`,
   `destinationOf(spot)` (station ?? room), `postDestination(post: PostId)` (identity; it
   compiles only because every `PostId` is a `RoomId` or a `StationId`).
@@ -283,7 +335,7 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cast
 - `packages/web/src/ui/PostCard.tsx`, `PostList.tsx`; `packages/web/src/store.ts`
   (`selectedPost`, `selectPost`); Canvas `onPointerMissed` is in `Office.tsx`.
 - `packages/web/test/dungeon.test.ts`, `walk.test.ts`, `characters.test.ts`, `slap.test.ts`,
-  `slapSwing.test.ts`, `layout.test.ts` (`layout.ts`: `ROOMS`, seats and `assignSpots`, altar `queueSpot`,
+  `slapSwing.test.ts`, `potion.test.ts`, `layout.test.ts` (`layout.ts`: `ROOMS`, seats and `assignSpots`, altar `queueSpot`,
   `SPAWN`, `corridorPath`, `routeBetween`, `reroute`, post tagging, `postGroups`,
   `POST_ROOM`, spot `room`/`station`), `highlight.test.ts`, `cursor.test.ts`,
   `destinations.test.ts` (`destinationOf`; room ids and post names never overlap;
@@ -308,11 +360,24 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cast
   `useOffice.setState({ sessions: [], roster: [...] })` so the tavern shows one resting
   figure per type. Hide other objects and move the camera for close-ups, mutate the grip
   group under the hand bone live, then copy the values into `PROP_GRIP`.
+  `dungeon`-pack models are modelled upright with the origin at their base, unlike RPG
+  Tools items: no quarter turn (it lays them on their side); offset `position` instead.
 - Repeated pieces go through `<KitInstances>`; one-off furniture through `<Kit>`; a new
   prop is a `PROPS` entry; multi-piece room decor is a recipe (`docs/ai/room-identity.md`).
   Put placement logic in `dungeon.ts` so it stays testable.
 - Any other per-agent visual reaction: reuse the `slap.ts` bus pattern (per-id listeners,
   target watch for a keyboard button) and the keyed `<Html>` remount to replay CSS effects.
+  A hook-driven reaction follows `potion.ts`: a pure `xxxTarget(event, sessions)` in the
+  `store.ts` event branch, then the bus.
+- New gag fields on `Motion` must be optional (absent = inactive), like `potionAt` /
+  `potionId`: several sibling gags edit the same interface, and the skeletons' `Motion`
+  literal must stay untouched. A gag's console test command adds its own key under
+  `window.agentOffice` (see `installPotionCommand`), never replaces the namespace object.
+- Potion verification: build web, run a second server (port 4779, `AGENT_OFFICE_TOKEN`
+  env, `docs/ai/agent-lifecycle.md`), POST hooks including
+  `{"hook_event_name":"PreCompact",...}`, or call `agentOffice.potion('rest:<type>')` in
+  Playwright. Resting figures are good close-up targets: hatless bodies (e.g. Hancock's)
+  show the bottle; mage hats hide the hands.
 - Agent motion logic goes in `walk.ts`, clip choice in `clipFor` (both tested), never
   inline in `AgentFigure`'s `useFrame`, which only calls them.
 - New decor must not cover seats or a door entry (tested in `dungeon.test.ts`).
@@ -394,7 +459,7 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cast
 - Tests must not import `kit.ts` or any `.tsx` file (drei / `import.meta.env`); test
   `dungeon.ts`, `layout.ts`, `walk.ts`, `characters.ts`, `slap.ts`, `slapSwing.ts`,
   `destinations.ts`, `forest.ts`, `outside.ts`, `stage.ts`, `ambush.ts`, `tavern.ts`,
-  `decor.ts`, `merge.ts` and the manifest JSON.
+  `decor.ts`, `merge.ts`, `potion.ts` and the manifest JSON.
 - Walk speed was set so figures reach the room before short tasks finish (user request).
   The chibi legs walk naturally at 0.57 (`Walking_A`) and 1.4 u/s (`Running_A`) at
   `KIT_SCALE`, so feet slide at cruise speed by design. Accepted limits: a reroute to a
@@ -433,6 +498,10 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cast
   `<Html>` per selectable figure (per-frame projection cost); no mute switch for the sound;
   the server SPA fallback answers a missing `/sounds/` file with `index.html` (status 200),
   so a missing `slap.wav` fails decoding silently and is refetched on every slap.
+- Potion accepted limits (not done): an event whose `agent_id` was refused (null) reaches
+  the client as the main agent's (`summarize` collapses null); a repeated PreCompact within
+  4.6 s restarts the effect; with the tab hidden the HTML timer and the frame clock can
+  drift (stars without stagger briefly).
 - Sound files rule: before shipping a new sound under `public/sounds/`, record its source
   and licence in `public/sounds/LICENSE.txt`. Never commit a sound ripped from a commercial
   game.

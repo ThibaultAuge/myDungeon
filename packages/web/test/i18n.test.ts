@@ -493,6 +493,23 @@ describe('dictionaries', () => {
   });
 
   /**
+   * Verifies that the potion's dazed bubble text is trimmed and non-empty in every language
+   */
+  it.each(ALL_LANGS)('%s has a trimmed, non-empty potion bubble', (lang) => {
+    const v = MESSAGES[lang].potion.bubble;
+    expect(typeof v).toBe('string');
+    expect(v.trim()).not.toBe('');
+    expect(v).toBe(v.trim());
+  });
+
+  /**
+   * Verifies that the potion bubble is translated in German and English, not a French copy
+   */
+  it.each(['de', 'en'] as const)('%s translates the potion bubble', (lang) => {
+    expect(MESSAGES[lang].potion.bubble).not.toBe(MESSAGES.fr.potion.bubble);
+  });
+
+  /**
    * Verifies that German and English are actually translated, not French copies
    */
   it.each(['de', 'en'] as const)('%s differs from French for key interface texts', (lang) => {
