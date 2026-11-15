@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls, SoftShadows } from '@react-three/drei';
 import { NeutralToneMapping } from 'three';
@@ -9,6 +9,7 @@ import { useT } from '../i18n/useT.ts';
 import { useOffice } from '../store.ts';
 import { useNow } from '../useNow.ts';
 import { AgentFigure, agentPositions } from './AgentFigure.tsx';
+import { altarForceVersion, installAltarCommand, onAltarForce, shownAltarStage } from './altarWait.ts';
 import { Ambush } from './ambush.ts';
 import { AmbushScene } from './Ambush.tsx';
 import { DungeonSign } from './DungeonSign.tsx';
@@ -170,6 +171,23 @@ export function OfficeScene({ dungeon }: { dungeon?: Dungeon }) {
   const selectPost = useOffice((s) => s.selectPost);
   const now = useNow();
   const { t } = useT();
+  // The endless wait at the altar: a forced stage (test command) re-renders at once.
+  useSyncExternalStore(onAltarForce, altarForceVersion);
+  // Test command `agentOffice.autel(stage?, id?)`, for the console.
+  useEffect(
+    () =>
+      installAltarCommand(window, {
+        selected: () => useOffice.getState().selectedAgentId,
+        atAltar: () =>
+          useOffice
+            .getState()
+            .sessions.flatMap((s) => [s.main, ...s.subagents])
+            .filter((a) => a.state === 'waiting' && a.room === 'autel')
+            .map((a) => a.id),
+        log: (message) => console.info(message),
+      }),
+    [],
+  );
   // Finished subagents that reached the tavern: they have left the scene.
   const [arrived, setArrived] = useState<ReadonlySet<string>>(() => new Set());
   const onArrive = useCallback((id: string) => setArrived((prev) => (prev.has(id) ? prev : new Set(prev).add(id))), []);
@@ -253,6 +271,7 @@ export function OfficeScene({ dungeon }: { dungeon?: Dungeon }) {
           spot={spots.get(agent.id)!}
           start={spots.get(agent.id)!}
           selected={selected === agent.id}
+          altarStage={shownAltarStage(agent, now)}
           // Clicking a resting figure opens its short introduction (keyboard route: RosterList).
           onSelect={select}
         />
@@ -274,6 +293,7 @@ export function OfficeScene({ dungeon }: { dungeon?: Dungeon }) {
             // keyboard route) lists live sessions only.
             onSelect={agent.kind === 'main' && !session.live ? undefined : select}
             onArrive={agent.kind === 'sub' ? onArrive : undefined}
+            altarStage={shownAltarStage(agent, now)}
           />
         )),
         ...[...stage.leaving.values()].map(({ agent, session, spot }) => (

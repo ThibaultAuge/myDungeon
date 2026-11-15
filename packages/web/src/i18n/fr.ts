@@ -70,6 +70,10 @@ export const fr = {
     folder: 'Dossier',
     lastMessage: 'Dernier message',
   },
+  altarWait: {
+    /** Snoring of an agent asleep at the altar after waiting too long for the human. */
+    snore: 'Zzz',
+  },
   slap: {
     /** Comic sound word of the slap, shown in a bubble over the slapped agent. */
     sound: 'PAF !',

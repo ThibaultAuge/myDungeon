@@ -137,7 +137,8 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cast
   looped; ignored under reduced motion) > drinking (`ClipInput.drinking`: `Use_Item` once,
   potion gag; ignored under reduced motion) > moving (`Walking_A`, or `Running_A` above
   `RUN_THRESHOLD`; rate = speed / measured clip speed, capped at `MAX_CLIP_RATE`, with a
-  0.5 floor for `Walking_A` only) >
+  0.5 floor for `Walking_A` only) > altar wait pose (`ClipInput.altar`: sleeping, sitting,
+  then pacing, which reduced motion skips; `docs/ai/altar-wait.md`) >
   kneeling at the altar (`PickUp` frozen at `KNEEL_POSE_TIME`) > done (`Idle_A` frozen, no
   transparency) > working (`Interact`) > waiting (`Idle_B`). Reduced motion: still poses,
   turns snap, no spawn; position still moves. `CLIPS` also lists `Hit_A`, `Death_A` and
@@ -372,7 +373,10 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cast
 - New gag fields on `Motion` must be optional (absent = inactive), like `potionAt` /
   `potionId`: several sibling gags edit the same interface, and the skeletons' `Motion`
   literal must stay untouched. A gag's console test command adds its own key under
-  `window.agentOffice` (see `installPotionCommand`), never replaces the namespace object.
+  `window.agentOffice` (see `installPotionCommand`), never replaces the namespace object,
+  and gets a row in the human list `docs/commandes-console.md` (owned by `otis`).
+- Endless wait at the altar (pacing, sitting, Zzz, cobwebs, `agentOffice.autel`):
+  `docs/ai/altar-wait.md`.
 - Potion verification: build web, run a second server (port 4779, `AGENT_OFFICE_TOKEN`
   env, `docs/ai/agent-lifecycle.md`), POST hooks including
   `{"hook_event_name":"PreCompact",...}`, or call `agentOffice.potion('rest:<type>')` in
@@ -459,7 +463,7 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cast
 - Tests must not import `kit.ts` or any `.tsx` file (drei / `import.meta.env`); test
   `dungeon.ts`, `layout.ts`, `walk.ts`, `characters.ts`, `slap.ts`, `slapSwing.ts`,
   `destinations.ts`, `forest.ts`, `outside.ts`, `stage.ts`, `ambush.ts`, `tavern.ts`,
-  `decor.ts`, `merge.ts`, `potion.ts` and the manifest JSON.
+  `decor.ts`, `merge.ts`, `potion.ts`, `altarWait.ts` and the manifest JSON.
 - Walk speed was set so figures reach the room before short tasks finish (user request).
   The chibi legs walk naturally at 0.57 (`Walking_A`) and 1.4 u/s (`Running_A`) at
   `KIT_SCALE`, so feet slide at cruise speed by design. Accepted limits: a reroute to a
