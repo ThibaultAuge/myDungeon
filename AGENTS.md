@@ -28,6 +28,7 @@ npm workspaces: `packages/server`, `packages/web`, `packages/shared`.
 - `docs/ai/dialogue.md` — Use when changing the agent conversation box (AgentDialog), the Markdown rendering of agent messages (MessageText, markdown.ts), how transcripts are found, parsed or paged (transcript.ts, /api/transcript, useTranscript), or adding any route that reads or changes conversations.
 - `docs/ai/agent-info.md` — Use when changing the selected-agent details card (AgentInfo), session details sent to the client (SessionView.info, worktree, branch, model, effort, permission mode, CLI version), or the detection of a session's local web servers (ports.ts, SessionView.servers).
 - `docs/ai/ui-theme.md` — Use when changing the web UI's colours or chrome styling — root CSS tokens, the single dark dungeon theme, top bar, side panel, home page and its castle-gate background image (and how to re-capture it).
+- `docs/ai/rat-gag.md` — Use when changing the rat gag — a procedural rat scurrying between corridor holes or stealing the tavern's cheese (rat.ts, RatScene, the KayKit cheese) — the agentOffice.rat console command, or when adding another scurrying creature.
 
 Human docs (French): `README.md` (pitch, install, tests, doc index); in `docs/`:
 `utilisation.md`, `fonctionnement.md` (data flow, hooks, env vars), `securite.md`,

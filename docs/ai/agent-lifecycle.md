@@ -239,7 +239,8 @@ do this; subagents keep the tavern cycle above.
   stays a knight. Fake-hook sessions may land in the "hors-environnement" group. A real
   pre-warmed, idle desktop-launched process with no transcript also shows as a ghost.
 - Ghost logic goes in `ghost.ts` (pure, tested); reuse `isGhost` wherever a stopped main
-  must be told apart, and reuse `corridorPath` for any new corridor wandering.
+  must be told apart, and reuse `corridorPath` for any new corridor wandering. The rat gag
+  reuses `WANDER_POINTS` as its holes: `docs/ai/rat-gag.md`.
 
 ## Notes
 - A 3D altar bubble was tried and rejected: the HTML tags and room signs are drawn over the

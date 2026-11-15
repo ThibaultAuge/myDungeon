@@ -428,6 +428,7 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cast
   and gets a row in the human list `docs/commandes-console.md` (owned by `otis`).
 - Endless wait at the altar (pacing, sitting, Zzz, cobwebs, `agentOffice.autel`):
   `docs/ai/altar-wait.md`.
+- Rat gag (corridor holes, tavern cheese theft, `agentOffice.rat`): `docs/ai/rat-gag.md`.
 - Potion verification: build web, run a second server (port 4779, `AGENT_OFFICE_TOKEN`
   env, `docs/ai/agent-lifecycle.md`), POST hooks including
   `{"hook_event_name":"PreCompact",...}`, or call `agentOffice.potion('rest:<type>')` in
