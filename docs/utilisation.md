@@ -195,7 +195,7 @@ Un sous-agent au repos, à la taverne, n'a pas de conversation : son clic ouvre 
 - **Fermer.** Clique sur × ou appuie sur Échap. La boîte se ferme et l'agent reste sélectionné.
 - **Lecture seule.** La boîte n'a pas encore de zone de saisie. Répondre à un agent depuis la 3D est prévu, voir [conception.md](conception.md).
 
-Le texte des conversations s'affiche comme du texte brut. Il n'est jamais interprété comme du HTML.
+Les messages sont mis en forme en Markdown, comme dans Claude Code : titres, listes, tableaux, blocs de code, citations, séparateurs, gras, italique et code en ligne. Les liens n'affichent que leur texte, sans lien cliquable ni adresse. Un tableau de plus de 30 colonnes reste du texte brut, et un tableau très long est coupé. Le contenu n'est jamais interprété comme du HTML.
 
 Qui peut lire ces conversations est décrit dans [securite.md](securite.md).
 

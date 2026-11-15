@@ -1,5 +1,5 @@
 ---
-description: Use when changing the agent conversation box (AgentDialog), how transcripts are found, parsed or paged (transcript.ts, /api/transcript, useTranscript), or adding any route that reads or changes conversations.
+description: Use when changing the agent conversation box (AgentDialog), the Markdown rendering of agent messages (MessageText, markdown.ts), how transcripts are found, parsed or paged (transcript.ts, /api/transcript, useTranscript), or adding any route that reads or changes conversations.
 ---
 
 # Agent conversation box and transcripts
@@ -44,9 +44,34 @@ description: Use when changing the agent conversation box (AgentDialog), how tra
   (`POLL_EMPTY_MS`), any other failure (including a 401) gives status `'error'`; merges with
   pure `mergeLatest` / `prependOlder` (`dialogue.ts`); loads older pages on scroll-to-top or
   a button.
+- Message rendering: user and assistant texts (not tool entries) render from Markdown
+  through `<MessageText>` (`React.memo` + `useMemo` on the text, because the log
+  re-renders on every poll). Output is React elements only, never
+  `dangerouslySetInnerHTML`; table alignment style comes from a closed set.
+- `markdown.ts`: pure, dependency-free GFM subset parser, never throws on cut text.
+  - Tables: alignment; rows padded/cut to header width; `\|` and pipes inside code spans
+    do not split; over `MAX_COLUMNS` 30 stays text, beyond `MAX_CELLS` 3000 is cut (DOM
+    amplification guard on untrusted text); a table ends at a blank line or another block
+    start.
+  - ATX headings, rendered as `<p role="heading" aria-level={level+2, max 6}>`, not
+    `<h1>`–`<h6>`, so they sit under the box's `h2`.
+  - Fenced code (any indent, fence indent stripped; a fence line inside a list item ends
+    the list so the main loop reads the whole block), quotes, rules, nested lists
+    (`MAX_DEPTH` 4).
+  - Inline code, strong, em; backslash escapes; no underscore emphasis (snake_case safe).
+    Links keep their label only: no `<a>`, no URL ever rendered.
+  - Its quadratic worst cases are harmless only because the server caps text at
+    `TEXT_MAX` 4000.
+- CSS: `.md-*` classes in `styles.css`. Table cells use `overflow-wrap: break-word` (short
+  headers stay whole); code in cells breaks anywhere so long paths do not widen the table;
+  code blocks wrap instead of scrolling; code has forced-colors borders.
 
 ## Relevant Files
 - `packages/web/src/ui/AgentDialog.tsx` — box, log, notices, older-page loading.
+- `packages/web/src/ui/MessageText.tsx` — memoised Markdown rendering of one message.
+- `packages/web/src/ui/markdown.ts` — pure GFM subset parser; tested in
+  `packages/web/test/markdown.test.ts`.
+- `packages/web/src/styles.css` — `.md-*` classes.
 - `packages/web/src/ui/useTranscript.ts` — polling and paging.
 - `packages/web/src/ui/dialogue.ts` — pure merge (`entryOffset`, `mergeLatest`,
   `prependOlder`); tested in `packages/web/test/dialogue.test.ts`.
@@ -78,6 +103,10 @@ description: Use when changing the agent conversation box (AgentDialog), how tra
   `/ws` if commands travel there. Keep the framing headers.
 - Add transcript filtering in `entriesOfLine` and merge logic in `dialogue.ts` (both
   tested), never inline in `AgentDialog`.
+- Any new place that shows transcript or agent text reuses `<MessageText>`. Add Markdown
+  features in `markdown.ts` with tests in `markdown.test.ts`, never inline in components.
+  Never render link URLs or raw HTML. Reusing `markdown.ts` on text without the server's
+  `TEXT_MAX` cap needs a length cap first (quadratic worst cases).
 - Never accept a file path from a client or hook; derive it from store state through
   `findTranscript`.
 - Box text follows the i18n invariant (`dialog.*` keys); server error bodies are not shown.
@@ -88,3 +117,6 @@ description: Use when changing the agent conversation box (AgentDialog), how tra
   no test proves the Origin guard covers the `/ws` upgrade; fstat/realpath containment in
   transcript reads; cost of the fallback project-folder scan on every poll; the focus
   guard reads the DOM during render.
+- Markdown known limitations (not done): mixed `-` / `1.` items at one level merge into one
+  list; images render as `!alt`; `a ** b ** c` becomes bold; no render-level test of
+  `MessageText` (no DOM test environment).
