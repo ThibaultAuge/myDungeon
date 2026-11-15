@@ -12,10 +12,11 @@ Sans argument, une commande vise l'agent sélectionné (clique d'abord sur une f
 - agent principal d'une session : `<id de session>#main` ;
 - sous-agent : son identifiant d'agent.
 
+Exception : `agentOffice.autel` prend d'abord le palier, puis l'identifiant. Sans aucun argument, `agentOffice.autel()` ne vise aucun agent : il retire tous les paliers imposés.
+
 Chaque commande renvoie `true` si une figure a réagi, `false` sinon (aucune sélection, ou agent sans figure dans la scène).
 
 Les célébrations (`heraut`, `feuArtifice`) ne visent aucun agent : elles se jouent sur le château. Elles renvoient `true` dès que la scène d'un donjon est affichée.
-Exception : `agentOffice.autel` prend d'abord le palier, puis l'identifiant. Sans aucun argument, `agentOffice.autel()` ne vise aucun agent : il retire tous les paliers imposés.
 
 Astuce : les mages portent un grand chapeau qui cache leurs mains. Pour bien voir un objet tenu, vise un personnage sans chapeau, comme Hancock.
 
