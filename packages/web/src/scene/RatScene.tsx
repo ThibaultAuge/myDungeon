@@ -1,4 +1,4 @@
-import { Suspense, useCallback, useEffect, useRef, useState, type RefObject } from 'react';
+import { memo, Suspense, useCallback, useEffect, useRef, useState, type RefObject } from 'react';
 import { useFrame } from '@react-three/fiber';
 import {
   CatmullRomCurve3,
@@ -15,7 +15,9 @@ import { KIT_SCALE } from './dungeon.ts';
 import { useKitParts } from './kit.ts';
 import {
   CHEESE_SPOT,
+  MOUTH_AHEAD,
   cheeseScale,
+  emergeScale,
   installRatCommand,
   nextPassDelay,
   pickPass,
@@ -33,8 +35,12 @@ import { turnToward } from './walk.ts';
 const RAT_SCALE = 1.9;
 /** The cheese model (KayKit Restaurant) at this size is about 0.36 m wide: readable at the usual zoom. */
 const CHEESE_SCALE = 0.5 * KIT_SCALE;
-/** In the mouth, the cheese shrinks a little and sits at the snout tip (ahead and up in rat units). */
-const MOUTH = { ahead: 0.29, up: 0.06, scale: 0.75 };
+/** Height of the cheese held in the mouth, above the rat's feet (the distance ahead is `MOUTH_AHEAD`). */
+const MOUTH_UP = 0.06 * RAT_SCALE;
+/** Centre of the cheese model along x, in model units: its origin is at its bottom, off-centre in x. */
+const CHEESE_CENTRE_X = 0.1535;
+/** The cheese's turn on the table, kept in the mouth (relative to the rat, which lands facing +z). */
+const CHEESE_TURN = 0.5;
 /** Turn rate towards the travel direction (per second, exponential). */
 const TURN_RATE = 18;
 /** Trot: steps per second, bob height. */
@@ -102,11 +108,11 @@ function RatBody({ tail, feet }: { tail: RefObject<Group | null>; feet: RefObjec
   );
 }
 
-/** The cheese model, centred on its own origin. */
+/** The cheese model, centred on its origin in x and z, its bottom at y = 0. */
 function CheeseModel() {
   const parts = useKitParts('restaurant', 'food_ingredient_cheese');
   return (
-    <group scale={CHEESE_SCALE}>
+    <group scale={CHEESE_SCALE} position={[-CHEESE_CENTRE_X * CHEESE_SCALE, 0, 0]}>
       {parts.map((p, i) => (
         <mesh
           key={i}
@@ -133,7 +139,7 @@ interface Live {
  * Plays the rat passes: a natural one every 3 to 6 minutes, or one asked for through the
  * console command `agentOffice.rat(pass?)`.
  */
-export function RatScene() {
+export const RatScene = memo(function RatScene() {
   const [run, setRun] = useState<{ key: number; run: RatRun } | null>(null);
   const live = useRef<Live | null>(null);
   /** Frame-clock time (ms) when a rat that stole the cheese left; null when the cheese is home. */
@@ -147,7 +153,7 @@ export function RatScene() {
 
   const start = useCallback((kind: RatPass) => {
     const next = planRun(kind, Math.random);
-    live.current = { run: next, elapsed: 0, heading: 0 };
+    live.current = { run: next, elapsed: 0, heading: sampleRun(next, 0).heading };
     // A replaced theft gives its cheese back at once.
     cheeseGoneAt.current = null;
     setRun({ key: ++counter.current, run: next });
@@ -178,11 +184,13 @@ export function RatScene() {
     const now = clockMs.current;
     const current = live.current;
     let carried = false;
+    const still = reducedMotion();
+    // Under reduced motion the cheese is always home, without growing back.
+    if (still) cheeseGoneAt.current = null;
     if (current) {
-      if (reducedMotion()) {
-        // No running rat under reduced motion: it vanishes and the cheese stays home.
+      if (still) {
+        // No running rat under reduced motion: it vanishes.
         live.current = null;
-        cheeseGoneAt.current = null;
         setRun(null);
       } else {
         current.elapsed += dt * 1000;
@@ -200,6 +208,7 @@ export function RatScene() {
             const trot = pose.moving && pose.y === 0 ? 1 : 0;
             g.position.set(pose.x, pose.y + trot * BOB * Math.abs(Math.sin(phase)), pose.z);
             g.rotation.set(0, current.heading, trot * 0.06 * Math.sin(phase));
+            g.scale.setScalar(emergeScale(current.run, current.elapsed));
             if (tail.current) tail.current.rotation.y = 0.35 * Math.sin(phase * (pose.moving ? 0.5 : 0.15));
             feet.current.forEach((f, i) => {
               if (f) f.position.z = (i < 2 ? 0.07 : -0.07) + trot * 0.025 * Math.sin(phase + (i % 3 === 0 ? 0 : Math.PI));
@@ -207,14 +216,14 @@ export function RatScene() {
           }
           const c = cheese.current;
           if (c && carried) {
-            const ahead = MOUTH.ahead * RAT_SCALE;
+            const size = emergeScale(current.run, current.elapsed);
             c.position.set(
-              pose.x + Math.sin(current.heading) * ahead,
-              pose.y + MOUTH.up * RAT_SCALE,
-              pose.z + Math.cos(current.heading) * ahead,
+              pose.x + Math.sin(current.heading) * MOUTH_AHEAD * size,
+              pose.y + MOUTH_UP * size,
+              pose.z + Math.cos(current.heading) * MOUTH_AHEAD * size,
             );
-            c.rotation.set(0, current.heading, 0);
-            c.scale.setScalar(MOUTH.scale);
+            c.rotation.set(0, current.heading + CHEESE_TURN, 0);
+            c.scale.setScalar(size);
           }
         }
       }
@@ -225,7 +234,7 @@ export function RatScene() {
       const scale = cheeseScale(since);
       if (scale >= 1) cheeseGoneAt.current = null;
       c.position.set(CHEESE_SPOT.x, CHEESE_SPOT.y, CHEESE_SPOT.z);
-      c.rotation.set(0, 0.5, 0);
+      c.rotation.set(0, CHEESE_TURN, 0);
       c.scale.setScalar(scale);
       c.visible = scale > 0;
     } else if (c) {
@@ -247,4 +256,4 @@ export function RatScene() {
       )}
     </>
   );
-}
+});

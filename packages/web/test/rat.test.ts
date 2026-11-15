@@ -1,11 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
-import { BOUNDS, CORRIDORS, ROOM_BY_ID, inFootprint, type Point } from '../src/scene/layout.ts';
+import { BOUNDS, CORRIDORS, GATE, ROOM_BY_ID, inFootprint, type Point } from '../src/scene/layout.ts';
 import { WANDER_POINTS, seededRandom } from '../src/scene/ghost.ts';
 import {
   CHEESE_BACK_MS,
   CHEESE_GROW_MS,
   CHEESE_SPOT,
+  EMERGE_MS,
   GRAB_MS,
+  MOUTH_AHEAD,
   HOP_HEIGHT,
   HOP_MS,
   PASS_MAX_MS,
@@ -18,6 +20,7 @@ import {
   TAVERN_WAY,
   THEFT_CHANCE,
   cheeseScale,
+  emergeScale,
   holeMouth,
   installRatCommand,
   nextPassDelay,
@@ -97,10 +100,12 @@ describe('RAT_HOLES', () => {
     for (const h of RAT_HOLES) expect(onEdge(h), JSON.stringify(h)).toBe(true);
   });
 
-  /** Verifies that the holes are exactly the corridor ends lying on the edge */
-  it('keeps every edge corridor end and no inner one', () => {
+  /** Verifies that the holes are exactly the corridor ends lying on the edge, except the open castle gate */
+  it('keeps every edge corridor end but the gate, and no inner one', () => {
+    const gate = (p: Point) => BOUNDS.z1 - p.z <= 0.6 && p.x >= GATE.lo && p.x <= GATE.hi;
+    expect(WANDER_POINTS.some(gate)).toBe(true);
     for (const p of WANDER_POINTS) {
-      expect(RAT_HOLES.some((h) => same(h, p)), JSON.stringify(p)).toBe(onEdge(p));
+      expect(RAT_HOLES.some((h) => same(h, p)), JSON.stringify(p)).toBe(onEdge(p) && !gate(p));
     }
   });
 
@@ -552,6 +557,33 @@ describe('pickPass', () => {
     for (let i = 0; i < 4000; i++) if (pickPass(random) === 'cheese') cheese++;
     expect(cheese / 4000).toBeGreaterThan(0.22);
     expect(cheese / 4000).toBeLessThan(0.28);
+  });
+});
+
+describe('emergeScale', () => {
+  const run = planRun('corridor', seededRandom('emerge'));
+
+  /** Verifies that the rat grows out of its hole at the start and shrinks back at the end */
+  it('grows from 0 over EMERGE_MS, stays at 1, then shrinks to 0 at the end', () => {
+    expect(emergeScale(run, 0)).toBe(0);
+    expect(emergeScale(run, EMERGE_MS / 2)).toBeCloseTo(0.5, 6);
+    expect(emergeScale(run, EMERGE_MS)).toBe(1);
+    expect(emergeScale(run, run.ms / 2)).toBe(1);
+    expect(emergeScale(run, run.ms - EMERGE_MS / 2)).toBeCloseTo(0.5, 6);
+    expect(emergeScale(run, run.ms)).toBe(0);
+    expect(emergeScale(run, run.ms + 100)).toBe(0);
+  });
+});
+
+describe('cheese and mouth', () => {
+  /** Verifies that the cheese waits exactly at the landed rat's mouth, so the grab has no jump */
+  it('puts the cheese MOUTH_AHEAD in front of the landing, along the hop direction', () => {
+    const run = planRun('cheese', seededRandom('mouth'));
+    const pause = sampleRun(run, run.grabAt!);
+    expect(pause.x).toBeCloseTo(TABLE_LANDING.x, 6);
+    expect(pause.z).toBeCloseTo(TABLE_LANDING.z, 6);
+    expect(CHEESE_SPOT.x).toBeCloseTo(TABLE_LANDING.x + Math.sin(pause.heading) * MOUTH_AHEAD, 6);
+    expect(CHEESE_SPOT.z).toBeCloseTo(TABLE_LANDING.z + Math.cos(pause.heading) * MOUTH_AHEAD, 6);
   });
 });
 

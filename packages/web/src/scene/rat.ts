@@ -1,4 +1,4 @@
-import { BOUNDS, ROOM_BY_ID, corridorPath, doorOf, type Point } from './layout.ts';
+import { BOUNDS, GATE, ROOM_BY_ID, corridorPath, doorOf, type Point } from './layout.ts';
 import { WANDER_POINTS } from './ghost.ts';
 
 // The rat gag: now and then a rat scurries along the corridors from one hole in the outer
@@ -27,6 +27,16 @@ export const CHEESE_GROW_MS = 400;
 export const TABLE_TOP = 0.75;
 /** A hole lies this far inside the outer wall: the rat comes out of it and goes back in. */
 const HOLE_DEPTH = 0.6;
+/** The rat grows out of its hole and shrinks back into it over this time, so it never pops. */
+export const EMERGE_MS = 350;
+/**
+ * Distance from the rat's origin to the cheese held in its mouth, in metres, at the size the
+ * rat is drawn. The cheese on the table sits exactly there in front of the landing, so the
+ * grab has no jump.
+ */
+export const MOUTH_AHEAD = 0.42;
+/** The cheese and the landing are this far off the table's middle line, clear of the stew. */
+const TABLE_SIDE = 0.28;
 
 export type RatPass = 'corridor' | 'cheese';
 
@@ -68,8 +78,13 @@ function onEdge(p: Point): boolean {
   );
 }
 
-/** Corridor ends against the outer wall: where a rat appears and disappears. */
-export const RAT_HOLES: readonly Point[] = WANDER_POINTS.filter(onEdge);
+/** The corridor end at the castle gate: open, so no hole there (the rat would vanish on the drawbridge). */
+function atGate(p: Point): boolean {
+  return GATE.side === 's' && BOUNDS.z1 - p.z <= HOLE_DEPTH && p.x >= GATE.lo && p.x <= GATE.hi;
+}
+
+/** Corridor ends against the outer wall, gate excepted: where a rat appears and disappears. */
+export const RAT_HOLES: readonly Point[] = WANDER_POINTS.filter((p) => onEdge(p) && !atGate(p));
 
 /** The point inside the wall behind a hole (or past the gate). */
 export function holeMouth(hole: Point): Point {
@@ -94,10 +109,10 @@ function inTavern(x: number, z: number): Point {
   return { x: TAVERN.cx + x, z: TAVERN.cz + z };
 }
 
-/** The cheese on the table (world position of its centre, on the table top). */
-export const CHEESE_SPOT: Point3 = { ...inTavern(CHEESE_TABLE.x, CHEESE_TABLE.z - 1.75), y: TABLE_TOP };
-/** Where the rat lands on the table, just north of the cheese. */
-export const TABLE_LANDING: Point3 = { ...inTavern(CHEESE_TABLE.x, CHEESE_TABLE.z - 1.95), y: TABLE_TOP };
+/** Where the rat lands on the table, near its north end, facing south (+z). */
+export const TABLE_LANDING: Point3 = { ...inTavern(CHEESE_TABLE.x + TABLE_SIDE, CHEESE_TABLE.z - 1.85), y: TABLE_TOP };
+/** The cheese on the table (world position of its centre, on the table top), at the landed rat's mouth. */
+export const CHEESE_SPOT: Point3 = { ...TABLE_LANDING, z: TABLE_LANDING.z + MOUTH_AHEAD };
 /**
  * The floor way from the tavern door to the foot of the table: along the west wall, then
  * between the first and the middle table. Ends at the foot of the table's north end.
@@ -105,7 +120,7 @@ export const TABLE_LANDING: Point3 = { ...inTavern(CHEESE_TABLE.x, CHEESE_TABLE.
 export const TAVERN_WAY: readonly Point[] = [
   TAVERN_DOOR.inside,
   inTavern(-2.4, CHEESE_TABLE.z - 2.75),
-  inTavern(CHEESE_TABLE.x, CHEESE_TABLE.z - 2.75),
+  inTavern(CHEESE_TABLE.x + TABLE_SIDE, CHEESE_TABLE.z - 2.75),
 ];
 /** The corridor point in front of the tavern door. */
 export const TAVERN_GATE: Point = TAVERN_DOOR.outside;
@@ -225,6 +240,11 @@ export function sampleRun(run: RatRun, ms: number): RatPose {
   return { ...end, heading, carrying: last?.carrying ?? false, moving: false, done: true };
 }
 
+/** Size of the rat `ms` into its run: it grows out of its hole and shrinks back into the next one. */
+export function emergeScale(run: RatRun, ms: number): number {
+  return Math.max(0, Math.min(1, ms / EMERGE_MS, (run.ms - ms) / EMERGE_MS));
+}
+
 /**
  * Scale of the cheese on the table, `sinceGone` ms after the rat that stole it left the
  * scene (it grows back after `CHEESE_BACK_MS`). Null: no cheese was stolen, full size.
@@ -246,9 +266,11 @@ const PASS_NAMES: Record<string, RatPass> = { couloir: 'corridor', corridor: 'co
 
 /**
  * Installs `agentOffice.rat(pass?)` on `target` (the window), next to the other gags' test
- * commands, which it never replaces. `rat()` or `rat('couloir')`: a corridor run;
- * `rat('fromage')`: the cheese theft. Replaces a pass already running. Returns true when a
- * rat starts, false otherwise (unknown pass, reduced motion). Returns the uninstall function.
+ * commands, which it never replaces. Returns the uninstall function.
+ *
+ * The command: `rat()` or `rat('couloir')` starts a corridor run, `rat('fromage')` the
+ * cheese theft, replacing a pass already running. It returns true when a rat starts, false
+ * otherwise (unknown pass, reduced motion).
  *
  * Developer tool: its console messages are not part of the interface, so stay in English.
  */
@@ -262,7 +284,8 @@ export function installRatCommand(target: object, deps: RatCommandDeps): () => v
     const key = typeof name === 'string' ? name.toLowerCase() : '';
     const kind = Object.hasOwn(PASS_NAMES, key) ? PASS_NAMES[key] : undefined;
     if (!kind) {
-      deps.log(`rat: unknown pass ${JSON.stringify(passArg)}; use 'couloir' or 'fromage'`);
+      const shown = typeof passArg === 'string' ? `'${passArg}'` : typeof passArg;
+      deps.log(`rat: unknown pass ${shown}; use 'couloir' or 'fromage'`);
       return false;
     }
     if (deps.reducedMotion()) {
