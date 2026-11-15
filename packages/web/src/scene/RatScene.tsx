@@ -35,9 +35,11 @@ import { turnToward } from './walk.ts';
 const RAT_SCALE = 1.9;
 /** The cheese model (KayKit Restaurant) at this size is about 0.36 m wide: readable at the usual zoom. */
 const CHEESE_SCALE = 0.5 * KIT_SCALE;
-/** Height of the cheese held in the mouth, above the rat's feet (the distance ahead is `MOUTH_AHEAD`). */
-const MOUTH_UP = 0.06 * RAT_SCALE;
-/** Centre of the cheese model along x, in model units: its origin is at its bottom, off-centre in x. */
+/**
+ * Centre of the cheese model along x, in model units (bounding box of food_ingredient_cheese.gltf,
+ * x from -0.335 to 0.642): its origin is at its bottom, off-centre in x. The cheese is dragged at
+ * the rat's foot level, so it does not jump up when grabbed from the table.
+ */
 const CHEESE_CENTRE_X = 0.1535;
 /** The cheese's turn on the table, kept in the mouth (relative to the rat, which lands facing +z). */
 const CHEESE_TURN = 0.5;
@@ -219,7 +221,7 @@ export const RatScene = memo(function RatScene() {
             const size = emergeScale(current.run, current.elapsed);
             c.position.set(
               pose.x + Math.sin(current.heading) * MOUTH_AHEAD * size,
-              pose.y + MOUTH_UP * size,
+              pose.y,
               pose.z + Math.cos(current.heading) * MOUTH_AHEAD * size,
             );
             c.rotation.set(0, current.heading + CHEESE_TURN, 0);
