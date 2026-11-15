@@ -739,6 +739,135 @@ select,
   }
 }
 
+/* The potion of oblivion (context compaction): once the gulp is over (--potion-drink), stars
+   orbit the head and a dazed bubble shows while the agent staggers (--potion-stagger). Timings
+   come from potion.ts through PotionEffect.tsx. Purely visual; remounted on every potion. */
+.potion-anchor {
+  pointer-events: none;
+}
+
+.potion {
+  position: relative;
+  display: block;
+  width: 0;
+  height: 0;
+}
+
+/* A flat ring around the head: wider than the slap's, and turning more slowly, as in a daze. */
+.potion__stars {
+  position: absolute;
+  left: 0;
+  /* Around the head itself (the anchor sits at its top), so the daze reads as the agent's. */
+  top: 0;
+  width: 0;
+  height: 0;
+  opacity: 0;
+  animation:
+    potion-orbit 1.4s linear var(--potion-drink) infinite,
+    potion-fade var(--potion-stagger) ease-out var(--potion-drink) forwards;
+}
+
+.potion__star {
+  position: absolute;
+  left: -10px;
+  top: -11px;
+  font-size: 21px;
+  line-height: 1;
+  color: #f1e4ff;
+  text-shadow:
+    0 0 2px #241238,
+    0 0 4px #7a4fd0,
+    0 1px 1px #241238;
+}
+
+.potion__star:nth-child(1) {
+  transform: translate(36px, 0);
+}
+
+.potion__star:nth-child(2) {
+  transform: translate(0, 36px);
+}
+
+.potion__star:nth-child(3) {
+  transform: translate(-36px, 0);
+}
+
+.potion__star:nth-child(4) {
+  transform: translate(0, -36px);
+}
+
+@keyframes potion-orbit {
+  from {
+    transform: scaleY(0.35) rotate(0deg);
+  }
+  to {
+    transform: scaleY(0.35) rotate(360deg);
+  }
+}
+
+@keyframes potion-fade {
+  0% {
+    opacity: 1;
+  }
+  80% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+/* The dazed words, beside the head, swaying a little. */
+.potion__bubble {
+  position: absolute;
+  left: 34px;
+  top: -40px;
+  padding: 2px 8px;
+  font: 700 italic 15px/1.2 'Comic Sans MS', 'Chalkboard SE', system-ui, sans-serif;
+  color: #241238;
+  background: #e6d8ff;
+  border: 2px solid #241238;
+  border-radius: 10px;
+  white-space: nowrap;
+  opacity: 0;
+  animation:
+    potion-wobble 0.9s ease-in-out var(--potion-drink) infinite alternate,
+    potion-fade var(--potion-stagger) ease-out var(--potion-drink) forwards;
+}
+
+@keyframes potion-wobble {
+  from {
+    transform: rotate(-7deg);
+  }
+  to {
+    transform: rotate(5deg);
+  }
+}
+
+/* Reduced motion: no gulp, no stagger, no orbit: the stars and the bubble show at once, still. */
+@media (prefers-reduced-motion: reduce) {
+  .potion__stars,
+  .potion__bubble {
+    opacity: 1;
+    animation: none;
+  }
+  .potion__stars {
+    transform: scaleY(0.35);
+  }
+}
+
+@media (forced-colors: active) {
+  .potion__star {
+    color: CanvasText;
+    text-shadow: none;
+  }
+  .potion__bubble {
+    color: CanvasText;
+    background: Canvas;
+    border-color: CanvasText;
+  }
+}
+
 .session-list,
 .session-list ul,
 .history {

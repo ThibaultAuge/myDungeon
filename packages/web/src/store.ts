@@ -3,6 +3,7 @@ import { NO_ENV_ID, type EnvironmentView, type HookEventSummary, type ServerMess
 import { initialLang, saveLang, type Lang } from './i18n/index.ts';
 import type { PostId } from './scene/layout.ts';
 import { celebrate } from './scene/celebrate.ts';
+import { drinkPotion, installPotionCommand, potionTarget } from './scene/potion.ts';
 import { isRestId, restType } from './scene/tavern.ts';
 
 export type Route = { page: 'home' } | { page: 'env'; envId: string } | { page: 'debug' };
@@ -95,6 +96,9 @@ export const useOffice = create<OfficeStore>((set) => ({
   },
 }));
 
+// Test command in the console: `agentOffice.potion()` (selected agent) or `agentOffice.potion(id)`.
+installPotionCommand(() => useOffice.getState().selectedAgentId, window);
+
 window.addEventListener('popstate', () => {
   useOffice.setState({
     route: parseRoute(location.pathname),
@@ -135,6 +139,9 @@ function onMessage(msg: ServerMessage): void {
     if (route.page === 'env' && (msg.event.envId ?? NO_ENV_ID) === route.envId) {
       for (const kind of msg.event.celebrations ?? []) celebrate(kind);
     }
+    // Context compaction: the agent drinks the potion of oblivion (a purely visual gag).
+    const drinker = potionTarget(msg.event, useOffice.getState().sessions);
+    if (drinker) drinkPotion(drinker);
   }
 }
 
