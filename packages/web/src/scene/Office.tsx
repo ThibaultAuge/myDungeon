@@ -11,13 +11,16 @@ import { useNow } from '../useNow.ts';
 import { AgentFigure, agentPositions } from './AgentFigure.tsx';
 import { Ambush } from './ambush.ts';
 import { AmbushScene } from './Ambush.tsx';
+import { Fireworks } from './Fireworks.tsx';
 import { Forest } from './Forest.tsx';
 import { Ghosts, isGhost } from './ghost.ts';
 import { GhostFigure } from './GhostFigure.tsx';
 import { NIGHT_SKY, scatterTrees } from './forest.ts';
 import { assignSpots, BOUNDS, SPAWN, type SeatMemory, type SeatRequest, type Spot } from './layout.ts';
 import { ENTRY_SPOT, PAN_MARGIN } from './outside.ts';
+import { Heralds } from './Herald.tsx';
 import { OfficeRooms } from './Room.tsx';
+import { Towers } from './Towers.tsx';
 import { Stage } from './stage.ts';
 import { inheritSeats, NEUTRAL_COLOR, restId, restingAgent, restingTypes, startOrigins } from './tavern.ts';
 
@@ -236,6 +239,10 @@ export function OfficeScene() {
       <SunLight />
       <Forest />
       <OfficeRooms />
+      {/* Celebrations (purely visual): corner towers with their heralds, fireworks. */}
+      <Towers />
+      <Heralds />
+      <Fireworks />
       {resting.map((agent) => (
         <AgentFigure
           key={agent.id}

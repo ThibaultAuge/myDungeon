@@ -2,6 +2,7 @@ import path from 'node:path';
 import { z } from 'zod';
 import type {
   AgentView,
+  Celebration,
   EnvironmentView,
   HookEventSummary,
   RoomId,
@@ -9,6 +10,7 @@ import type {
   WaitReason,
 } from '@agent-office/shared';
 import { NO_ENV_ID } from '@agent-office/shared';
+import { celebrationsFor } from './celebration.ts';
 import { AGENT_ID, HOOK_AGENT_TYPE, label, matchEnvironment, type DefinedAgents, type Environment, type Inventory, type LiveProcess } from './inventory.ts';
 
 // State machine of the office. No I/O here: every function takes the state and `now`,
@@ -686,5 +688,10 @@ export function summarize(ev: HookEvent, s: SessionView, now: number, seq = 0): 
     agentType: ev.agent_type ?? undefined,
     tool: ev.tool_name,
     detail: toolDetail(ev.tool_input) ?? truncate(ev.prompt ?? ev.message, 120),
+    ...celebrationField(celebrationsFor(ev)),
   };
+}
+
+function celebrationField(celebrations: Celebration[]): { celebrations?: Celebration[] } {
+  return celebrations.length > 0 ? { celebrations } : {};
 }
