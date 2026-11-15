@@ -1,5 +1,5 @@
 ---
-description: Use when changing a room's visual identity — per-room wall variants, wall hangs, room lights, decor kinds and decor recipes (decor.ts), the skeleton dummy — or the static mesh merging of posts (merge.ts) and the scene's draw-call count.
+description: Use when changing a room's visual identity — per-room wall variants, wall hangs, room lights, decor kinds and decor recipes (decor.ts) — or the static mesh merging of posts (merge.ts) and the scene's draw-call count.
 ---
 
 # Room identity, decor recipes and mesh merging
@@ -17,15 +17,11 @@ description: Use when changing a room's visual identity — per-room wall varian
   `"pack:name"`; `tallModel(key)` reverses it. `Structure.tsx`'s `CutawayKit` resolves keys
   with `tallModel`.
 - Decor kinds: `DECOR_KINDS` exported from `layout.ts` (tests also keep their own lists).
-  A kind with a recipe in `decor.ts` `DECOR_RECIPES` (`DecorPiece { pack, name, x, z, y?,
+  Every kind has a recipe in `decor.ts` `DECOR_RECIPES` (`DecorPiece { pack, name, x, z, y?,
   rot?, s?, shadow? }`, Y-turn only) is drawn map-wide by `DecorInstances` (`Room.tsx`) from
   `decorPlacement(rooms)`: one instanced batch per pack / model / shadow flag. `shadow`
   defaults to `s >= 0.6`. `PROPS` still has a `Recipe` renderer for each recipe kind
   (`Record<PropKind>` requires it); it is not used on the map.
-- `skeleton` kind has no recipe: `SkeletonDummy.tsx` (pack `skeletons`, `Skeleton_Minion`)
-  plays the idle `Rig_Medium` clip, restarted from `useFrame` when the action is no longer
-  `isScheduled()` (first-load Suspense hide stops it, same gotcha as `Character` in
-  `docs/ai/dungeon-scene.md`); paused under reduced motion; skeleton disposed on unmount.
 - `weeds` and `cobwebs` have `[0, 0]` footprints (walk-through / overhead). Post piece kind
   `keg` exists (taverne).
 - Per-room choices: observatoire chart chest + arched windows; pigeonnier sacks, grass,
@@ -35,7 +31,7 @@ description: Use when changing a room's visual identity — per-room wall varian
   machines woodstove boiler, fuel barrels, hanging chains; arithmetique treasury of bars;
   detente Furniture couch + oval rug, gamer corner (chair, console, guitar), puzzle cube;
   concierge cobwebs in the back corners + cracked walls; garde prison bones / shackle, bear
-  trap, shield / keyring / sword hangs; epreuves skeleton test subject; heraut frames;
+  trap, shield / keyring / sword hangs; epreuves barrels only; heraut frames;
   taverne log stack, pantry crates, kegs, stew and dinner plates.
 - Corridors do not use `floor_tile_large_rocks` (user: looked like a boulder); the model
   stays in the manifest.
@@ -58,7 +54,7 @@ description: Use when changing a room's visual identity — per-room wall varian
 - `packages/web/src/scene/Room.tsx` — `DecorInstances`, room lights.
 - `packages/web/src/scene/dungeon.ts` — `tallKey`, `tallModel`, wall variant and hang
   placement; `Structure.tsx` — `CutawayKit`.
-- `packages/web/src/scene/SkeletonDummy.tsx`, `props.tsx` (`PROPS`, `Recipe`).
+- `packages/web/src/scene/props.tsx` (`PROPS`, `Recipe`).
 - `packages/web/src/scene/merge.ts` — `lookKey`, `mergeStatic`, `unmerge`; `Post.tsx`;
   `highlight.ts` (`baseMaterial`).
 - Tests: `packages/web/test/decor.test.ts`, `merge.test.ts`, `dungeon.test.ts`,
@@ -70,6 +66,8 @@ description: Use when changing a room's visual identity — per-room wall varian
 - New multi-piece decor: add a `DECOR_RECIPES` entry (plus its `PROPS` `Recipe` entry for
   the type) instead of a new component; it is batched automatically. Models come from the
   manifest (see `docs/ai/dungeon-scene.md`).
+- Decor is static models only. Never use a character model (animated or posed) as decor
+  (user decision: a motionless figure reads as a frozen agent).
 - Post children must be static (no changing `visible` / material props after mount); a
   piece that changes opts out with `userData.noMerge`.
 - Hover / selection material swaps must keep going through `highlight.ts` so

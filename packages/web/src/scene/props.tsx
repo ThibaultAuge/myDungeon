@@ -7,7 +7,6 @@ import { KIT_SCALE, type KitItem } from './dungeon.ts';
 import type { Pack } from './kit.ts';
 import { Kit, KitInstances } from './KitInstances.tsx';
 import type { Accent, PropKind, RoomDef } from './layout.ts';
-import { SkeletonDummy } from './SkeletonDummy.tsx';
 
 // Furniture of the dungeon. KayKit models where the packs have one; otherwise simple shapes
 // in colours taken from the KayKit palette, so both kinds sit together.
@@ -488,7 +487,6 @@ export const PROPS: Record<PropKind, PropRenderer> = {
   cobwebs: recipe('cobwebs'),
   prison: recipe('prison'),
   beartrap: recipe('beartrap'),
-  skeleton: () => <SkeletonDummy />,
   logs: recipe('logs'),
   pantry: recipe('pantry'),
 };
