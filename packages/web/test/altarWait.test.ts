@@ -1,8 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { AgentView } from '@agent-office/shared';
 import {
+  ALTAR_POSE_START,
   ALTAR_STAGE_MS,
   ALTAR_STAGES,
+  isLyingDown,
+  trackAltarPose,
+  type AltarPoseTrack,
+  type WantedAltarPose,
   PACE_AMPLITUDE,
   PACE_PERIOD,
   altarForceVersion,
@@ -21,6 +26,7 @@ import {
   parseStageArg,
   shownAltarStage,
 } from '../src/scene/altarWait.ts';
+import { LIE_DOWN_TIME, LIE_UP_TIME, SIT_DOWN_TIME, SIT_UP_TIME, altarClip } from '../src/scene/characters.ts';
 
 const NOW = 1_700_000_000_000;
 type Waiter = Pick<AgentView, 'id' | 'state' | 'waitReason' | 'room' | 'since'>;
@@ -396,5 +402,214 @@ describe('installAltarCommand', () => {
     const target: { agentOffice?: unknown } = { agentOffice: value };
     installAltarCommand(target, { selected: () => null, atAltar: () => [], log: () => {} });
     expect(typeof (target.agentOffice as Record<string, unknown>).autel).toBe('function');
+  });
+});
+
+describe('trackAltarPose', () => {
+  const MOVING = { still: false, exit: false, interrupted: false };
+  const DT = 0.1;
+  /** Runs the tracker for `seconds` wanting `wanted`, from `track`. */
+  function run(track: AltarPoseTrack, wanted: WantedAltarPose, seconds: number, opts = MOVING): AltarPoseTrack {
+    let t = track;
+    for (let s = 0; s < seconds - 1e-9; s += DT) t = trackAltarPose(t, wanted, DT, opts);
+    return t;
+  }
+  /** A figure that arrived at its place and has been calm a while. */
+  const settled = run(ALTAR_POSE_START, null, 1);
+
+  /** Verifies a new pose starts from its beginning and counts its time */
+  it('starts a pose afresh and counts how long it is held', () => {
+    expect(settled).toEqual({ pose: null, held: 0, riseLeft: 0 });
+    const sat = trackAltarPose(settled, 'sitting', DT, MOVING);
+    expect(sat).toEqual({ pose: 'sitting', held: 0, riseLeft: 0 });
+    expect(run(sat, 'sitting', 1).held).toBeCloseTo(1);
+  });
+
+  /** Verifies a figure that appears already in a pose shows it settled, without the way down */
+  it('shows a pose settled on the very first frame only', () => {
+    expect(trackAltarPose(ALTAR_POSE_START, 'sleeping', DT, MOVING)).toEqual({ pose: 'sleeping', held: Infinity, riseLeft: 0 });
+    // A figure that walked in first lies down normally.
+    const walked = trackAltarPose(ALTAR_POSE_START, null, DT, MOVING);
+    expect(trackAltarPose(walked, 'sleeping', DT, MOVING).held).toBe(0);
+  });
+
+  /** Verifies sitting goes straight to lying down, without getting up */
+  it('lies down from sitting without getting up', () => {
+    const sat = run(settled, 'sitting', 2);
+    expect(trackAltarPose(sat, 'sleeping', DT, MOVING)).toEqual({ pose: 'sleeping', held: 0, riseLeft: 0 });
+  });
+
+  /** Verifies a sitting or lying figure gets up for the clip's length when the pose ends */
+  it.each([
+    ['sitting', 'rising-sit', SIT_UP_TIME],
+    ['sleeping', 'rising-lie', LIE_UP_TIME],
+  ] as const)('gets up from %s before anything else', (from, rising, time) => {
+    const down = run(settled, from, 4);
+    for (const next of [null, 'pacing'] as const) {
+      const up = trackAltarPose(down, next, DT, MOVING);
+      expect(up).toEqual({ pose: rising, held: 0, riseLeft: time });
+      // Still getting up just before the end, whatever is wanted meanwhile.
+      const almost = run(up, next, time - 2 * DT);
+      expect(almost.pose).toBe(rising);
+      expect(almost.riseLeft).toBeGreaterThan(0);
+      const stood = run(almost, next, 3 * DT);
+      expect(stood.pose).toBe(next);
+      expect(stood.riseLeft).toBe(0);
+    }
+    // Lying back down from sitting is the only change without getting up; sitting from lying gets up.
+    if (from === 'sleeping') expect(trackAltarPose(down, 'sitting', DT, MOVING).pose).toBe('rising-lie');
+  });
+
+  /** Verifies reduced motion and a doomed figure change pose at once, settled */
+  it('never gets up under reduced motion or for a doomed figure', () => {
+    const lying = run(settled, 'sleeping', 4);
+    for (const opts of [{ ...MOVING, still: true }, { ...MOVING, exit: true }]) {
+      expect(trackAltarPose(lying, null, DT, opts)).toEqual({ pose: null, held: Infinity, riseLeft: 0 });
+      const midway = trackAltarPose(trackAltarPose(lying, null, DT, MOVING), null, DT, opts);
+      expect(midway.riseLeft).toBe(0);
+      expect(trackAltarPose(settled, 'sleeping', DT, opts).held).toBe(Infinity);
+    }
+  });
+
+  /** Verifies a slap or a gulp while getting up ends the rise at once, standing */
+  it('ends getting up when a slap or a gulp shows', () => {
+    const up = trackAltarPose(run(settled, 'sleeping', 4), null, DT, MOVING);
+    expect(up.riseLeft).toBeGreaterThan(0);
+    expect(trackAltarPose(up, null, DT, { ...MOVING, interrupted: true })).toEqual({ pose: null, held: 0, riseLeft: 0 });
+  });
+
+  /** Verifies a figure away from the altar keeps the same track object: no allocation per frame */
+  it('returns the same track while nothing changes away from the altar', () => {
+    expect(trackAltarPose(settled, null, DT, MOVING)).toBe(settled);
+  });
+
+  /** Verifies a slap or a gulp starts the way down over */
+  it('starts the way down over after an interruption', () => {
+    const lying = run(settled, 'sleeping', 5);
+    const hit = trackAltarPose(lying, 'sleeping', DT, { ...MOVING, interrupted: true });
+    expect(hit).toEqual({ pose: 'sleeping', held: 0, riseLeft: 0 });
+  });
+
+  /** Verifies Zzz and cobwebs wait until the figure lies on the floor */
+  it('tells when the figure lies settled', () => {
+    const lay = trackAltarPose(settled, 'sleeping', DT, MOVING);
+    expect(isLyingDown(lay)).toBe(false);
+    expect(isLyingDown(run(lay, 'sleeping', LIE_DOWN_TIME + DT))).toBe(true);
+    expect(isLyingDown(run(settled, 'sitting', 10))).toBe(false);
+    expect(isLyingDown({ pose: 'rising-lie', held: 10, riseLeft: 1 })).toBe(false);
+    expect(isLyingDown(trackAltarPose(ALTAR_POSE_START, 'sleeping', DT, MOVING))).toBe(true);
+  });
+
+  const STILL = { ...MOVING, still: true };
+  /** Steps the tracker wanting `wanted` until the figure stands again. */
+  function standUp(track: AltarPoseTrack, wanted: WantedAltarPose): AltarPoseTrack {
+    let t = track;
+    while (t.riseLeft > 0) t = trackAltarPose(t, wanted, DT, MOVING);
+    return t;
+  }
+
+  /** Verifies a rise goes on when the wanted pose changes midway, then that pose starts afresh */
+  it('finishes getting up when the wanted pose changes midway', () => {
+    const up = trackAltarPose(run(settled, 'sleeping', 4), null, DT, MOVING);
+    const midway = run(up, 'sitting', 1);
+    expect(midway.pose).toBe('rising-lie');
+    expect(midway.riseLeft).toBeCloseTo(LIE_UP_TIME - 1);
+    const changedAgain = run(midway, 'sleeping', 0.5);
+    expect(changedAgain.pose).toBe('rising-lie');
+    // Standing again with sitting wanted: the way down plays, never the settled pose.
+    const stood = standUp(changedAgain, 'sitting');
+    expect(stood).toEqual({ pose: 'sitting', held: 0, riseLeft: 0 });
+    expect(altarClip('sitting', stood.held, false).name).toBe('Sit_Floor_Down');
+  });
+
+  /** Verifies the first-frame settled marker never carries over to a later pose */
+  it('never shows a later pose settled after appearing in one', () => {
+    const appeared = trackAltarPose(ALTAR_POSE_START, 'sleeping', DT, MOVING);
+    expect(trackAltarPose(appeared, 'sleeping', DT, MOVING).held).toBe(Infinity);
+    const up = trackAltarPose(appeared, null, DT, MOVING);
+    expect(up).toEqual({ pose: 'rising-lie', held: 0, riseLeft: LIE_UP_TIME });
+    const stood = standUp(up, null);
+    expect(stood).toEqual({ pose: null, held: 0, riseLeft: 0 });
+    expect(trackAltarPose(stood, 'sleeping', DT, MOVING).held).toBe(0);
+    // Appearing while pacing: the later sitting starts with the way down too.
+    const paced = trackAltarPose(ALTAR_POSE_START, 'pacing', DT, MOVING);
+    expect(paced.held).toBe(Infinity);
+    expect(trackAltarPose(paced, 'sitting', DT, MOVING)).toEqual({ pose: 'sitting', held: 0, riseLeft: 0 });
+  });
+
+  /** Verifies a sleeper stood up directly into a new sit plays the whole way down */
+  it('sits down afresh after getting up from lying', () => {
+    const stood = standUp(trackAltarPose(run(settled, 'sleeping', 4), 'sitting', DT, MOVING), 'sitting');
+    expect(stood).toEqual({ pose: 'sitting', held: 0, riseLeft: 0 });
+    expect(isLyingDown(stood)).toBe(false);
+  });
+
+  /** Verifies pacing is not a floor pose: it ends at once and leads straight to sitting */
+  it('never gets up from pacing', () => {
+    const paced = run(settled, 'pacing', 2);
+    expect(trackAltarPose(paced, null, DT, MOVING)).toEqual({ pose: null, held: 0, riseLeft: 0 });
+    expect(trackAltarPose(paced, 'sitting', DT, MOVING)).toEqual({ pose: 'sitting', held: 0, riseLeft: 0 });
+  });
+
+  /** Verifies a frame longer than the rise stands the figure up in that frame */
+  it('stands up within one long frame and holds still on a zero-length frame', () => {
+    const up = trackAltarPose(run(settled, 'sitting', 2), null, DT, MOVING);
+    expect(up).toEqual({ pose: 'rising-sit', held: 0, riseLeft: SIT_UP_TIME });
+    expect(trackAltarPose(up, null, 0, MOVING)).toEqual(up);
+    expect(trackAltarPose(up, 'pacing', SIT_UP_TIME + 1, MOVING)).toEqual({ pose: 'pacing', held: 0, riseLeft: 0 });
+  });
+
+  /** Verifies reduced motion or a doomed figure cuts a rise short into the wanted pose */
+  it('drops a rise at once under reduced motion or for a doomed figure', () => {
+    const up = trackAltarPose(run(settled, 'sleeping', 4), null, DT, MOVING);
+    for (const opts of [STILL, { ...MOVING, exit: true }]) {
+      expect(trackAltarPose(up, 'pacing', DT, opts)).toEqual({ pose: 'pacing', held: Infinity, riseLeft: 0 });
+      expect(trackAltarPose(up, null, DT, opts)).toEqual({ pose: null, held: Infinity, riseLeft: 0 });
+    }
+  });
+
+  /** Verifies reduced motion keeps counting an unchanged pose, so a lying figure keeps its Zzz */
+  it('keeps counting an unchanged pose under reduced motion', () => {
+    const sat = run(settled, 'sitting', 2);
+    expect(trackAltarPose(sat, 'sitting', DT, STILL).held).toBeCloseTo(sat.held + DT);
+    const lying = run(settled, 'sleeping', 4);
+    expect(isLyingDown(trackAltarPose(lying, 'sleeping', DT, STILL))).toBe(true);
+  });
+
+  /** Verifies turning reduced motion off does not replay the way down of the shown pose */
+  it('keeps a pose taken under reduced motion settled once motion resumes', () => {
+    const sat = trackAltarPose(settled, 'sitting', DT, STILL);
+    const resumed = trackAltarPose(sat, 'sitting', DT, MOVING);
+    expect(resumed).toEqual({ pose: 'sitting', held: Infinity, riseLeft: 0 });
+    expect(altarClip('sitting', resumed.held, false).name).toBe('Sit_Floor_Idle');
+  });
+
+  /** Verifies a calm frame with motion clears the marker left by reduced motion */
+  it('plays the way down for a pose that comes after a calm frame with motion', () => {
+    const calm = run(ALTAR_POSE_START, null, 1, STILL);
+    expect(calm.held).toBe(Infinity);
+    const moving = trackAltarPose(calm, null, DT, MOVING);
+    expect(moving).toEqual({ pose: null, held: 0, riseLeft: 0 });
+    const lay = trackAltarPose(moving, 'sleeping', DT, MOVING);
+    expect(lay.held).toBe(0);
+    expect(isLyingDown(lay)).toBe(false);
+  });
+
+  /** Verifies Zzz start exactly when Lie_Down ends, and never without the sleeping pose */
+  it('switches isLyingDown at the Lie_Down length', () => {
+    expect(isLyingDown({ pose: 'sleeping', held: LIE_DOWN_TIME, riseLeft: 0 })).toBe(true);
+    expect(isLyingDown({ pose: 'sleeping', held: LIE_DOWN_TIME - 0.001, riseLeft: 0 })).toBe(false);
+    expect(isLyingDown(ALTAR_POSE_START)).toBe(false);
+    expect(isLyingDown({ pose: 'pacing', held: Infinity, riseLeft: 0 })).toBe(false);
+  });
+
+  /** Verifies the tracked time drives the clips: way down, resting loop, then getting up */
+  it('drives the sit clips frame by frame through the tracked time', () => {
+    const sat = trackAltarPose(settled, 'sitting', DT, MOVING);
+    const clipOf = (t: AltarPoseTrack) => altarClip(t.pose as 'sitting' | 'rising-sit', t.held, false);
+    expect(clipOf(run(sat, 'sitting', SIT_DOWN_TIME / 2)).name).toBe('Sit_Floor_Down');
+    const rested = run(sat, 'sitting', SIT_DOWN_TIME + 0.5);
+    expect(clipOf(rested)).toEqual({ name: 'Sit_Floor_Idle', loop: true, timeScale: 1, frozen: false, frozenAt: 0 });
+    expect(clipOf(trackAltarPose(rested, null, DT, MOVING)).name).toBe('Sit_Floor_StandUp');
   });
 });

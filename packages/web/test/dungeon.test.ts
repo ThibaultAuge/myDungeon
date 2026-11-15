@@ -56,8 +56,10 @@ import {
 import {
   CLIPS,
   DEATH_CLIP_TIME,
-  SIT_CLIP,
-  SIT_POSE_TIME,
+  LIE_DOWN_TIME,
+  LIE_UP_TIME,
+  SIT_DOWN_TIME,
+  SIT_UP_TIME,
   HIT_CLIP_TIME,
   LOOKS,
   MAIN_BODY,
@@ -637,15 +639,19 @@ describe('kit manifest', () => {
   });
 
   /**
-   * Verifies that the sitting pose of the endless wait at the altar lies inside its clip
+   * Verifies that the way down and the getting up of the endless wait at the altar last as long as their clips
    */
-  it('holds the altar sitting pose inside its clip', () => {
-    const json = glbJson('animations', CLIP_FILE[SIT_CLIP]);
-    const anim = json.animations?.find((a) => a.name === SIT_CLIP);
-    expect(anim, `${SIT_CLIP} found`).toBeDefined();
+  it.each([
+    ['Sit_Floor_Down', SIT_DOWN_TIME],
+    ['Sit_Floor_StandUp', SIT_UP_TIME],
+    ['Lie_Down', LIE_DOWN_TIME],
+    ['Lie_StandUp', LIE_UP_TIME],
+  ] as const)('times the altar clip %s as long as in its file', (clip, time) => {
+    const json = glbJson('animations', CLIP_FILE[clip]);
+    const anim = json.animations?.find((a) => a.name === clip);
+    expect(anim, `${clip} found`).toBeDefined();
     const length = Math.max(...anim!.samplers.map((s) => json.accessors?.[s.input]?.max?.[0] ?? 0));
-    expect(SIT_POSE_TIME).toBeGreaterThan(0);
-    expect(SIT_POSE_TIME).toBeLessThan(length);
+    expect(length).toBeCloseTo(time, 2);
   });
 
   /**

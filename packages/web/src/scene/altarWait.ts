@@ -2,6 +2,7 @@
 // looks (paces, sits down, falls asleep, gathers cobwebs). A purely visual gag: nothing is
 // sent to the server. Pure module, no three.js, testable in node.
 import type { AgentView } from '@agent-office/shared';
+import { LIE_DOWN_TIME, LIE_UP_TIME, SIT_UP_TIME, type AltarPose } from './characters.ts';
 import { gagCommands } from './gagCommands.ts';
 
 /** How far an agent waiting at the altar has given up, from fresh to buried in cobwebs. */
@@ -229,4 +230,64 @@ export function altarHeading(stage: AltarStage, facing: number, t: number): numb
   if (stage === 'pacing') return paceHeading(facing, paceOffset(t).dir);
   if (stage === 'sitting') return facing + Math.PI;
   return facing;
+}
+
+/**
+ * The altar pose a figure shows, carried from frame to frame: the pose, how long it has
+ * been shown (seconds; endless for a figure that appeared already in it) and, while it gets
+ * up from the floor, the seconds left until it stands.
+ */
+export interface AltarPoseTrack {
+  pose: AltarPose | null;
+  held: number;
+  riseLeft: number;
+}
+
+/** A figure that has just appeared: a pose it starts in is shown settled, without the way down. */
+export const ALTAR_POSE_START: AltarPoseTrack = Object.freeze({ pose: null, held: Infinity, riseLeft: 0 });
+
+/** The pose the stage asks of a figure at its place; null when it is not at its place or calm. */
+export type WantedAltarPose = 'pacing' | 'sitting' | 'sleeping' | null;
+
+/**
+ * Next frame of the altar pose. A figure sitting or lying gets up first (the walk waits for
+ * it, see AgentFigure) when that pose ends, unless it only goes from sitting to sleeping.
+ * Reduced motion and a figure walking out to its death never get up: the pose changes at
+ * once. A slap or a gulp (`interrupted`, while its clip shows) leaves the figure standing: it
+ * ends a getting up at once, and the way down starts over after it.
+ */
+export function trackAltarPose(
+  track: AltarPoseTrack,
+  wanted: WantedAltarPose,
+  dt: number,
+  opts: { still: boolean; exit: boolean; interrupted: boolean },
+): AltarPoseTrack {
+  if (opts.still || opts.exit) {
+    return { pose: wanted, held: wanted === track.pose ? track.held + dt : Infinity, riseLeft: 0 };
+  }
+  if (track.riseLeft > 0) {
+    // The hit and the gulp both end standing: getting up is over.
+    if (opts.interrupted) return { pose: wanted, held: 0, riseLeft: 0 };
+    const riseLeft = Math.max(0, track.riseLeft - dt);
+    if (riseLeft > 0) return { pose: track.pose, held: track.held + dt, riseLeft };
+    // Standing again: whatever is wanted now starts afresh.
+    return { pose: wanted, held: 0, riseLeft: 0 };
+  }
+  const from = track.pose;
+  // Nothing changes for a figure away from the altar (most of them): no allocation per frame.
+  if (wanted === null && from === null && track.held === 0) return track;
+  // Without a pose, `held` only marks the first frame (endless): from the second one on, a
+  // pose that comes is a new one.
+  if (wanted === from) return { pose: from, held: from === null || opts.interrupted ? 0 : track.held + dt, riseLeft: 0 };
+  if ((from === 'sitting' || from === 'sleeping') && !(from === 'sitting' && wanted === 'sleeping')) {
+    const sat = from === 'sitting';
+    return { pose: sat ? 'rising-sit' : 'rising-lie', held: 0, riseLeft: sat ? SIT_UP_TIME : LIE_UP_TIME };
+  }
+  // Appearing already in a pose: shown settled. Otherwise the new pose starts from its beginning.
+  return { pose: wanted, held: from === null && track.held === Infinity ? Infinity : 0, riseLeft: 0 };
+}
+
+/** The figure lies settled on the floor (past Lie_Down): Zzz and cobwebs may show. */
+export function isLyingDown(track: AltarPoseTrack): boolean {
+  return track.pose === 'sleeping' && track.held >= LIE_DOWN_TIME;
 }
