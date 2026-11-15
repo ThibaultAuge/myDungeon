@@ -22,6 +22,7 @@ import { ENTRY_SPOT, PAN_MARGIN } from './outside.ts';
 import { OfficeRooms } from './Room.tsx';
 import { MishapProps } from './MishapProps.tsx';
 import { MishapWatcher } from './MishapWatcher.tsx';
+import { RatScene } from './RatScene.tsx';
 import { Stage } from './stage.ts';
 import { inheritSeats, NEUTRAL_COLOR, restId, restingAgent, restingTypes, startOrigins } from './tavern.ts';
 
@@ -266,6 +267,7 @@ export function OfficeScene({ dungeon }: { dungeon?: Dungeon }) {
       <OfficeRooms />
       <MishapWatcher />
       <MishapProps />
+      <RatScene />
       {resting.map((agent) => (
         <AgentFigure
           key={agent.id}
