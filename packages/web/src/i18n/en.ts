@@ -70,6 +70,10 @@ export const en: Messages = {
   slap: {
     sound: 'SLAP!',
   },
+  mishap: {
+    boiler: 'POOF!',
+    flask: 'BLOOP!',
+  },
   potion: {
     bubble: 'Where am I?',
   },

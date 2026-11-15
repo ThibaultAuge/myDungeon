@@ -871,6 +871,68 @@ select,
   }
 }
 
+/* Mishaps (mishap.ts): a comic word over an agent whose command failed. Same anchor as the
+   slap, a little lower so both can show at once. Purely visual; remounted on every mishap. */
+.mishap {
+  position: relative;
+  display: block;
+  width: 0;
+  height: 0;
+}
+
+.mishap__bubble {
+  position: absolute;
+  right: 22px;
+  top: -84px;
+  padding: 2px 8px;
+  font: 900 16px/1.2 'Comic Sans MS', 'Chalkboard SE', system-ui, sans-serif;
+  letter-spacing: 0.02em;
+  color: #f2ede4;
+  background: #3a3430;
+  border: 2px solid #120f0d;
+  border-radius: 10px;
+  white-space: nowrap;
+  transform: rotate(6deg);
+  opacity: 0;
+  animation:
+    mishap-pop 0.25s ease-out forwards,
+    slap-fade 1.4s ease-out forwards;
+}
+
+.mishap--flask .mishap__bubble {
+  color: #0d2a12;
+  background: #7dff8f;
+  border-color: #0d2a12;
+}
+
+@keyframes mishap-pop {
+  0% {
+    transform: rotate(6deg) scale(0.3);
+  }
+  70% {
+    transform: rotate(6deg) scale(1.2);
+  }
+  100% {
+    transform: rotate(6deg) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mishap__bubble {
+    opacity: 1;
+    animation: none;
+  }
+}
+
+@media (forced-colors: active) {
+  .mishap__bubble,
+  .mishap--flask .mishap__bubble {
+    color: CanvasText;
+    background: Canvas;
+    border-color: CanvasText;
+  }
+}
+
 .session-list,
 .session-list ul,
 .history {

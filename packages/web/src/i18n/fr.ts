@@ -78,6 +78,12 @@ export const fr = {
     /** Comic sound word of the slap, shown in a bubble over the slapped agent. */
     sound: 'PAF !',
   },
+  mishap: {
+    /** Comic word over an agent whose command failed in the engine room (the boiler goes poof). */
+    boiler: 'POUF !',
+    /** Comic word over an agent whose test run failed (the alchemy flask blows up). */
+    flask: 'BLOUP !',
+  },
   potion: {
     /** Dazed words of an agent that just drank the potion of oblivion (context compaction), in a bubble over its head. */
     bubble: 'Où suis-je ?',

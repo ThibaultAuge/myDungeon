@@ -26,6 +26,9 @@ import { SlapEffect } from './SlapEffect.tsx';
 import { SlapHand } from './SlapHand.tsx';
 import { SWING_IMPACT } from './slapSwing.ts';
 import { playSlapSound, preloadSlapSound } from '../ui/slapSound.ts';
+import { MISHAP_BUBBLE_MS, onMishap, SOOT_MS, type MishapKind } from './mishap.ts';
+import { MishapEffect } from './MishapEffect.tsx';
+import { Soot } from './Soot.tsx';
 import { advance, approach, nextSpeed, remainingDistance, turnToward } from './walk.ts';
 
 /** Live positions of the figures, read by the camera to follow the selected agent. */
@@ -420,6 +423,28 @@ function AgentFigureImpl({ agent, name, color, spot, start, selected, onSelect, 
     };
   }, [agent.id]);
 
+  // A failed command (mishap.ts): soot on the figure and a comic bubble, nothing else.
+  const [mishap, setMishap] = useState<{ n: number; kind: MishapKind; bubble: boolean } | null>(null);
+  /** A ref, as for the slaps: a re-run of the effect must never reuse a number `Soot` already armed. */
+  const mishaps = useRef(0);
+  useEffect(() => {
+    if (exit) return;
+    let bubbleTimer: ReturnType<typeof setTimeout> | undefined;
+    let sootTimer: ReturnType<typeof setTimeout> | undefined;
+    const off = onMishap(agent.id, (kind) => {
+      setMishap({ n: ++mishaps.current, kind, bubble: true });
+      clearTimeout(bubbleTimer);
+      clearTimeout(sootTimer);
+      bubbleTimer = setTimeout(() => setMishap((m) => m && { ...m, bubble: false }), MISHAP_BUBBLE_MS);
+      sootTimer = setTimeout(() => setMishap(null), SOOT_MS);
+    });
+    return () => {
+      off();
+      clearTimeout(bubbleTimer);
+      clearTimeout(sootTimer);
+      setMishap(null);
+    };
+  }, [agent.id, exit]);
   // The potion of oblivion (PreCompact) is purely visual too: gulp, stagger, stars and bubble.
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | undefined;
@@ -719,8 +744,10 @@ function AgentFigureImpl({ agent, name, color, spot, start, selected, onSelect, 
       {connected && onSelect && (
         <Html position={[0, SLAP_Y, 0]} center className="slap-anchor" zIndexRange={[30, 20]}>
           {slap !== null && <SlapEffect key={slap} />}
+          {mishap?.bubble && <MishapEffect key={mishap.n} kind={mishap.kind} />}
         </Html>
       )}
+      {!exit && <Soot root={group} mishap={mishap} />}
       {/* Mounted only while the potion acts; the effect remounts on each potion. */}
       {connected && potion !== null && !exit && (
         <Html position={[0, POTION_Y, 0]} center className="potion-anchor" zIndexRange={[30, 20]}>
