@@ -8,9 +8,12 @@ Agents’ l**AI**r est un petit repaire en 3D. Le nom reste en anglais dans tout
 - **Un personnage par agent**, de la couleur de sa session. Les sous-agents apparaissent, puis retournent à la taverne.
 - **Une baffe façon Dungeon Keeper** : clic droit sur un personnage, purement pour rire.
 - **Une potion d'oubli** : quand une session compacte son contexte, son agent boit une fiole et titube, purement pour rire.
+- **Une chaudière qui explose** : quand un outil échoue dans la salle des machines, elle fait « pouf » et l'agent se noircit de suie, purement pour rire.
+- **Une fiole qui explose** : quand les tests échouent, la fiole du labo explose en vert et l'agent se couvre de suie verte, purement pour rire.
 - **Entrées et sorties** : le chevalier d'une session entre au château par le pont-levis. Quand la session disparaît, il sort par la porte et meurt sous les coups de squelettes.
 - **Trois états lisibles** : il travaille, il attend ton prochain message, il a terminé.
 - **L'autel des requêtes** : les agents qui ont besoin de toi (permission, question, erreur) font la queue.
+- **L'attente interminable** : plus un agent attend ta réponse à l'autel, plus il se lasse. Il fait les cent pas, s'assoit, s'endort, puis se couvre de toiles d'araignée, purement pour rire.
 - **Une fiche par agent** : contexte de sa session, serveurs web locaux, conversation en lecture seule.
 - **Trois langues** : français, allemand et anglais.
 - **Temps réel, sans influence sur Claude** : les hooks et les fichiers locaux de l'app desktop alimentent le serveur, qui ne fait qu'observer.

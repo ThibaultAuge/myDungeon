@@ -4,6 +4,7 @@ import { initialLang, saveLang, type Lang } from './i18n/index.ts';
 import type { PostId } from './scene/layout.ts';
 import { celebrate } from './scene/celebrate.ts';
 import { drinkPotion, installPotionCommand, potionTarget } from './scene/potion.ts';
+import { installMishapCommands } from './scene/mishap.ts';
 import { isRestId, restType } from './scene/tavern.ts';
 
 export type Route = { page: 'home' } | { page: 'env'; envId: string } | { page: 'debug' };
@@ -98,6 +99,8 @@ export const useOffice = create<OfficeStore>((set) => ({
 
 // Test command in the console: `agentOffice.potion()` (selected agent) or `agentOffice.potion(id)`.
 installPotionCommand(() => useOffice.getState().selectedAgentId, window);
+// Same for the mishaps: `agentOffice.boiler(id?)` and `agentOffice.flask(id?)`.
+installMishapCommands(() => useOffice.getState().selectedAgentId, window);
 
 window.addEventListener('popstate', () => {
   useOffice.setState({

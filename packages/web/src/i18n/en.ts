@@ -64,8 +64,15 @@ export const en: Messages = {
     folder: 'Folder',
     lastMessage: 'Last message',
   },
+  altarWait: {
+    snore: 'Zzz',
+  },
   slap: {
     sound: 'SLAP!',
+  },
+  mishap: {
+    boiler: 'POOF!',
+    flask: 'BLOOP!',
   },
   potion: {
     bubble: 'Where am I?',

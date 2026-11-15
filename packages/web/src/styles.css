@@ -519,7 +519,10 @@ select,
   animation: request-bob 1.6s ease-in-out infinite;
 }
 
-.agent-tag-anchor[data-travelling] .request-bubble {
+.agent-tag-anchor[data-travelling] .request-bubble,
+.agent-tag-anchor[data-travelling] .snore,
+/* Zzz only while the sleeping pose shows (AgentFigure sets data-asleep every frame). */
+.agent-tag-anchor:not([data-asleep]) .snore {
   visibility: hidden;
 }
 
@@ -862,6 +865,68 @@ select,
     text-shadow: none;
   }
   .potion__bubble {
+    color: CanvasText;
+    background: Canvas;
+    border-color: CanvasText;
+  }
+}
+
+/* Mishaps (mishap.ts): a comic word over an agent whose command failed. Same anchor as the
+   slap, a little lower so both can show at once. Purely visual; remounted on every mishap. */
+.mishap {
+  position: relative;
+  display: block;
+  width: 0;
+  height: 0;
+}
+
+.mishap__bubble {
+  position: absolute;
+  right: 22px;
+  top: -84px;
+  padding: 2px 8px;
+  font: 900 16px/1.2 'Comic Sans MS', 'Chalkboard SE', system-ui, sans-serif;
+  letter-spacing: 0.02em;
+  color: #f2ede4;
+  background: #3a3430;
+  border: 2px solid #120f0d;
+  border-radius: 10px;
+  white-space: nowrap;
+  transform: rotate(6deg);
+  opacity: 0;
+  animation:
+    mishap-pop 0.25s ease-out forwards,
+    slap-fade 1.4s ease-out forwards;
+}
+
+.mishap--flask .mishap__bubble {
+  color: #0d2a12;
+  background: #7dff8f;
+  border-color: #0d2a12;
+}
+
+@keyframes mishap-pop {
+  0% {
+    transform: rotate(6deg) scale(0.3);
+  }
+  70% {
+    transform: rotate(6deg) scale(1.2);
+  }
+  100% {
+    transform: rotate(6deg) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mishap__bubble {
+    opacity: 1;
+    animation: none;
+  }
+}
+
+@media (forced-colors: active) {
+  .mishap__bubble,
+  .mishap--flask .mishap__bubble {
     color: CanvasText;
     background: Canvas;
     border-color: CanvasText;
@@ -1451,6 +1516,41 @@ select,
   0% {
     opacity: 0;
     transform: translate(0, 0) rotate(-10deg);
+/* The endless wait at the altar (altarWait.ts): Zzz rising over a sleeping agent, next to
+   its request bubble. Decorative, inside the name tag. */
+.snore {
+  position: absolute;
+  left: calc(50% + 22px);
+  bottom: calc(100% + 6px);
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+
+.snore__z {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  font: italic 700 15px system-ui, -apple-system, 'Segoe UI', sans-serif;
+  color: #f4ecd8;
+  /* A dark outline keeps the light letters readable on any floor. */
+  text-shadow:
+    0 0 2px #1a1206,
+    0 0 2px #1a1206,
+    0 1px 3px rgba(0, 0, 0, 0.6);
+  white-space: nowrap;
+  opacity: 0;
+  animation: snore-rise 2.4s ease-out infinite;
+}
+
+.snore__z + .snore__z {
+  animation-delay: 1.2s;
+}
+
+@keyframes snore-rise {
+  0% {
+    opacity: 0;
+    transform: translate(0, 0) scale(0.7);
   }
   20% {
     opacity: 1;
@@ -1472,6 +1572,22 @@ select,
 }
 @media (forced-colors: active) {
   .herald-notes span {
+    transform: translate(14px, -26px) scale(1.15);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .snore__z {
+    animation: none;
+    opacity: 1;
+  }
+  .snore__z + .snore__z {
+    display: none;
+  }
+}
+
+@media (forced-colors: active) {
+  .snore__z {
     color: CanvasText;
     text-shadow: none;
   }

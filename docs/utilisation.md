@@ -42,6 +42,7 @@ L'autel est au centre de la scène. Tout agent qui a besoin de toi y fait la que
 - Les suivants attendent debout derrière lui, le plus ancien en tête.
 - Quand tu réponds au premier, il repart vers son poste et la file avance d'une place.
 - Si la file s'allonge, elle contourne la nef par les couloirs.
+- Plus un agent attend, plus il se lasse : il fait les cent pas, s'assoit, s'endort, puis se couvre de toiles d'araignée. Le détail est dans [L'attente interminable](lieux.md#lattente-interminable).
 
 Un agent qui attend seulement ton prochain message ne fait pas la queue. Il reste à la taverne.
 
@@ -139,7 +140,7 @@ Les personnages viennent du pack KayKit Adventurers 2.0 :
 Tous les agents d'un même type se ressemblent, y compris au repos à la taverne. La liste complète est dans [personnages.md](personnages.md).
 
 - **Déplacement.** Ils marchent ou courent entre les pièces. Ils font une animation de travail quand ils travaillent.
-- **Attente.** Ils regardent autour d'eux, le losange ambre restant affiché. Le premier de la file s'agenouille devant l'autel.
+- **Attente.** Ils regardent autour d'eux, le losange ambre restant affiché. Le premier de la file s'agenouille devant l'autel, puis se relève au bout d'une minute.
 - **Couleur.** Chaque personnage a un disque au sol de la couleur de sa session, et le bord de son étiquette porte cette même couleur. L'étiquette du personnage sélectionné a un contour bleu et du texte en gras.
 - **Réduction des animations.** Si la réduction des animations est activée dans le système, les personnages gardent une pose fixe et n'effectuent pas de surgissement. Ils se déplacent toujours d'une pièce à l'autre. Le chevalier d'une session supprimée disparaît sans marche ni combat, et les squelettes ne s'affichent pas.
 
@@ -160,6 +161,19 @@ Quand Claude Code compacte le contexte d'une session, l'agent concerné boit une
 Cet effet est purement esthétique, comme la baffe : rien n'agit sur le travail de l'agent. Il suppose les hooks installés. Après une mise à jour, relance `npm run hooks:install`.
 
 - **Réduction des animations.** Ni fiole, ni gorgée, ni titubation : les étoiles et la bulle restent immobiles.
+
+## La chaudière et la fiole
+
+Deux accidents visuels, déclenchés par un outil qui échoue. Ils ne jouent jamais sur une réussite.
+
+- **La chaudière.** Quand un outil échoue alors que l'agent se trouve dans la salle des machines, la chaudière fait « pouf » : une bouffée de fumée claire et une brève lueur. L'agent reste noirci de suie environ 4,5 s : 3 s pleines, puis la suie disparaît peu à peu. Une bulle « POUF ! » apparaît (« POOF! » en anglais, « PUFF! » en allemand).
+- **La fiole.** Quand une commande `Bash` ou `PowerShell` qui lance des tests échoue, la fiole du labo de la salle des épreuves explose en vert. L'agent, en général dans la salle des machines, est couvert de suie verte environ 4,5 s, avec une bulle « BLOUP ! » (« BLOOP! » en anglais, « BLUBB! » en allemand). La commande peut enchaîner plusieurs instructions : le gag la reconnaît tant que la commande de test figure dans ses 200 premiers caractères.
+
+Le déclencheur, les commandes de test reconnues et les commandes pour tester ces gags sont décrits dans [Commandes console](commandes-console.md).
+
+Ces effets sont purement esthétiques, comme la baffe et la potion : rien n'est envoyé au serveur, et rien n'agit sur le travail de l'agent. Ils lisent seulement les événements de hooks déjà diffusés, et supposent les hooks installés.
+
+- **Réduction des animations.** Ni fumée, ni lueur : la bulle reste fixe, et la suie disparaît d'un coup au lieu de s'estomper.
 
 ## La fiche d'agent
 
