@@ -126,8 +126,11 @@ export const PROP_GRIP: Readonly<Record<string, Grip>> = {
   bucket_metal: upright(0.6),
   // Turned the other way, so it hangs from its handle below the hand.
   lantern: grip([0, 0, -Q], 0.55),
-  // The potion of oblivion (potion.ts), a dungeon shelf bottle.
-  bottle_C_green: upright(0.8),
+  // The potion of oblivion (potion.ts), a dungeon shelf bottle. Modelled standing, like the
+  // Adventurers props, so no quarter turn (the tools' one laid it on its side in the hand).
+  // Its origin is at its base and its neck at the top (~0.9 units): lowered so the neck sits in
+  // the fist and the body hangs below the hand.
+  bottle_C_green: Object.freeze({ position: Object.freeze([0, -0.62, 0]), rotation: Object.freeze([0, 0, 0]), scale: 0.8 }) as Grip,
 };
 
 /** The potion of oblivion, held in the right hand while the agent drinks it (potion.ts). */

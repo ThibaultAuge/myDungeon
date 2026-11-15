@@ -121,7 +121,8 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cast
   materials shared, `castShadow` on the clone's meshes) and mounts it via R3F `createPortal`
   into bone `handslotr` / `handslotl` (GLTFLoader strips the dots of `handslot.r`), inside a
   group carrying the grip. A dev warning fires when a hand slot is missing. Grips:
-  `PROP_GRIP` / `gripFor` hold rotation/scale for `tools` models only; Adventurers props fit
+  `PROP_GRIP` / `gripFor` hold position/rotation/scale for `tools` models and the `dungeon`
+  potion bottle; Adventurers props fit
   the slot as they are. The slot's local X points down, so upright tools turn a quarter turn
   on Z; the lantern turns on −Z (hangs).
 - Walking: cruise `CRUISE_SPEED` 9 u/s, `ACCELERATION` 18 u/s², `MIN_SPEED` 0.3, with
@@ -256,7 +257,8 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cast
     spawning/loading ignores the potion (unless reduced motion); doomed (`exit`) figures
     ignore it. Suspense cleanup resets `potionAt` and the HTML state.
   - Bottle: `POTION_PROP` (`dungeon` pack `bottle_C_green`, `PROP_GRIP` entry
-    `upright(0.8)`) is mounted through `Character`'s `extra` prop in its own Suspense for the
+    rotation `[0, 0, 0]`, scale 0.8, position `[0, -0.62, 0]` so the neck sits in the fist
+    and the body hangs below the hand) is mounted through `Character`'s `extra` prop in its own Suspense for the
     whole effect. Its visibility, and hiding the look's right prop (only once the bottle has
     loaded), is set per frame from the chosen clip (`choice.name === 'Use_Item' &&
     !scripted`), never from a timer.
@@ -358,6 +360,8 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cast
   `useOffice.setState({ sessions: [], roster: [...] })` so the tavern shows one resting
   figure per type. Hide other objects and move the camera for close-ups, mutate the grip
   group under the hand bone live, then copy the values into `PROP_GRIP`.
+  `dungeon`-pack models are modelled upright with the origin at their base, unlike RPG
+  Tools items: no quarter turn (it lays them on their side); offset `position` instead.
 - Repeated pieces go through `<KitInstances>`; one-off furniture through `<Kit>`; a new
   prop is a `PROPS` entry; multi-piece room decor is a recipe (`docs/ai/room-identity.md`).
   Put placement logic in `dungeon.ts` so it stays testable.
