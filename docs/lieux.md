@@ -90,7 +90,7 @@ au survol.
 
 Les agents qui ont besoin de l'humain (permission, question, erreur) viennent devant l'autel. Un agent qui attend seulement ton prochain prompt reste à la taverne. Plutôt que de s'agglutiner, les agents de l'autel **se mettent en file**, les uns derrière les autres dans l'allée :
 
-- le **premier** de la file est à genoux devant l'autel, avec la bulle rouge de sa demande (« … » pour une permission, « ? » pour une question, « ! » pour une erreur) ;
+- le **premier** de la file est à genoux devant l'autel, avec la bulle rouge de sa demande (« … » pour une permission, « ? » pour une question, « ! » pour une erreur). Au bout d'une minute, il se relève (voir [L'attente interminable](#lattente-interminable)) ;
 - les **suivants** attendent debout derrière lui, par ordre d'arrivée (le plus ancien en tête) ;
 - quand l'humain répond au premier, il repart vers son poste et toute la file **avance d'une place**.
 
@@ -99,6 +99,21 @@ La file est visuelle : elle ne change rien côté Claude Code. L'humain peut tou
 Quand la réponse depuis la 3D sera possible (voir [conception.md](conception.md)), l'autel deviendra le guichet : on traitera la demande du premier de la file.
 
 Si la file dépasse la longueur de l'allée, elle tourne autour de la nef.
+
+### L'attente interminable
+
+Un agent qui attend ta réponse à l'autel finit par s'ennuyer. Chaque agent de la file suit sa propre minuterie, depuis le moment où il s'est mis à attendre. L'attente se voit à l'écran, purement pour rire, sans rien changer à Claude Code :
+
+- **Dès 1 min** : il fait les cent pas sur place, d'un pas de côté puis de l'autre. Le premier de la file se relève et ne s'agenouille plus.
+- **Dès 3 min** : il s'assoit par terre, le dos tourné à l'autel. Il boude.
+- **Dès 5 min** : il s'endort, allongé, avec une bulle « Zzz ».
+- **Dès 10 min** : des toiles d'araignée le recouvrent.
+
+Dès que tu réponds, il se relève et repart vers son poste, comme d'habitude. Une baffe ou une gorgée de potion d'oubli interrompt sa pose un court instant, puis elle reprend.
+
+**Réduction des animations.** L'agent ne fait pas les cent pas et reste dans sa pose calme. Les poses assise et endormie, ainsi que les toiles, restent. La bulle « Zzz » ne bouge pas.
+
+Pour voir ces paliers sans attendre, voir [Commandes console](commandes-console.md).
 
 ## Places par pièce
 

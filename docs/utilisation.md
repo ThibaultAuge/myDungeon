@@ -42,6 +42,7 @@ L'autel est au centre de la scène. Tout agent qui a besoin de toi y fait la que
 - Les suivants attendent debout derrière lui, le plus ancien en tête.
 - Quand tu réponds au premier, il repart vers son poste et la file avance d'une place.
 - Si la file s'allonge, elle contourne la nef par les couloirs.
+- Plus un agent attend, plus il se lasse : il fait les cent pas, s'assoit, s'endort, puis se couvre de toiles d'araignée. Le détail est dans [L'attente interminable](lieux.md#lattente-interminable).
 
 Un agent qui attend seulement ton prochain message ne fait pas la queue. Il reste à la taverne.
 
@@ -139,7 +140,7 @@ Les personnages viennent du pack KayKit Adventurers 2.0 :
 Tous les agents d'un même type se ressemblent, y compris au repos à la taverne. La liste complète est dans [personnages.md](personnages.md).
 
 - **Déplacement.** Ils marchent ou courent entre les pièces. Ils font une animation de travail quand ils travaillent.
-- **Attente.** Ils regardent autour d'eux, le losange ambre restant affiché. Le premier de la file s'agenouille devant l'autel.
+- **Attente.** Ils regardent autour d'eux, le losange ambre restant affiché. Le premier de la file s'agenouille devant l'autel, puis se relève au bout d'une minute.
 - **Couleur.** Chaque personnage a un disque au sol de la couleur de sa session, et le bord de son étiquette porte cette même couleur. L'étiquette du personnage sélectionné a un contour bleu et du texte en gras.
 - **Réduction des animations.** Si la réduction des animations est activée dans le système, les personnages gardent une pose fixe et n'effectuent pas de surgissement. Ils se déplacent toujours d'une pièce à l'autre. Le chevalier d'une session supprimée disparaît sans marche ni combat, et les squelettes ne s'affichent pas.
 

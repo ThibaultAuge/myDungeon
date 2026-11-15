@@ -13,6 +13,7 @@ Agents’ l**AI**r est un petit repaire en 3D. Le nom reste en anglais dans tout
 - **Entrées et sorties** : le chevalier d'une session entre au château par le pont-levis. Quand la session disparaît, il sort par la porte et meurt sous les coups de squelettes.
 - **Trois états lisibles** : il travaille, il attend ton prochain message, il a terminé.
 - **L'autel des requêtes** : les agents qui ont besoin de toi (permission, question, erreur) font la queue.
+- **L'attente interminable** : plus un agent attend ta réponse à l'autel, plus il se lasse. Il fait les cent pas, s'assoit, s'endort, puis se couvre de toiles d'araignée, purement pour rire.
 - **Une fiche par agent** : contexte de sa session, serveurs web locaux, conversation en lecture seule.
 - **Trois langues** : français, allemand et anglais.
 - **Temps réel, sans influence sur Claude** : les hooks et les fichiers locaux de l'app desktop alimentent le serveur, qui ne fait qu'observer.
