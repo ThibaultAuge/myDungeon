@@ -58,6 +58,8 @@ function Home() {
     <>
       <Header />
       <main className="home">
+        {/* Product name, never translated: the alt reuses APP_NAME, hence lang="en". */}
+        <img className="home__logo" src="/images/agents-lair-logo.png" alt={APP_NAME} lang="en" width={820} height={520} />
         <h1>{t.home.title}</h1>
         <p className="muted">{t.home.intro}</p>
         <ul className="env-grid">
