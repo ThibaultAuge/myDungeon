@@ -80,6 +80,8 @@ description: Use when changing the night environment around the castle — fores
   holds. Near-ring scenery reuses `NearForest`'s material and per-quadrant placement;
   never pass the kit's shared material to `nightify`.
 - Preview: `docs/ai/dungeon-scene.md` (Usage).
+- A visible change near the castle gate means re-capturing the home page image:
+  `docs/ai/ui-theme.md`.
 
 ## Notes
 - Never use `Tree_4_C` (about 10.8 m tall): the user rejected it as towering over the forest.

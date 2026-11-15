@@ -24,6 +24,7 @@ npm workspaces: `packages/server`, `packages/web`, `packages/shared`.
 - `docs/ai/agent-lifecycle.md` — Use when changing where agents rest or wait (tavern, altar queue), how agent figures appear, leave or return (subagent tavern cycle, main agents walking in from the forest, the skeleton ambush when a session ends, stopped sessions, ghosts of sessions that never worked, everActive), the agent roster (snapshot.roster, agent definitions, seen types), the introduction card of resting subagent types (RestCard, RosterList), or when testing the scene with fake hooks.
 - `docs/ai/dialogue.md` — Use when changing the agent conversation box (AgentDialog), how transcripts are found, parsed or paged (transcript.ts, /api/transcript, useTranscript), or adding any route that reads or changes conversations.
 - `docs/ai/agent-info.md` — Use when changing the selected-agent details card (AgentInfo), session details sent to the client (SessionView.info, worktree, branch, model, effort, permission mode, CLI version), or the detection of a session's local web servers (ports.ts, SessionView.servers).
+- `docs/ai/ui-theme.md` — Use when changing the web UI's colours or chrome styling — root CSS tokens, the single dark dungeon theme, top bar, side panel, home page and its castle-gate background image (and how to re-capture it).
 
 Human docs (French): `README.md` (pitch, install, tests, doc index); in `docs/`:
 `utilisation.md`, `fonctionnement.md` (data flow, hooks, env vars), `securite.md`,
