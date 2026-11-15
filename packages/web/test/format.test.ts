@@ -454,7 +454,7 @@ describe('agentRole', () => {
    * Verifies that a concrete English role reads as expected
    */
   it('gives the English role of a known type', () => {
-    expect(agentRole('dexter', MESSAGES.en)).toBe('Writes unit, integration and API contract tests.');
+    expect(agentRole('dexter', MESSAGES.en)).toBe('Brews unit, integration and API contract tests, then waits for the flask to smoke green.');
   });
 
   /**

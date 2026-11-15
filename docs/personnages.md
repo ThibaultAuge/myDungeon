@@ -121,6 +121,8 @@ Ce sont les agents définis dans `~/.claude/agents/`, ou dans le `.claude/agents
 | **curator** | Documentation pour les IA | Archiviste : robe de moine, gants | Registres et trousseau de clés des archives | Scriptorium | Mage, grimoire fermé |
 | **otis** | Documentation pour les humains | Scribe copiste : bonnet, manches retroussées | Plume d'oie et parchemin | Scriptorium | Voleur encapuchonné, journal ouvert |
 | **turing** | Calculs (exécute du Python) | Arithméticien : toque, craie à la main | Boulier géant, ardoise couverte de chiffres | Cabinet de l'arithméticien | Mage, compas |
+| **grumpy** | Met à l'épreuve les plans avant validation | Vieux grincheux : sourcils froncés, bras croisés | Le plan qu'il épluche | Aucun poste attitré | Barbare, carte |
+| **phoenix-wright** | Conformité légale et protection des données | Avocat : robe, rabat | Code de lois ouvert | Aucun poste attitré | Voleur, journal ouvert |
 
 La colonne « Aujourd'hui (KayKit) » donne le corps et l'objet réellement utilisés. Le cliché visuel est la cible.
 
