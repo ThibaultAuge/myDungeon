@@ -22,7 +22,7 @@ flowchart LR
 ```
 *Figure : Les trois chemins de données, du relevé à la page.*
 
-- **Les hooks** donnent le temps réel : prompt envoyé, outil utilisé, outil en échec, permission demandée, sous-agent lancé ou terminé, fin de tour, fin de session, compactage du contexte.
+- **Les hooks** donnent le temps réel : prompt envoyé, outil utilisé, outil en échec, permission demandée, sous-agent lancé ou terminé, fin de tour, fin de session, compactage du contexte, et appels HTTP du Pigeonnier (voir [Appels HTTP du Pigeonnier](#appels-http-du-pigeonnier)).
 - **L'inventaire** relit les fichiers de l'app desktop (au fil de leurs modifications, et toutes les 10 s). Il fournit les donjons (un par environnement de l'app Claude), les sessions, leur titre et leur session parente, et indique si une session tourne. Au démarrage du serveur, il reconstruit l'état même sans hooks.
 - **Le navigateur** reçoit un instantané complet du donjon affiché, au plus toutes les 100 ms. Une reconnexion suffit donc à tout resynchroniser.
 
@@ -67,6 +67,37 @@ flowchart TD
     D -->|non| E["Fantôme"]
 ```
 *Figure : Choix entre chevalier et fantôme pour une session arrêtée.*
+
+## Appels HTTP du Pigeonnier
+
+Le gag du pigeon (voir [utilisation.md](utilisation.md#le-pigeon-de-samuel-morse)) repose sur les hooks d'outil déjà installés : `PreToolUse`, `PostToolUse` et `PostToolUseFailure`. Il ne demande pas de réinstallation.
+
+Pour chaque événement d'outil, le serveur vérifie trois choses : l'outil est `Bash` ou `PowerShell`, l'agent travaille au Pigeonnier, et la commande est une requête HTTP (`curl`, `wget`, `Invoke-WebRequest`, `Invoke-RestMethod`, `iwr` ou `irm`). Si les trois sont vraies, le résumé de l'événement diffusé à la page reçoit un champ `httpCall` :
+
+- `start` au lancement de la commande (`PreToolUse`) ;
+- `error` si la commande échoue (`PostToolUseFailure`) ;
+- à la fin normale (`PostToolUse`), `error` ou `ok` selon le code HTTP trouvé dans la sortie.
+
+Dans les autres cas, le champ est absent.
+
+Pour trouver le code HTTP, le serveur lit la sortie de la commande (`tool_response.stdout`), seulement son début (64 Ko) et sa fin (4 Ko). Il cherche, dans cet ordre :
+
+1. le dernier marqueur `--- HTTP nnn`, que Samuel-Morse produit avec `curl -w` ;
+2. à défaut, la dernière ligne de statut `HTTP/x nnn`, présente quand curl affiche les en-têtes (`-i`).
+
+Un code de 400 ou plus, ou inférieur à 100 (le `000` de curl quand aucune réponse n'arrive), donne `error`. Sans code, la sortie compte comme `ok` : la commande s'est terminée normalement.
+
+```mermaid
+flowchart TD
+    A["PreToolUse"] -->|"requête HTTP du Pigeonnier"| S["start"]
+    B["PostToolUseFailure"] -->|"requête HTTP du Pigeonnier"| E["error"]
+    C["PostToolUse"] --> D{"Dernier code HTTP de la sortie"}
+    D -->|"400 ou plus, ou moins de 100"| E
+    D -->|"autre, ou aucun"| O["ok"]
+```
+*Figure : Classement d'un événement d'outil en start, ok ou error.*
+
+Seul ce mot quitte le serveur : `start`, `ok` ou `error`. Ni le code HTTP, ni le corps de la réponse, ni les en-têtes, ni l'URL n'arrivent à la page. Le gag est purement décoratif et n'affiche aucun texte. La protection est décrite dans [Sécurité](securite.md).
 
 ## Données lues
 

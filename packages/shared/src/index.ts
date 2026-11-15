@@ -124,6 +124,8 @@ export interface HookEventSummary {
   detail?: string;
   /** Set when the event is a successful git commit / push or test run. Never the command text. */
   celebrations?: Celebration[];
+  /** An HTTP call (curl…) of an agent working in the dovecote: launched, then its outcome. Never the response itself. */
+  httpCall?: 'start' | 'ok' | 'error';
 }
 
 export const NO_ENV_ID = 'hors-environnement';
