@@ -6,14 +6,17 @@ import { WANDER_POINTS } from './ghost.ts';
 // the cheese and runs off with it. The cheese comes back a few seconds later.
 // Pure, no three.js: testable in node.
 
-/** Running speed on the floor, in m/s: a quick scurry. */
-export const RAT_SPEED = 2.4;
-/** Height of a hop's arc above the higher of its two ends. */
-export const HOP_HEIGHT = 0.35;
-/** Duration of one hop (onto the table or down from it). */
-export const HOP_MS = 450;
+/** Running speed on the floor, in m/s: a dash, three times the first version (2.4) at the user's request. */
+export const RAT_SPEED = 7.5;
+/** Height of a hop's arc above the higher of its two ends (low, so the short hop stays plausible). */
+export const HOP_HEIGHT = 0.22;
+/**
+ * Duration of one hop (onto the table or down from it). Two hops plus the grab stay under a
+ * third of the first version's 1.6 s, so a theft is also at least three times faster.
+ */
+export const HOP_MS = 150;
 /** Pause on the table while the rat grabs the cheese. */
-export const GRAB_MS = 700;
+export const GRAB_MS = 230;
 /** A natural pass comes every 3 to 6 minutes. */
 export const PASS_MIN_MS = 180_000;
 export const PASS_MAX_MS = 360_000;
@@ -27,8 +30,11 @@ export const CHEESE_GROW_MS = 400;
 export const TABLE_TOP = 0.75;
 /** A hole lies this far inside the outer wall: the rat comes out of it and goes back in. */
 const HOLE_DEPTH = 0.6;
-/** The rat grows out of its hole and shrinks back into it over this time, so it never pops. */
-export const EMERGE_MS = 350;
+/**
+ * The rat grows out of its hole and shrinks back into it over this time, so it never pops:
+ * the time it takes to run through the wall, so it is full size at the wall face.
+ */
+export const EMERGE_MS = (HOLE_DEPTH / RAT_SPEED) * 1000;
 /**
  * Distance from the rat's origin to the cheese held in its mouth, in metres, at the size the
  * rat is drawn. The cheese on the table sits exactly there in front of the landing, so the

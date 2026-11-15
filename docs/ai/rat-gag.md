@@ -18,14 +18,20 @@ console command: `docs/commandes-console.md`.
   castle gate excluded (`atGate`, assumes the gate is on the south side). `holeMouth` sits
   0.6 m outward (inside the wall).
 - Run planning: `planRun(kind, random)` → `RatRun` of legs (floor run at `RAT_SPEED`
-  2.4 m/s, hops of `HOP_MS` 450 with arc `HOP_HEIGHT`, pauses); `sampleRun(run, ms)` →
-  `RatPose`; `emergeScale` grows / shrinks the rat over `EMERGE_MS` 350 at both ends.
+  7.5 m/s, hops of `HOP_MS` 150 with arc `HOP_HEIGHT` 0.22, pauses); `sampleRun(run, ms)` →
+  `RatPose`; `emergeScale` grows / shrinks the rat over `EMERGE_MS` at both ends.
+  `EMERGE_MS` is derived as `HOLE_DEPTH / RAT_SPEED × 1000` (80 ms) so the rat is full size
+  exactly at the wall face; keep the two tied.
+- Speed is a user requirement: at least 3× the first version (measured on 400 generated
+  runs: corridor passes 3.125× faster, ≈1.9–7.6 s; thefts ≥ 3.11× faster, ≈6–15 s). Two
+  hops + `GRAB_MS` must stay ≤ 1/3 of the old fixed 1.6 s (≤ 533 ms) or thefts lose the 3×
+  ratio.
   - Corridor pass: hole → `corridorPath` → another hole ≥ 4 m away.
   - Cheese pass: hole → `corridorPath` → `TAVERN_GATE` (tavern `doorOf` outside) →
     `TAVERN_WAY` (door inside, west of the tables, gap between the 1st and 2nd `longTable`,
     foot of the 2nd table's north end) → hop up to `TABLE_LANDING` (`TABLE_TOP` 0.75,
     `TABLE_SIDE` 0.28 m off the table's middle line, clear of the `longTable` stew in
-    `props.tsx`) → `GRAB_MS` pause, grab at mid-pause (`grabAt`) → hop down → back out →
+    `props.tsx`) → `GRAB_MS` 230 pause, grab at mid-pause (`grabAt`) → hop down → back out →
     a far hole. Floor legs avoid every tavern prop footprint (tested with `inFootprint`).
 - Cheese: KayKit Restaurant `food_ingredient_cheese`, always mounted at `CHEESE_SPOT` =
   `TABLE_LANDING` + `MOUTH_AHEAD` 0.42 (so the grab has no jump); carried at the rat's foot
@@ -35,7 +41,10 @@ console command: `docs/commandes-console.md`.
 - Clock: frame clock with dt capped at 0.1 s, so a hidden tab pauses everything.
 - Rat mesh: procedural (no free KayKit rat), ~13 meshes (body, head, snout, nose, ears,
   eyes, tail tube, 4 feet), geometries and materials shared at module level, `RAT_SCALE`
-  1.9 (larger than life to stay visible), no shadow. Mounted only during a pass (keyed
+  1.9 (larger than life to stay visible), no shadow. In `RatScene`, heading eases at
+  `TURN_RATE` 40 and the feet cycle at `STEP_RATE` 34; the tail sway uses its own phase
+  accumulated per frame (`Live.tailPhase`) so it does not jump when the rat stops or
+  starts. Mounted only during a pass (keyed
   group): ~13 extra draw calls during a pass, +1 permanent mesh for the cheese.
   `RatScene` is `memo`'d, no props; mounted in `Office.tsx` after `<MishapProps />`.
 - Not selectable: raycast disabled on rat and cheese, no keyboard route (accepted
@@ -73,8 +82,9 @@ console command: `docs/commandes-console.md`.
   frames render.
 
 ## Notes
-- Accepted limits (not done): the rat turns ~180° on the table in ~150 ms at the start of
-  the hop down (the tail may sweep over table props); the cheese's stew clearance is
+- Accepted limits (not done): the rat turns ~180° on the table in ~75 ms at the start of
+  the hop down (the tail and the carried cheese swing through the turn and may sweep over
+  table props); the cheese's stew clearance is
   measured by eye; `atGate` assumes the south gate; static rat parts are not merged per
   material (`merge.ts` approach, possible optimisation); one-frame flicker when the
   console replaces a running pass.

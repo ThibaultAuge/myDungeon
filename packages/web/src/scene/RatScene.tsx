@@ -44,9 +44,9 @@ const CHEESE_CENTRE_X = 0.1535;
 /** The cheese's turn on the table, kept in the mouth (relative to the rat, which lands facing +z). */
 const CHEESE_TURN = 0.5;
 /** Turn rate towards the travel direction (per second, exponential). */
-const TURN_RATE = 18;
+const TURN_RATE = 40;
 /** Trot: steps per second, bob height. */
-const STEP_RATE = 14;
+const STEP_RATE = 34;
 const BOB = 0.012;
 
 const FUR = new MeshStandardMaterial({ color: '#6e6159', roughness: 0.9 });
@@ -135,6 +135,8 @@ interface Live {
   /** Milliseconds since the run started (frame time, so a hidden tab pauses it). */
   elapsed: number;
   heading: number;
+  /** Tail sway phase, advanced each frame at a rate that depends on running or not: no jump. */
+  tailPhase: number;
 }
 
 /**
@@ -155,7 +157,7 @@ export const RatScene = memo(function RatScene() {
 
   const start = useCallback((kind: RatPass) => {
     const next = planRun(kind, Math.random);
-    live.current = { run: next, elapsed: 0, heading: sampleRun(next, 0).heading };
+    live.current = { run: next, elapsed: 0, heading: sampleRun(next, 0).heading, tailPhase: 0 };
     // A replaced theft gives its cheese back at once.
     cheeseGoneAt.current = null;
     setRun({ key: ++counter.current, run: next });
@@ -211,7 +213,8 @@ export const RatScene = memo(function RatScene() {
             g.position.set(pose.x, pose.y + trot * BOB * Math.abs(Math.sin(phase)), pose.z);
             g.rotation.set(0, current.heading, trot * 0.06 * Math.sin(phase));
             g.scale.setScalar(emergeScale(current.run, current.elapsed));
-            if (tail.current) tail.current.rotation.y = 0.35 * Math.sin(phase * (pose.moving ? 0.5 : 0.15));
+            current.tailPhase += dt * STEP_RATE * (pose.moving ? 0.5 : 0.15);
+            if (tail.current) tail.current.rotation.y = 0.35 * Math.sin(current.tailPhase);
             feet.current.forEach((f, i) => {
               if (f) f.position.z = (i < 2 ? 0.07 : -0.07) + trot * 0.025 * Math.sin(phase + (i % 3 === 0 ? 0 : Math.PI));
             });
