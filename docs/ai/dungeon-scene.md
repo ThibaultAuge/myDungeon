@@ -151,6 +151,8 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cast
   turns snap, no spawn; position still moves. Measured clip lengths (`SPAWN_CLIP_TIME`,
   `HIT_CLIP_TIME`, `DEATH_CLIP_TIME`, `USE_ITEM_CLIP_TIME`) are checked against the GLB by a
   test (helper pattern in `dungeon.test.ts`).
+- Bonus clips (dodge, cheering, sneaking, fishing) insert into that order:
+  `docs/ai/bonus-gags.md` holds the full order.
 - Clips loading: `clipCatalog.ts` holds `ANIM_FILES` (same list and order as the manifest's
   `animations` models, tested), the frozen `CLIP_FILE` catalog of all 131 clips (T-Pose
   excluded) → file (checked against the GLBs by a test), the `KitClip` type and
@@ -467,6 +469,8 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cast
 - Endless wait at the altar (pacing, sitting, Zzz, cobwebs, `agentOffice.autel`):
   `docs/ai/altar-wait.md`.
 - Rat gag (corridor holes, tavern cheese theft, `agentOffice.rat`): `docs/ai/rat-gag.md`.
+- Cheer, slap dodge ("missed" bubble), rogue sneak, moat fishing (`agentOffice.peche`):
+  `docs/ai/bonus-gags.md`.
 - Potion verification: build web, run a second server (port 4779, `AGENT_OFFICE_TOKEN`
   env, `docs/ai/agent-lifecycle.md`), POST hooks including
   `{"hook_event_name":"PreCompact",...}`, or call `agentOffice.potion('rest:<type>')` in

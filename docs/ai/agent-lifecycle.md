@@ -242,6 +242,8 @@ do this; subagents keep the tavern cycle above.
 - Ghost logic goes in `ghost.ts` (pure, tested); reuse `isGhost` wherever a stopped main
   must be told apart, and reuse `corridorPath` for any new corridor wandering. The rat gag
   reuses `WANDER_POINTS` as its holes: `docs/ai/rat-gag.md`.
+- Main agents waiting long for a prompt leave the tavern to fish in the moat; finishing
+  subagents cheer, and rogue ones sneak back to the tavern: `docs/ai/bonus-gags.md`.
 
 ## Notes
 - A 3D altar bubble was tried and rejected: the HTML tags and room signs are drawn over the
