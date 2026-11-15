@@ -10,8 +10,8 @@ export const en: Messages = {
     label: 'Interface language',
   },
   home: {
-    title: 'Choose a company',
-    intro: 'Each environment of the Claude app is a dungeon, with its sessions and agents.',
+    title: 'Choose your dungeon',
+    intro: 'Each environment of the Claude app is a dungeon of the kingdom, with its sessions and agents.',
     activeSessions: (n: number) => plural('en', n, `${n} active session`, `${n} active sessions`),
     quiet: 'All quiet',
     empty: 'No environment found. Is the server running?',
@@ -21,7 +21,7 @@ export const en: Messages = {
     unknown: 'Unknown environment',
   },
   envSwitcher: {
-    label: 'Company',
+    label: 'Dungeon',
     active: (n: number) => ` (${n} active)`,
     open: 'Open',
   },

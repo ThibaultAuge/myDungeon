@@ -34,7 +34,7 @@ description: Use when changing the agent conversation box (AgentDialog), how tra
 - Route `GET /api/transcript?session=&agent=&before=`: unauthenticated; 400 on bad
   params/cursor, 404 when no transcript; `Cache-Control: no-store`; `ETag` + 304 on the
   latest page only (older pages of an append-only file never change).
-- No browser sign-in (owner's decision): Agent Office is a single-user local tool started
+- No browser sign-in (owner's decision): the app is a single-user local tool started
   by hand, so whoever can load the page reads conversations. Exposure is limited by the
   `127.0.0.1` bind (`index.ts`) and the global `onRequest` Host/Origin allow-list in
   `app.ts` (DNS-rebinding and cross-origin guard, 403), plus no CORS headers, `nosniff`

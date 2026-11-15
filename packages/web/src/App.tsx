@@ -16,6 +16,7 @@ import { RosterList } from './ui/RosterList.tsx';
 import { envName } from './format.ts';
 import { StatusIcon } from './ui/StatusIcon.tsx';
 import { useT } from './i18n/useT.ts';
+import { APP_NAME } from './i18n/index.ts';
 
 function Header({ children }: { children?: ReactNode }) {
   const connected = useOffice((s) => s.connected);
@@ -31,7 +32,7 @@ function Header({ children }: { children?: ReactNode }) {
           navigate({ page: 'home' });
         }}
       >
-        Agent Office
+        {APP_NAME}
       </a>
       {children}
       <span className={`conn ${connected ? 'conn--ok' : 'conn--ko'}`} role="status">
@@ -106,9 +107,9 @@ function EnvPage({ envId }: { envId: string }) {
   const { t } = useT();
   const name = env ? envName(env, t) : '';
   useEffect(() => {
-    document.title = name ? `${name} · Agent Office` : 'Agent Office';
+    document.title = name ? `${name} · ${APP_NAME}` : APP_NAME;
     return () => {
-      document.title = 'Agent Office';
+      document.title = APP_NAME;
     };
   }, [name]);
   return (
@@ -148,7 +149,7 @@ export function App() {
   }, []);
   if (route.page === 'env') return <EnvPage envId={route.envId} />;
   if (route.page === 'debug') {
-    document.title = 'Debug · Agent Office';
+    document.title = `Debug · ${APP_NAME}`;
     return (
       <>
         <Header />
@@ -156,6 +157,6 @@ export function App() {
       </>
     );
   }
-  document.title = 'Agent Office';
+  document.title = APP_NAME;
   return <Home />;
 }
