@@ -146,7 +146,8 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cast
   `RUN_THRESHOLD`; rate = speed / measured clip speed, capped at `MAX_CLIP_RATE`, with a
   0.5 floor for `Walking_A` only) > altar wait pose (`ClipInput.altar`: sleeping, sitting,
   then pacing, which reduced motion skips; `docs/ai/altar-wait.md`) >
-  kneeling at the altar (`PickUp` frozen at `KNEEL_POSE_TIME`) > done (`Idle_A` frozen, no
+  kneeling at the altar (`PickUp` frozen at `KNEEL_POSE_TIME`) > place (`ClipInput.place`:
+  work gesture or seated pose, see Work gestures below) > done (`Idle_A` frozen, no
   transparency) > working (`Interact`) > waiting (`Idle_B`). Reduced motion: still poses,
   turns snap, no spawn; position still moves. Measured clip lengths (`SPAWN_CLIP_TIME`,
   `HIT_CLIP_TIME`, `DEATH_CLIP_TIME`, `USE_ITEM_CLIP_TIME`) are checked against the GLB by a
@@ -165,6 +166,34 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cast
   animations, filters them by `CLIPS` and warns in DEV on missing or duplicate clips.
   Agents, ambush skeletons (`Ambush.tsx`) and heralds (`Herald.tsx`) all go through
   `Character` → `useClips`.
+- Work gestures and seated poses (`workGestures.ts`, pure; plan
+  `plans/plan-gestes-travail-2026-11-15.md`): a figure standing still at its place plays a
+  gesture fitting its room or post, or sits.
+  - Seat: `seatOf(spot.id, room, station)` parses `<room>:<kind>:<n>` into `SeatRef`
+    (`station` / `seat` / `wall` / `scatter` / `other`; queue, spawn, outside and other
+    rooms' ids are `other`). `AgentFigure` memoises it per spot.
+  - `placeClip({room, station, seat, state, reducedMotion, throwing})` → `ClipChoice | null`
+    (null = default chain). `AgentFigure`'s `useFrame` writes it to `Motion.place` only when
+    at its place (`atPlace`) and `m.altar === null`; `clipFor` plays it after the altar
+    poses and kneeling.
+  - Working gestures: `ROOM_GESTURES` (per `RoomId`, list picked by `seat.index % length`
+    so neighbours differ), overridden by `STATION_GESTURES` for `chevalet`, `boulier`,
+    `relecture` and `labo` only (`estrade` / `inspection` use their room's). `autel` and
+    `taverne` have no entry (altar: `docs/ai/altar-wait.md`); a non-working figure outside
+    the tavern gets null.
+  - Seated poses: `CHAIR_CLIP` `Sit_Chair_Idle` on `seat`-kind places of `taverne` and
+    `detente` (stools / couch); `FLOOR_CLIP` `Sit_Floor_Idle` on wall and scatter places.
+    Tavern: any non-working state sits (resting figures, waiting mains:
+    `docs/ai/agent-lifecycle.md`). Detente: working figures sit, except `PUSH_UPS_CLIP` on
+    wall place 0.
+  - Reduced motion: seated poses are held at `SIT_STILL_AT`; push-ups give way to the held
+    floor pose; standing gestures (and the throw) return null, so `Idle_A` held.
+  - Dovecote throw: `THROW_CLIP` `Throw`, once, while `Motion.throwAt ≥ 0`
+    (`advanceThrow`, `THROW_CLIP_TIME` 41/30 s, tested against the GLB). Trigger:
+    `docs/ai/pigeon-gag.md`.
+  - `WORK_CLIPS` pulls `Rig_Medium_Tools`, `Simulation`, `CombatMelee` and `CombatRanged`
+    (about 1 MB each) into `ANIM_FILES_USED`, loaded before any figure appears (accepted
+    cost).
 - `AgentFigure` structure: the parent runs the walk and writes a `Motion` ref (exported,
   with `scripted`); the exported
   `Character` child (own `Suspense` + `CharacterBoundary` error boundary with a capsule
@@ -379,6 +408,10 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cast
 - `packages/web/src/scene/characters.ts` — pure, no three.js: `MAIN_BODY`, `SUB_BODIES`,
   `LOOKS`, `SKELETON_LOOKS`, `lookFor`, `PROP_GRIP`, `gripFor`, `clipFor`, the clip theme
   arrays, `CLIPS`, `ClipName`, `ANIM_FILES_USED` and the clip constants / measured clip times.
+- `packages/web/src/scene/workGestures.ts` — pure: `seatOf`, `SeatRef`, `ROOM_GESTURES`,
+  `STATION_GESTURES`, `placeClip`, seated / throw clip constants, `SIT_STILL_AT`, throw bus
+  (`throwPigeon`, `onThrow`), `advanceThrow` (`packages/web/test/workGestures.test.ts`).
+  Stools: `TABLE_STOOLS` / `DICE_STOOLS` in `props.tsx`.
 - `packages/web/src/scene/AgentFigure.tsx` — walk, `Motion`, `Character` (takes a `Look`;
   both exported, reused by `Ambush.tsx`), `Held`, `CharacterBoundary`, tag, destination
   badge toggle, slap handlers and anchor.
@@ -480,6 +513,12 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cast
   hand under Preview below.
 - Agent motion logic goes in `walk.ts`, clip choice in `clipFor` (both tested), never
   inline in `AgentFigure`'s `useFrame`, which only calls them.
+- New or changed work gesture or seated pose: edit the tables in `workGestures.ts` (and add
+  the clip to `WORK_CLIPS`), never a new branch in `clipFor`; a one-shot per-agent gesture
+  reuses the `throwPigeon` / `onThrow` bus and an optional `Motion` timer like `throwAt`.
+- Gesture preview: Vite on a free port from the worktree, Playwright, store-injected
+  gallery (setup below) with working subagents placed in every room. Close-ups from the
+  front or side: find the figure's `root` bone world direction and put the camera along it.
 - New decor must not cover seats or a door entry (tested in `dungeon.test.ts`).
 - Anything placed against or through the outer wall uses `perimeterSides` and the
   `PERIMETER_*` constants (never `WALL_INSET` there); new runs carry `thick`.
@@ -560,6 +599,7 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cast
   `dungeon.ts`, `layout.ts`, `walk.ts`, `characters.ts`, `slap.ts`, `slapSwing.ts`,
   `destinations.ts`, `forest.ts`, `outside.ts`, `stage.ts`, `ambush.ts`, `tavern.ts`,
   `decor.ts`, `merge.ts`, `potion.ts`, `mishap.ts`, `altarWait.ts`, `pigeon.ts`, `celebrate.ts`,
+  `workGestures.ts`,
   `gagCommands.ts` and the manifest JSON.
 - Walk speed was set so figures reach the room before short tasks finish (user request).
   The chibi legs walk naturally at 0.57 (`Walking_A`) and 1.4 u/s (`Running_A`) at
@@ -575,6 +615,17 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cast
   (tested in `walk.test.ts`). An inline blend that took the decrease branch at
   `weight === target` flickered 1→0 every other slow frame, showing a T-pose.
 - Kneeling replaced the old 30 cm sink at the altar; done agents are no longer transparent.
+- Stools are render-only (no footprint, no seat data): `TABLE_STOOLS` (six per table, in
+  the `longTable` recipe) and `DICE_STOOLS` (three, in `diceTable`) sit `STOOL_BACK` 1.25 from
+  the table at `STOOL_SCALE` 0.7, under the `layout.ts` table seats; the detente couch seats
+  sit at z −1.15 so the seated pose lands on the cushions. Moving a table seat in
+  `layout.ts` means moving the `props.tsx` constants by hand: tests pin only the seat counts
+  (18 tavern table seats, 2 couch + 3 dice seats).
+- Work gesture accepted limits (review findings not done): one possible frame of the new
+  room's gesture before the walk starts (`place` derives from the `spot` prop, the walk from
+  `last.current`); stools have no footprint, so figures may brush through them on the way
+  in; slapped seated figures stand for the hit; `placeClip` allocates a `ClipChoice` per
+  frame, like `clipFor`.
 - First-load Suspense gotcha: an upper Suspense hides and re-shows the scene while the kit
   loads; React 19.2 runs passive effect cleanups then, so `useAnimations` stops every action
   while `Character`'s refs survive. `Character` restarts its clip when the current action
