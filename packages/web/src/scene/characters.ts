@@ -145,6 +145,9 @@ export const CLIPS = [
   'Hit_B',
   'Death_A',
   'Use_Item',
+  // The endless wait at the altar (altarWait.ts): sitting down, then lying asleep.
+  'Death_B',
+  'Death_A_Pose',
 ] as const;
 export type ClipName = (typeof CLIPS)[number];
 
@@ -175,6 +178,19 @@ export const USE_ITEM_CLIP_TIME = 1.6;
 export const SPAWN_TIME_SCALE = 1.5;
 /** Time in PickUp where the figure is crouched: the kneeling pose at the altar. */
 export const KNEEL_POSE_TIME = 0.55;
+/**
+ * The endless wait at the altar has no sit or sleep clip in the free pack: an agent sits on
+ * its heels with Death_B held where it has dropped to its knees, upright, before falling
+ * forward (it also turns its back to the altar, see altarWait.ts), and sleeps with the lying
+ * end pose of Death_A. Pacing plays the walk slowly, in place.
+ */
+export const SIT_CLIP = 'Death_B' satisfies ClipName;
+export const SIT_POSE_TIME = 1.1;
+export const SLEEP_CLIP = 'Death_A_Pose' satisfies ClipName;
+export const PACE_CLIP_RATE = 0.6;
+
+/** How the endless wait at the altar poses a figure standing at its place (see altarWait.ts). */
+export type AltarPose = 'pacing' | 'sitting' | 'sleeping';
 
 export interface ClipInput {
   /** The figure moves along its path this frame. */
@@ -191,6 +207,8 @@ export interface ClipInput {
   scripted?: ClipChoice | null;
   /** The figure was just slapped: the hit reaction to play (once). Absent otherwise. */
   hit?: 'Hit_A' | 'Hit_B';
+  /** The endless wait at the altar, for a figure at its place. Absent otherwise. */
+  altar?: AltarPose;
 }
 
 export interface ClipChoice {
@@ -210,7 +228,7 @@ export const hold = (name: ClipName, at = 0): ClipChoice => ({ name, loop: false
  * still changes (that is information), the limbs do not.
  */
 export function clipFor(input: ClipInput): ClipChoice {
-  const { moving, speed, state, spawning, kneeling, reducedMotion, scripted, hit } = input;
+  const { moving, speed, state, spawning, kneeling, reducedMotion, scripted, hit, altar } = input;
   // Reduced motion wins even over a scripted scene: limbs stay still.
   if (scripted && !reducedMotion) return scripted;
   if (spawning && !reducedMotion) return play('Spawn_Ground', SPAWN_TIME_SCALE, false);
@@ -222,6 +240,11 @@ export function clipFor(input: ClipInput): ClipChoice {
       ? play('Running_A', Math.min(speed / RUN_CLIP_SPEED, MAX_CLIP_RATE))
       : play('Walking_A', Math.min(Math.max(speed / WALK_CLIP_SPEED, 0.5), MAX_CLIP_RATE));
   }
+  // The endless wait at the altar: still poses, so they stay under reduced motion; pacing
+  // does not (the figure stands still, see AgentFigure).
+  if (altar === 'sleeping') return hold(SLEEP_CLIP);
+  if (altar === 'sitting') return hold(SIT_CLIP, SIT_POSE_TIME);
+  if (altar === 'pacing' && !reducedMotion) return play('Walking_A', PACE_CLIP_RATE);
   if (kneeling) return hold('PickUp', KNEEL_POSE_TIME);
   if (state === 'done' || reducedMotion) return hold('Idle_A');
   if (state === 'working') return play('Interact');

@@ -6,8 +6,10 @@ import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js
 import type { AgentState, AgentView } from '@agent-office/shared';
 import { STATE_COLORS, statusKind } from '../format.ts';
 import { reducedMotion } from '../motion.ts';
+import { altarHeading, isAsleep, paceAxis, paceOffset, paceSeed, type AltarStage } from './altarWait.ts';
+import { AltarCobwebs } from './AltarCobwebs.tsx';
 import { victimClip, victimSink, type Ambush } from './ambush.ts';
-import { clipFor, CLIPS, gripFor, lookFor, SPAWN_TIME_SCALE, type ClipChoice, type ClipName, type Look, type PropRef } from './characters.ts';
+import { clipFor, CLIPS, gripFor, lookFor, SPAWN_TIME_SCALE, type AltarPose, type ClipChoice, type ClipName, type Look, type PropRef } from './characters.ts';
 import { CLICK_MAX_DRAG_PX, nearestTarget, setPointerHover, TARGET_USER_DATA } from './cursor.ts';
 import { DestinationBadge } from './DestinationIcon.tsx';
 import { destinationOf } from './destinations.ts';
@@ -16,6 +18,7 @@ import { useKitGLTF } from './kit.ts';
 import { reroute, SPAWN, type Point, type Spot } from './layout.ts';
 import { exitRoute, groundY, routeFrom } from './outside.ts';
 import { RequestBubble } from './RequestBubble.tsx';
+import { SnoreBubble } from './SnoreBubble.tsx';
 import { hitClipFor, onSlap, slapAgent, SLAP_EFFECT_MS } from './slap.ts';
 import { SlapEffect } from './SlapEffect.tsx';
 import { SlapHand } from './SlapHand.tsx';
@@ -38,6 +41,8 @@ const BUBBLE_Y = 2.1;
 const SLAP_Y = 1.5;
 /** Pause of the walk after a slap until the character reports its hit clip's real length. */
 const HIT_FALLBACK = 0.6;
+/** Fastest sideways easing (m/s) of a pacing figure, above the pace's own peak speed. */
+const PACE_EASE = 1;
 
 /** What the figure does this frame, written by the walk and read by the character. */
 export interface Motion {
@@ -55,6 +60,8 @@ export interface Motion {
   hitWait: number;
   /** Seconds of hit reaction left: the walk pauses meanwhile (and during the wait). */
   hitLeft: number;
+  /** The endless wait at the altar (altarWait.ts), for a figure at its place; null or absent otherwise. */
+  altar?: AltarPose | null;
 }
 
 /** Share of the gap to close this frame for an exponential turn; all of it under reduced motion. */
@@ -153,6 +160,7 @@ export function Character({ look, state, motion }: { look: Look; state: AgentSta
       reducedMotion: still,
       scripted: m.scripted,
       hit: m.hitWait <= 0 && m.hitLeft > 0 && m.hit ? m.hit : undefined,
+      altar: m.altar ?? undefined,
     });
     // When Suspense hides and shows the scene again (while the kit loads), React runs the
     // effect cleanups: drei's useAnimations then stops every action, but these refs survive.
@@ -270,6 +278,8 @@ interface Props {
   exit?: Ambush;
   /** Called once when a doomed figure has sunk out of sight. */
   onGone?(id: string): void;
+  /** How far the agent has given up waiting at the altar (altarWait.ts); calm when absent. */
+  altarStage?: AltarStage;
 }
 
 /**
@@ -278,7 +288,7 @@ interface Props {
  */
 export const AgentFigure = memo(AgentFigureImpl);
 
-function AgentFigureImpl({ agent, name, color, spot, start, selected, onSelect, onArrive, exit, onGone }: Props) {
+function AgentFigureImpl({ agent, name, color, spot, start, selected, onSelect, onArrive, exit, onGone, altarStage = 'calm' }: Props) {
   const group = useRef<Group>(null);
   const ring = useRef<Mesh>(null);
   const bubble = useRef<Mesh>(null);
@@ -306,7 +316,11 @@ function AgentFigureImpl({ agent, name, color, spot, start, selected, onSelect, 
     hitId: 0,
     hitWait: 0,
     hitLeft: 0,
+    altar: null,
   });
+  /** Sideways shift of a pacing agent from its place, eased so it never jumps. */
+  const paceShift = useRef(0);
+  const paceStart = useMemo(() => paceSeed(agent.id), [agent.id]);
   /** Number of the slap on screen (a new one remounts the effect), null when none is. */
   const [slap, setSlap] = useState<number | null>(null);
   const slaps = useRef(0);
@@ -434,9 +448,15 @@ function AgentFigureImpl({ agent, name, color, spot, start, selected, onSelect, 
         arrived.current = true;
         onArrive(agent.id);
       }
-      g.rotation.y = turnToward(g.rotation.y, spot.facing, turnFraction(REST_TURN_RATE, dt, still));
+      // The endless wait at the altar: pacing faces the way it walks, sitting turns its back.
+      const stage = exit || (still && altarStage === 'pacing') ? 'calm' : altarStage;
+      const heading = altarHeading(stage, spot.facing, clock.elapsedTime + paceStart);
+      g.rotation.y = turnToward(g.rotation.y, heading, turnFraction(stage === 'pacing' ? WALK_TURN_RATE : REST_TURN_RATE, dt, still));
     }
-    m.kneeling = !exit && path.current.length === 0 && !!spot.kneel;
+    // The endless wait at the altar poses a figure standing at its place (never a doomed one).
+    const atPlace = !exit && !spawning && path.current.length === 0;
+    m.altar = atPlace && altarStage !== 'calm' ? (isAsleep(altarStage) ? 'sleeping' : altarStage) : null;
+    m.kneeling = !exit && path.current.length === 0 && !!spot.kneel && m.altar === null;
     m.scripted = doomed && path.current.length === 0 ? victimClip(doomed.phase) : null;
     // Touch the DOM only when walking starts or stops: no React render per frame. The tag
     // is a separate React root that renders a little later: until it shows the new
@@ -446,6 +466,14 @@ function AgentFigureImpl({ agent, name, color, spot, start, selected, onSelect, 
     if (tag && tag.hasAttribute('data-travelling') !== travelling) tag.toggleAttribute('data-travelling', travelling);
     g.position.copy(pos);
     g.position.y = groundY(pos) - (doomed ? victimSink(doomed) : 0);
+    // Pacing shifts the drawn figure sideways only, never `pos`: the walk and reroutes ignore it.
+    const paceTarget = m.altar === 'pacing' && !still && !hitting ? paceOffset(clock.elapsedTime + paceStart).offset : 0;
+    paceShift.current = still ? 0 : approach(paceShift.current, paceTarget, dt * PACE_EASE);
+    if (paceShift.current !== 0) {
+      const axis = paceAxis(spot.facing);
+      g.position.x += axis.x * paceShift.current;
+      g.position.z += axis.z * paceShift.current;
+    }
 
     if (bubble.current) {
       bubble.current.rotation.y = t * 2;
@@ -531,6 +559,8 @@ function AgentFigureImpl({ agent, name, color, spot, start, selected, onSelect, 
           </mesh>
         </>
       )}
+      {/* Left waiting at the altar for ten minutes: cobwebs grow over the sleeping agent. */}
+      {!exit && altarStage === 'webbed' && <AltarCobwebs />}
       {/* Waiting for a prompt: the small amber gem. At the altar, a speech bubble rides on the name tag. */}
       {waiting && !urgent && !exit && (
         <mesh ref={bubble} position={[0, BUBBLE_Y, 0]}>
@@ -550,6 +580,7 @@ function AgentFigureImpl({ agent, name, color, spot, start, selected, onSelect, 
           {/* While walking, the destination badge takes the request bubble's place (CSS). */}
           <DestinationBadge ref={badge} kind={destination} />
           {urgent && <RequestBubble reason={agent.waitReason} />}
+          {!exit && isAsleep(altarStage) && <SnoreBubble />}
           {/* Same name as in the side list, which is the accessible one: not announced twice. */}
           <span className={`agent-tag${selected ? ' agent-tag--selected' : ''}`} aria-hidden="true">
             {name}

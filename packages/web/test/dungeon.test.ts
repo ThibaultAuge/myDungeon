@@ -56,6 +56,8 @@ import {
 import {
   CLIPS,
   DEATH_CLIP_TIME,
+  SIT_CLIP,
+  SIT_POSE_TIME,
   HIT_CLIP_TIME,
   LOOKS,
   MAIN_BODY,
@@ -599,6 +601,18 @@ describe('kit manifest', () => {
     }
     expect(length, `${clip} found`).toBeDefined();
     expect(length!).toBeCloseTo(time, 2);
+  });
+
+  /**
+   * Verifies that the sitting pose of the endless wait at the altar lies inside its clip
+   */
+  it('holds the altar sitting pose inside its clip', () => {
+    const json = glbJson('adventurers_anim', 'Rig_Medium_General');
+    const anim = json.animations?.find((a) => a.name === SIT_CLIP);
+    expect(anim, `${SIT_CLIP} found`).toBeDefined();
+    const length = Math.max(...anim!.samplers.map((s) => json.accessors?.[s.input]?.max?.[0] ?? 0));
+    expect(SIT_POSE_TIME).toBeGreaterThan(0);
+    expect(SIT_POSE_TIME).toBeLessThan(length);
   });
 
   /**

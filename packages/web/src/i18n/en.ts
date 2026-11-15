@@ -64,6 +64,9 @@ export const en: Messages = {
     folder: 'Folder',
     lastMessage: 'Last message',
   },
+  altarWait: {
+    snore: 'Zzz',
+  },
   slap: {
     sound: 'SLAP!',
   },

@@ -12,6 +12,10 @@ import {
   type ClipChoice,
   KNEEL_POSE_TIME,
   LOOKS,
+  PACE_CLIP_RATE,
+  SIT_CLIP,
+  SIT_POSE_TIME,
+  SLEEP_CLIP,
   MAIN_BODY,
   MAX_CLIP_RATE,
   PROP_GRIP,
@@ -534,6 +538,43 @@ describe('clipFor', () => {
       expect(c.name).toBe('PickUp');
       expect(c.frozenAt).toBe(KNEEL_POSE_TIME);
     }
+  });
+
+  // ---- the endless wait at the altar (altarWait.ts)
+
+  /** Verifies each altar pose: slow walk in place, sitting on the heels, lying asleep */
+  it('poses the endless wait at the altar', () => {
+    expect(clip({ altar: 'pacing' })).toEqual(play('Walking_A', PACE_CLIP_RATE));
+    expect(clip({ altar: 'sitting' })).toEqual(hold(SIT_CLIP, SIT_POSE_TIME));
+    expect(clip({ altar: 'sleeping' })).toEqual(hold(SLEEP_CLIP));
+    expect(SIT_CLIP).toBe('Death_B');
+    expect(SLEEP_CLIP).toBe('Death_A_Pose');
+    for (const name of [SIT_CLIP, SLEEP_CLIP]) expect(CLIPS).toContain(name);
+    expect(PACE_CLIP_RATE).toBeGreaterThan(0);
+  });
+
+  /** Verifies the altar poses replace the kneeling and every state */
+  it.each(STATES)('lets an altar pose win over kneeling in state %s', (state) => {
+    expect(clip({ altar: 'sitting', kneeling: true, state }).name).toBe(SIT_CLIP);
+    expect(clip({ altar: 'sleeping', kneeling: true, state }).name).toBe(SLEEP_CLIP);
+    expect(clip({ altar: 'pacing', kneeling: true, state }).name).toBe('Walking_A');
+  });
+
+  /** Verifies walking, a slap, the spawn and a scripted scene still win over an altar pose */
+  it('lets moving, a slap, the spawn and a script win over an altar pose', () => {
+    expect(clip({ altar: 'sleeping', moving: true, speed: WALK_CLIP_SPEED }).name).toBe('Walking_A');
+    expect(clip({ altar: 'sleeping', moving: true, speed: RUN_CLIP_SPEED }).name).toBe('Running_A');
+    expect(clip({ altar: 'sleeping', hit: 'Hit_B' }).name).toBe('Hit_B');
+    expect(clip({ altar: 'sitting', spawning: true }).name).toBe('Spawn_Ground');
+    expect(clip({ altar: 'sitting', scripted: hold('Death_A') }).name).toBe('Death_A');
+  });
+
+  /** Verifies reduced motion keeps the still poses but stops the pacing walk */
+  it('keeps still altar poses under reduced motion and stops pacing', () => {
+    expect(clip({ altar: 'sitting', reducedMotion: true })).toEqual(hold(SIT_CLIP, SIT_POSE_TIME));
+    expect(clip({ altar: 'sleeping', reducedMotion: true })).toEqual(hold(SLEEP_CLIP));
+    expect(clip({ altar: 'pacing', reducedMotion: true })).toEqual(hold('Idle_A'));
+    expect(clip({ altar: 'pacing', reducedMotion: true, kneeling: true }).name).toBe('PickUp');
   });
 
   // ---- still states
