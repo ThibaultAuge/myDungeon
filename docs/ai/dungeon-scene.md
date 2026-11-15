@@ -14,9 +14,9 @@ description: Use when changing the 3D dungeon map — rooms, floors, walls, cast
 - Room-decor packs (KayKit CC0, free tiers): `furniture`, `halloween`, `restaurant`
   (Furniture / Halloween / Restaurant Bits 1.0), `resources` (Resource Bits), `mixed1`,
   `mixed2` (Mixed Bag 1 / 2). Their use: `docs/ai/room-identity.md`.
-- KayKit Skeletons 1.1 (free tier), one pack each, shared by decor and ambush:
-  `skeletons` (glb, only `Skeleton_Minion`: the training dummy `SkeletonDummy.tsx`,
-  `docs/ai/room-identity.md`, and the ambush attackers, `docs/ai/agent-lifecycle.md`) and
+- KayKit Skeletons 1.1 (free tier), two packs:
+  `skeletons` (glb, only `Skeleton_Minion`, used only by the ambush attackers,
+  `docs/ai/agent-lifecycle.md`) and
   `skeleton_props` (gltf, texture `skeleton_texture.png`: `Skeleton_Shield_Large_A` as decor,
   `Skeleton_Blade` / `Skeleton_Axe` held by the attackers).
 - KayKit is about 1.33x our scene: every model is scaled by `KIT_SCALE = 0.75`. After

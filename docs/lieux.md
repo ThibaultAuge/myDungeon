@@ -80,7 +80,7 @@ au survol.
 | Coin détente | Canapé, tapis ovale, coin gamer (fauteuil, console portable, guitare), cube-énigme |
 | Réduit du concierge | Toiles d'araignée dans les coins, murs fissurés |
 | Poste de garde | Ossements, entraves, piège à ours, boucliers, trousseau de clés et épées aux murs |
-| Salle des épreuves | Squelette, sujet d'essai au repos |
+| Salle des épreuves | Tonneaux |
 | Salle Accessibilité / SEO | Cadres aux murs |
 | Taverne | Bûches, caisses de réserve, tonneaux, ragoût et assiettes |
 

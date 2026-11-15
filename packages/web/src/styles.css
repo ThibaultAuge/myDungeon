@@ -110,12 +110,16 @@ h3 {
   z-index: 1;
 }
 
+/* No text-transform: the name's casing (lAIr) is part of the pun. */
 .brand {
-  font-weight: 700;
+  font-weight: 400;
   color: var(--accent);
   text-decoration: none;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.04em;
+}
+
+.brand__ai {
+  font-weight: 800;
 }
 
 .conn {

@@ -185,7 +185,7 @@ function makeGlb(json: unknown, patch: GlbPatch = {}): Buffer {
 const ACCENTS: Accent[] = ['red', 'blue', 'green', 'yellow', 'white', 'brown'];
 const BANNER_STYLES = ['', 'patternA_', 'patternB_', 'patternC_', 'shield_', 'triple_'];
 /** Decoration with a footprint (rugs, grass and cobwebs are walked through or overhead). */
-const DECOR: PropKind[] = ['crates', 'barrels', 'chest', 'coins', 'candle', 'chartChest', 'sacks', 'bookPile', 'lumber', 'forge', 'fuel', 'treasury', 'gamerCorner', 'prison', 'beartrap', 'skeleton', 'logs', 'pantry'];
+const DECOR: PropKind[] = ['crates', 'barrels', 'chest', 'coins', 'candle', 'chartChest', 'sacks', 'bookPile', 'lumber', 'forge', 'fuel', 'treasury', 'gamerCorner', 'prison', 'beartrap', 'logs', 'pantry'];
 
 const WALLED = ROOMS.filter((r) => !r.insideOf);
 const WALLED_CASES = WALLED.map((r) => [r.id, r] as const);

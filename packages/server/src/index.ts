@@ -114,7 +114,7 @@ const app = await buildApp({
 });
 await app.listen({ host: '127.0.0.1', port: config.port });
 
-console.log(`IA IA Land : http://127.0.0.1:${config.port}`);
+console.log(`Agents’ lAIr : http://127.0.0.1:${config.port}`);
 console.log(`  données desktop : ${paths.desktopData ?? 'introuvables'} (${paths.sessionDirs.length} dossier(s) de sessions)`);
 if (!config.token) {
   console.warn('  aucun jeton : les hooks sont refusés. Lance `npm run hooks:install`.');

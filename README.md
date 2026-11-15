@@ -1,6 +1,6 @@
-# IA IA Land
+# Agents’ l**AI**r
 
-**IA IA Land** est un petit royaume en 3D : le royaume des IA, jeu de mots sur *La La Land*. Chaque environnement de l'app Claude en est un donjon. Dans un donjon, chaque agent Claude Code du poste local est un personnage. On voit qui travaille, sur quoi, qui attend une réponse et qui a fini.
+Agents’ l**AI**r est un petit repaire en 3D. Le nom reste en anglais dans toutes les langues de l'interface. *Lair* signifie « repaire » en anglais, et le « AI » (IA) se cache au milieu du mot. Chaque environnement de l'app Claude en est un donjon. Dans un donjon, chaque agent Claude Code du poste local est un personnage. On voit qui travaille, sur quoi, qui attend une réponse et qui a fini.
 
 > Les identifiants techniques gardent le nom historique `agent-office` : packages `@agent-office/*`, variables `AGENT_OFFICE_*`, en-tête `x-agent-office-token`, dossier `~/.claude/agent-office`, sauvegardes `settings.json.agent-office-<date>.bak`, et configurations `agent-office`, `agent-office-test` et `agent-office-web` de `.claude/launch.json`.
 

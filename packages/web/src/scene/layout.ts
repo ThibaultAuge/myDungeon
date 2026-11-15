@@ -111,7 +111,6 @@ export type PropKind =
   | 'cobwebs'
   | 'prison'
   | 'beartrap'
-  | 'skeleton'
   | 'logs'
   | 'pantry';
 
@@ -135,7 +134,6 @@ export const DECOR_KINDS: readonly PropKind[] = [
   'cobwebs',
   'prison',
   'beartrap',
-  'skeleton',
   'logs',
   'pantry',
 ];
@@ -560,7 +558,6 @@ export const ROOMS: RoomDef[] = [
     light: { color: '#9CFFB0', intensity: 16 },
     props: [
       { kind: 'barrels', x: -4.6, z: -2.2 },
-      { kind: 'skeleton', x: 4.7, z: -1.6, rot: W },
       { kind: 'readingTable', x: -2.6, z: 0.6, post: 'relecture' },
       { kind: 'alchemyBench', x: 2.8, z: 2.4, post: 'labo' },
     ],
@@ -811,7 +808,6 @@ const FOOTPRINTS: Record<PropKind, [number, number]> = {
   cobwebs: [0, 0],
   prison: [0.55, 0.45],
   beartrap: [0.55, 0.4],
-  skeleton: [0.3, 0.3],
   logs: [0.65, 0.55],
   pantry: [0.8, 0.4],
 };
